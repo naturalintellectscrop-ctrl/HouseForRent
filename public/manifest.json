@@ -1,0 +1,25 @@
+{
+  "name": "House For Rent - Uganda's #1 Rental Platform",
+  "short_name": "HouseForRent",
+  "description": "Find your perfect rental home in Uganda. Discover thousands of rental properties across Uganda.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#dc2626",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/logo.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/logo.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ],
+  "categories": ["business", "lifestyle"],
+  "lang": "en",
+  "scope": "/"
+}

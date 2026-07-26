@@ -1,0 +1,210 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String     @id @default(cuid())
+  email         String     @unique
+  name          String
+  password      String
+  role          String     @default("TENANT") // TENANT, LANDLORD, ADMIN
+  phone         String?
+  avatar        String?
+  verified      Boolean    @default(false)
+  bio           String?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  properties    Property[]
+  favorites     Favorite[]
+  sentInquiries Inquiry[]  @relation("TenantInquiries")
+  sentMessages  Message[]  @relation("SentMessages")
+  receivedMessages Message[] @relation("ReceivedMessages")
+  reviews        Review[]
+  notifications  Notification[]
+  savedSearches  SavedSearch[]
+}
+
+model Property {
+  id             String       @id @default(cuid())
+  title          String
+  description    String
+  price          Float
+  location       String
+  address        String
+  city           String
+  bedrooms       Int
+  bathrooms      Int
+  propertyType   String       // APARTMENT, HOUSE, VILLA, STUDIO, CONDO, TOWNHOUSE, BUNGALOW, BEDSITTER, LAND
+  status         String       @default("AVAILABLE") // AVAILABLE, RENTED, SOLD, PENDING
+  area           Float        // square meters
+  furnished      Boolean      @default(false)
+  parking        Boolean      @default(false)
+  petsAllowed    Boolean      @default(false)
+  yearBuilt      Int?
+  floor          Int?
+  totalFloors    Int?
+  listingType    String       @default("RENT") // RENT, SALE, BOTH
+  landTitleType  String?      // READY_TITLE, AGREEMENT, MILE_LAND, CROWN_LAND
+  paymentStatus  String       @default("UNPAID") // UNPAID, PENDING_VERIFICATION, PAID
+  paymentReference String?
+  listingStatus  String       @default("PENDING") // PENDING, APPROVED, REJECTED
+  views          Int          @default(0)
+  featured       Boolean      @default(false)
+  landlordId     String
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  landlord       User         @relation(fields: [landlordId], references: [id])
+  images         PropertyImage[]
+  amenities      PropertyAmenity[]
+  favorites      Favorite[]
+  inquiries      Inquiry[]
+  reviews        Review[]
+
+  @@index([city])
+  @@index([propertyType])
+  @@index([price])
+  @@index([listingStatus])
+  @@index([listingType])
+}
+
+model PropertyImage {
+  id         String   @id @default(cuid())
+  url        String
+  caption    String?
+  isPrimary  Boolean  @default(false)
+  order      Int      @default(0)
+  propertyId String
+  createdAt  DateTime @default(now())
+
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId])
+}
+
+model Amenity {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  icon      String?
+  category  String?  // GENERAL, OUTDOOR, SECURITY, UTILITY
+
+  properties PropertyAmenity[]
+}
+
+model PropertyAmenity {
+  id         String   @id @default(cuid())
+  propertyId String
+  amenityId  String
+
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  amenity    Amenity  @relation(fields: [amenityId], references: [id], onDelete: Cascade)
+
+  @@unique([propertyId, amenityId])
+}
+
+model Favorite {
+  id         String   @id @default(cuid())
+  userId     String
+  propertyId String
+  createdAt  DateTime @default(now())
+
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, propertyId])
+}
+
+model Inquiry {
+  id         String   @id @default(cuid())
+  message    String
+  status     String   @default("PENDING") // PENDING, REPLIED, CLOSED
+  tenantId   String
+  propertyId String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  tenant     User     @relation("TenantInquiries", fields: [tenantId], references: [id])
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  messages   Message[]
+
+  @@index([tenantId])
+  @@index([propertyId])
+}
+
+model Message {
+  id         String   @id @default(cuid())
+  content    String
+  senderId   String
+  receiverId String
+  inquiryId  String
+  read       Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  sender     User     @relation("SentMessages", fields: [senderId], references: [id])
+  receiver   User     @relation("ReceivedMessages", fields: [receiverId], references: [id])
+  inquiry    Inquiry  @relation(fields: [inquiryId], references: [id], onDelete: Cascade)
+
+  @@index([senderId])
+  @@index([receiverId])
+  @@index([inquiryId])
+}
+
+model Review {
+  id         String   @id @default(cuid())
+  rating     Int      // 1-5 stars
+  comment    String
+  userId     String
+  propertyId String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, propertyId])
+  @@index([propertyId])
+}
+
+model Notification {
+  id         String   @id @default(cuid())
+  type       String   // FAVORITE, INQUIRY, REVIEW, SYSTEM, APPROVAL
+  title      String
+  message    String
+  read       Boolean  @default(false)
+  userId     String
+  link       String?
+  createdAt  DateTime @default(now())
+
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([read])
+}
+
+model SavedSearch {
+  id           String   @id @default(cuid())
+  userId       String
+  name         String
+  searchQuery  String?
+  city         String?
+  propertyType String?
+  minPrice     Float?
+  maxPrice     Float?
+  bedrooms     Int?
+  furnished    Boolean  @default(false)
+  parking      Boolean  @default(false)
+  petsAllowed  Boolean  @default(false)
+  active       Boolean  @default(true)
+  matchCount   Int      @default(0)
+  createdAt    DateTime @default(now())
+
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
