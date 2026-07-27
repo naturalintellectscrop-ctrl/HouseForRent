@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { DealsService } from './deals.service';
 import { LedgerModule } from '../ledger/ledger.module';
+import { PaymentsModule } from '../payments/payments.module';
 
 /**
  * Deals & Guarantee — the deal state machine and commission engine
@@ -8,7 +9,7 @@ import { LedgerModule } from '../ledger/ledger.module';
  * Guarantee is the shape of the transition graph, not a separate feature.
  */
 @Module({
-  imports: [LedgerModule],
+  imports: [LedgerModule, PaymentsModule],
   providers: [DealsService],
   exports: [DealsService],
 })

@@ -764,6 +764,15 @@ enum PspInstructionState {
 
 /// 🔒 The idempotent boundary to the external custodian (Technical
 /// Architecture §5.2). idempotency_key dedupes duplicate callbacks (FR-7.8).
+///
+/// FULLY immutable — the instruction as issued never changes. Its lifecycle
+/// (pending → succeeded/failed) is recorded as PspInstructionEvent rows and
+/// the current state is DERIVED from the latest event, not stored here.
+/// The `state` column is retained only as the initial, permanent record of
+/// how the instruction was created (always `pending`); read current state
+/// via PspInstructionEvent. This keeps the amount, kind and idempotency key
+/// of a money instruction un-editable after the fact, which is the point of
+/// marking this table immutable in the first place.
 model PspInstruction {
   id             String              @id @default(uuid())
   dealId         String              @map("deal_id")
@@ -773,11 +782,32 @@ model PspInstruction {
   providerRef    String?             @map("provider_ref")
   state          PspInstructionState @default(pending)
   createdAt      DateTime            @default(now()) @map("created_at")
-  updatedAt      DateTime            @updatedAt @map("updated_at")
 
-  deal Deal @relation(fields: [dealId], references: [id])
+  deal   Deal                  @relation(fields: [dealId], references: [id])
+  events PspInstructionEvent[]
 
   @@map("psp_instruction")
+}
+
+/// 🔒 Append-only lifecycle log for a psp_instruction. The instruction's
+/// CURRENT state is the `toState` of its most recent event (or `pending` if
+/// it has none). Duplicate provider callbacks are deduplicated on
+/// (instruction, toState) so a repeated "succeeded" webhook cannot post
+/// twice (FR-7.8).
+model PspInstructionEvent {
+  id            String              @id @default(uuid())
+  instructionId String              @map("instruction_id")
+  toState       PspInstructionState @map("to_state")
+  providerRef   String?             @map("provider_ref")
+  detail        String?
+  occurredAt    DateTime            @map("occurred_at")
+  createdAt     DateTime            @default(now()) @map("created_at")
+
+  instruction PspInstruction @relation(fields: [instructionId], references: [id])
+
+  @@unique([instructionId, toState])
+  @@index([instructionId])
+  @@map("psp_instruction_event")
 }
 
 /// Ledger-vs-PSP reconciliation (FR-7.8, FR-10.4).
