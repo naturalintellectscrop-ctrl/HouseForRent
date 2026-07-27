@@ -363,3 +363,92 @@ from deal snapshots (Stage 3); the `PaymentProvider` interface, mock PSP,
 HTTP routes.
 
 No SSOT conflict encountered in Stage 2.
+
+---
+
+## Stage 3 — Deal state machine & commission engine
+
+Built as `backend/src/deals/`:
+
+- **`deal-state-machine.ts`** — `ALLOWED_TRANSITIONS` is a direct,
+  line-by-line encoding of the Data_Model.md §7.3 table, `Object.freeze`d so
+  the graph cannot be mutated at runtime. Only edges appearing there are
+  legal; everything else throws `IllegalTransitionError` (FR-8.1).
+- **`commission.ts`** — `computeCommission()` is a **pure function over the
+  deal's own snapshots**. It has no access to a live rate, a listing, or an
+  escrow total, so the two most expensive money bugs available here —
+  computing commission from the escrow inflow (Decision 5) or reading the
+  current rate at settlement (FR-7.4) — are impossible by signature, not by
+  discipline. Integer `bigint` arithmetic throughout; truncation resolves
+  fractional shillings in the payer's favour.
+- **`deals.service.ts`** — one named business method per transition (there
+  is deliberately **no** generic `setStatus()`, which would let callers route
+  around the guards). Every transition writes the status change, an
+  immutable `deal_transition` audit row, and any ledger effect inside **one
+  database transaction**, so money state and deal state cannot diverge.
+
+### ⚠️ FLAGGED SSOT AMBIGUITY — Data_Model.md §7.3 (needs your ruling)
+
+§7.3's transition table contradicts itself about whether a **funded** deal
+can be cancelled:
+
+- **Row 8** lists `escrow_funded` in the "From" column for `cancelled` — but
+  that same row's guard text reads *"pre-funding cancel; if funded → must
+  route via refunded"*, which forbids exactly that transition.
+- **§7.3's closing paragraph** states as a structural fact: *"The only exits
+  from `escrow_funded` are `move_in_confirmed` (forward) or `refunded`
+  (money back)."*
+
+These cannot both hold. Allowing `escrow_funded → cancelled` would let a
+funded deal reach a **terminal** state with no refund posting — held client
+money stranded, and the Move-In Guarantee broken.
+
+**Implemented: the strict reading** — the `escrow_funded → cancelled` edge is
+ABSENT — because it is the only reading that is safe if wrong, and it is the
+one both the row's own guard and the closing paragraph support. Recorded in
+code as the exported `ESCROW_FUNDED_CANCEL_AMBIGUITY` constant and asserted
+by test. **If you intend row 8's "From" column literally, this needs an
+explicit amendment**, since it would change a Move-In Guarantee property.
+
+### Acceptance criteria and the tests proving them
+
+Pure-function suites (`commission.spec.ts` 7 tests, `deal-state-machine.spec.ts` 19 tests) and an integration suite (`deals.service.spec.ts` 16 tests) — 42 tests, all passing.
+
+| Acceptance criterion | Test |
+|---|---|
+| **Rate frozen at signing, immune to later changes** | `a new commission_rate_version created AFTER signing does not re-price the deal` — doubles the standard rate mid-deal, asserts the deal still earns at the old rate |
+| Listing edits also cannot re-price a signed deal | `editing the LISTING rent after signing does not re-price the deal either` — triples the listing rent, commission unchanged |
+| Snapshots cannot be re-taken | `snapshots cannot be re-taken — signing twice is rejected` |
+| **Commission uses monthly rent, not the escrow total** | `a 12-month upfront payment yields the SAME commission as a 3-month one` — 4,000,000 vs 13,000,000 into escrow, identical 1,000,000 commission |
+| The engine cannot see the escrow total at all | `THE Decision 5 property: commission is invariant to the upfront amount` |
+| **Commission recognised exactly at move-in** | `no revenue exists at any point before the commission_earned transition` — asserts zero revenue after *each* of created/matched/signed/funded/moved-in, then non-zero only after the earn step |
+| Exactly one revenue posting | `the earn transition posts exactly one recognise_commission entry` |
+| **No code path releases funds before move-in** | `settle() on a funded (not moved-in) deal is REJECTED and moves no money` — asserts ledger balances are byte-identical before/after |
+| The guarantee edge is absent from the graph | `there is NO escrow_funded → settled transition` and `the ONLY value-moving exits from escrow_funded are move_in_confirmed and refunded` |
+| Settlement is reachable only via move-in | `settlement is reachable ONLY via move_in_confirmed → commission_earned` |
+| The graph cannot be mutated to re-add the edge | `the table is frozen at runtime` |
+| A funded deal cannot be cancelled (see ambiguity above) | `a funded deal CANNOT be cancelled — money must route via refund` |
+| Refund returns everything and earns nothing | `refund from escrow_funded returns the full amount and earns nothing` |
+| **Illegal transitions rejected, leaving no trace** | `a rejected transition writes no deal_transition row and does not change status` |
+| Every legal transition is audited immutably | `every legal transition writes exactly one immutable audit row` — asserts the exact from/to sequence, then that the row rejects UPDATE |
+| Happy path settles net of commission | `landlord receives upfront − commission; ledger fully discharged` |
+| No step of the happy path can be skipped or reversed | `the happy path cannot be short-circuited` / `no backward transition ... is permitted` |
+
+### Test-infrastructure change
+
+`maxWorkers: 1` is now set in the Jest config. The suites pass individually
+but failed when run together: Jest's parallel workers exceed what this
+sandbox's WASM Postgres server tolerates, producing connection errors that
+look like test failures but are not. Setting it in the config (rather than
+only in the npm script) means a bare `npx jest` is correct too. **This is an
+environment constraint, not a property of the code** — against a real
+PostgreSQL server the suites can run in parallel.
+
+Full suite: **80/80 passing**, stable across repeated runs; `tsc --noEmit`
+clean.
+
+**Deliberately deferred to Stage 4:** the `PaymentProvider` interface and
+mock PSP, `psp_instruction` idempotency, timeout auto-release, and
+`reconciliation_check`. `DealsService.settle()` currently posts both the
+settle and release legs directly; Stage 4 will route the release through the
+provider. No HTTP routes.
