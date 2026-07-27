@@ -452,3 +452,104 @@ mock PSP, `psp_instruction` idempotency, timeout auto-release, and
 `reconciliation_check`. `DealsService.settle()` currently posts both the
 settle and release legs directly; Stage 4 will route the release through the
 provider. No HTTP routes.
+
+---
+
+## Stage 4 — Payments abstraction & escrow orchestration
+
+Built as `backend/src/payments/`, plus orchestration changes in
+`DealsService`:
+
+- **`PaymentProvider` interface** — `collectToEscrow` / `releaseTo` /
+  `refund` / `status` / `custodianBalance`. Every method issues an
+  *instruction to a third party that holds the money*; nothing in the
+  interface can be read as our own account holding funds (FR-7.1).
+  Expressed in payer/payee/amount/reference terms with no "rent",
+  "commission", "landlord" or "listing" anywhere, so Smart Ride could
+  implement against it unchanged (SSOT §5 rule 8).
+- **`MockPaymentProvider`** — a real test double, not a stub that always
+  says yes: it enforces idempotency by key (returning the *original* result
+  flagged `deduplicated`), fails deterministically for references containing
+  `-fail`, and tracks a custodian balance that actually moves, so
+  reconciliation is tested against something real rather than a constant.
+- **`PaymentsService`** — owns the `psp_instruction` boundary. Deduplicates
+  on our side of the boundary as well as the provider's, so we are safe even
+  against a provider that handles keys badly. **Deliberately does not post to
+  the ledger** — ledger effects belong to the deal transition that authorised
+  them, inside that transition's transaction; posting here too would
+  double-count.
+
+### Schema change: `psp_instruction` immutability (resolved by your ruling)
+
+Data_Model.md marks `psp_instruction` 🔒 immutable, but its `state` column
+defaults to `pending` and must become `succeeded`/`failed`. With the Stage 0
+trigger in place this was verified impossible — an UPDATE is rejected — which
+blocked Stage 4.
+
+Resolved (your decision) by **event sourcing**: `psp_instruction` stays fully
+immutable, and a new append-only `psp_instruction_event` table records each
+state change. Current state is *derived* from the latest event. The
+instruction's `amount`, `kind` and `idempotency_key` therefore remain
+un-editable after the fact, which is the entire point of marking a money
+boundary immutable. The `updated_at` column was also dropped from
+`psp_instruction` — it was incoherent on an immutable table. The new table
+carries the same `reject_mutation()` trigger. Migration
+`20260727170000_psp_instruction_events`.
+
+### Settlement ordering — PSP call outside the transaction
+
+`settle()` and `refund()` issue the custodian instruction **before** opening
+the DB transaction, not inside it. Holding a transaction open across a
+network call would hold locks for its duration and, worse, allow the
+transaction to roll back *after real money had moved at the custodian*,
+leaving our books denying a payout the landlord actually received. Instead:
+issue the instruction (idempotent, recorded immutably) → only if the
+custodian accepted, atomically post the ledger effect and flip the status.
+If the second step fails, the deal stays at `commission_earned` and a retry
+re-issues under the **same deterministic idempotency key**
+(`settle:<dealId>` / `refund:<dealId>`), so the custodian cannot pay twice
+and the discrepancy is visible to reconciliation meanwhile.
+
+### Timeout auto-release — mechanism built, policy left as config
+
+`findEscrowFundedBeyond({ windowDays })` returns candidate deals rather than
+acting on them. PRD §7 explicitly lists *"refund/timeout timing specifics"*
+among unresolved open items, describing them as **"configuration or an
+ops-policy value, not a design choice"**. Inventing a window, or
+auto-refunding money on a schedule nobody has agreed, would be exactly the
+silent business-rule invention this build exists to avoid. The mechanism is
+testable now and the policy plugs in as configuration; any actual money
+movement still goes through `refund()`, keeping the ledger and the guarantee
+intact. Funded-at is read from the immutable transition history, not a
+mutable `updatedAt`.
+
+### Acceptance criteria and the tests proving them
+
+`payments.service.spec.ts` (14 tests) and `deals-orchestration.spec.ts` (10 tests).
+
+| Acceptance criterion | Test |
+|---|---|
+| **Provider is swappable behind the interface** | `a completely different PaymentProvider implementation can be substituted` — injects an entirely separate implementation via the DI token and asserts it is the one called |
+| No code assumes we hold the funds | `every provider method is an instruction to a third party, with a provider reference back` |
+| **Full happy path posts correctly end-to-end** | `fund → move-in → earn → settle (via PSP) → close posts correctly throughout` — asserts the release instruction exists, is for `upfront − commission`, and that liability and payable both discharge to zero |
+| **Pre-move-in refund returns tenant funds fully** | `refund issues a PSP instruction, unwinds the liability, and earns nothing` |
+| **A duplicated PSP call does not double-post** | `issuing twice with the same key creates ONE instruction and does not re-charge`; `a duplicated fund call does not double-post to the ledger`; `a replayed provider callback does not create a second event` |
+| A retried settlement cannot pay twice | `calling settle() again after success is rejected by the state machine, and issues no second instruction` — asserts one instruction, unchanged custodian balance, and no second ledger posting |
+| A retried refund cannot refund twice | `a retried refund does not refund twice` |
+| A failed custodian release does not advance the deal | `when the provider declines, the deal stays at commission_earned and no money moves` — asserts the full ledger balance map is unchanged |
+| **Ledger reconciles to PSP state** | `a reconciliation check records both balances and whether they agree` |
+| A divergence is surfaced, not absorbed | `a DIVERGENCE is surfaced, not silently absorbed`; `the ledger is authoritative: a custodian mismatch does not alter ledger state` |
+| `psp_instruction` remains fully immutable | `the instruction row itself rejects UPDATE and DELETE`; `lifecycle events are append-only and also reject mutation` |
+| State is derived, not stored | `current state is derived from the latest event, not stored on the row` |
+| Timeout mechanism works, policy is caller-supplied | `a deal funded longer ago than the window is returned as a candidate` (+ two negative cases) |
+
+Full suite: **104/104 passing** across 9 suites, stable across repeated runs;
+`tsc --noEmit` clean; the app boots with all six modules wiring correctly.
+
+**Deferred (correctly, outside Stage 0–4 scope):** HTTP routes and the
+authorisation matrix (the API spec is document 4, not yet written); Config
+module wiring for the timeout window; everything in Stages 5–8.
+
+No SSOT conflict encountered in Stage 4. The §7.3 `escrow_funded → cancelled`
+ambiguity raised at Checkpoint 3 **remains open and unruled** — the strict
+reading is still in force.

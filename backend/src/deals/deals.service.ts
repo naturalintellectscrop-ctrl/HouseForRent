@@ -2,6 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { Deal, DealStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { EscrowService } from '../ledger/escrow.service';
+import { PaymentsService } from '../payments/payments.service';
+import type { PaymentAccountRef } from '../payments/interfaces/payment-provider.interface';
 import {
   assertTransitionAllowed,
   TERMINAL_STATUSES,
@@ -24,6 +26,17 @@ export class SnapshotImmutableError extends Error {
         'once taken at agreement_signed (FR-7.4)',
     );
     this.name = 'SnapshotImmutableError';
+  }
+}
+
+export class SettlementReleaseFailedError extends Error {
+  constructor(dealId: string) {
+    super(
+      `deal ${dealId}: the custodian rejected the release instruction, so the ` +
+        'deal remains at commission_earned. Retrying reuses the same ' +
+        'idempotency key, so the landlord cannot be paid twice (FR-7.8)',
+    );
+    this.name = 'SettlementReleaseFailedError';
   }
 }
 
@@ -56,6 +69,7 @@ export class DealsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly escrow: EscrowService,
+    private readonly payments: PaymentsService,
   ) {}
 
   async createDeal(params: {
@@ -271,19 +285,58 @@ export class DealsService {
    *
    * Reachable only from commission_earned, which is reachable only from
    * move_in_confirmed — so settlement structurally cannot precede move-in.
+   *
+   * ── Ordering, and why it is this way round ──
+   * The external PSP call happens BEFORE the transaction, not inside it.
+   * Holding a DB transaction open across a network call would hold locks
+   * for the duration and, worse, allow the transaction to roll back after
+   * real money had already moved at the custodian — leaving our books
+   * denying a payout the landlord actually received. Instead:
+   *   1. issue the release instruction (idempotent, recorded immutably);
+   *   2. only if the custodian accepted it, atomically post the ledger
+   *      effect and flip the status.
+   * If step 2 fails, the instruction remains on record and the deal stays
+   * at commission_earned, so a retry re-issues under the SAME idempotency
+   * key and the custodian will not pay twice — the discrepancy is visible
+   * to reconciliation in the meantime rather than silently lost.
    */
   async settle(params: {
     dealId: string;
     actorPartyId: string;
     totalHeld: bigint;
+    landlordAccount?: PaymentAccountRef;
     reason?: string;
   }): Promise<Deal> {
+    const preflight = await this.prisma.deal.findUnique({
+      where: { id: params.dealId },
+    });
+    if (!preflight) {
+      throw new DealNotFoundError(params.dealId);
+    }
+    // fail fast before touching the custodian
+    assertTransitionAllowed(preflight.status, 'settled');
+
+    const commissionAmount = preflight.commissionAmount ?? 0n;
+    const netToLandlord = params.totalHeld - commissionAmount;
+
+    if (params.landlordAccount) {
+      const { instruction } = await this.payments.issueInstruction({
+        dealId: preflight.id,
+        kind: 'release',
+        amount: netToLandlord,
+        // deterministic key: a retry of THIS settlement reuses it
+        idempotencyKey: `settle:${preflight.id}`,
+        counterparty: params.landlordAccount,
+      });
+      const state = await this.payments.currentState(instruction.id);
+      if (state === 'failed') {
+        throw new SettlementReleaseFailedError(preflight.id);
+      }
+    }
+
     return this.prisma.$transaction(async (tx) => {
       const deal = await this.loadForUpdate(params.dealId, tx);
       assertTransitionAllowed(deal.status, 'settled');
-
-      const commissionAmount = deal.commissionAmount ?? 0n;
-      const netToLandlord = params.totalHeld - commissionAmount;
 
       await this.escrow.settle({ dealId: deal.id, amount: netToLandlord }, tx);
       await this.escrow.releaseToLandlord(
@@ -334,8 +387,31 @@ export class DealsService {
     dealId: string;
     actorPartyId: string;
     amount: bigint;
+    tenantAccount?: PaymentAccountRef;
+    originalProviderRef?: string;
     reason?: string;
   }): Promise<Deal> {
+    const preflight = await this.prisma.deal.findUnique({
+      where: { id: params.dealId },
+    });
+    if (!preflight) {
+      throw new DealNotFoundError(params.dealId);
+    }
+    assertTransitionAllowed(preflight.status, 'refunded');
+
+    // Same ordering rationale as settle(): instruct the custodian before
+    // opening the transaction, under a deterministic idempotency key.
+    if (params.tenantAccount) {
+      await this.payments.issueInstruction({
+        dealId: preflight.id,
+        kind: 'refund',
+        amount: params.amount,
+        idempotencyKey: `refund:${preflight.id}`,
+        counterparty: params.tenantAccount,
+        originalProviderRef: params.originalProviderRef,
+      });
+    }
+
     return this.prisma.$transaction(async (tx) => {
       const deal = await this.loadForUpdate(params.dealId, tx);
       assertTransitionAllowed(deal.status, 'refunded');
@@ -374,6 +450,53 @@ export class DealsService {
         tx,
       );
     });
+  }
+
+  /**
+   * Finds deals that have sat at `escrow_funded` longer than the configured
+   * window without a move-in confirmation (FR-7.7, "timeout auto-release
+   * rules").
+   *
+   * ── Why this returns candidates rather than acting ──
+   * The timeout WINDOW and what should happen at its expiry are explicitly
+   * unresolved: PRD §7 lists "refund/timeout timing specifics" among the
+   * open items, describing them as "configuration or an ops-policy value,
+   * not a design choice". Inventing a number here, or auto-refunding money
+   * on a schedule nobody has agreed, would be exactly the silent
+   * business-rule invention this build is meant to avoid.
+   *
+   * So the MECHANISM exists and is testable now, and the policy plugs in as
+   * configuration: callers supply the window, receive the candidates, and
+   * decide (today: ops review; later: an automated rule once the policy is
+   * set). Every actual money movement still goes through refund(), which
+   * keeps the ledger and the guarantee intact.
+   */
+  async findEscrowFundedBeyond(params: {
+    windowDays: number;
+    now?: Date;
+  }): Promise<Deal[]> {
+    const now = params.now ?? new Date();
+    const cutoff = new Date(
+      now.getTime() - params.windowDays * 24 * 60 * 60 * 1000,
+    );
+
+    const funded = await this.prisma.deal.findMany({
+      where: { status: 'escrow_funded' },
+    });
+
+    // "since it was funded", taken from the authoritative transition history
+    // rather than the mutable updatedAt column
+    const candidates: Deal[] = [];
+    for (const deal of funded) {
+      const fundedAt = await this.prisma.dealTransition.findFirst({
+        where: { dealId: deal.id, toStatus: 'escrow_funded' },
+        orderBy: { occurredAt: 'desc' },
+      });
+      if (fundedAt && fundedAt.occurredAt < cutoff) {
+        candidates.push(deal);
+      }
+    }
+    return candidates;
   }
 
   /** any active → dispute_hold (ops action). Blocks settlement (FR-10.5). */
