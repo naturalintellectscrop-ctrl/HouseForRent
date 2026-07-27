@@ -280,3 +280,86 @@ Prompt Pack's own Stage 1 scope, which lists tests, not endpoints, as the
 deliverable).
 
 No SSOT conflict encountered in Stage 1.
+
+---
+
+## Stage 2 — The double-entry ledger
+
+Built as `backend/src/ledger/`:
+
+- **`LedgerService`** — `post()` is the single choke point through which
+  every ledger write passes. It calls `validate()` first, which rejects
+  (before any row is written): postings with fewer than two legs, any leg
+  with `amount <= 0`, and any posting where `sum(debits) !== sum(credits)`.
+  All arithmetic is `bigint`; no float appears anywhere in the file. Also
+  provides `reverse()` (corrections are new opposite-direction postings,
+  never edits), `balanceOf()`, `balancesByTypeForDeal()`, and
+  `everyPostingBalances()` (a global integrity check used by tests and,
+  later, Stage 4 reconciliation).
+- **`EscrowService`** — the canonical postings from Data_Model.md §8.2:
+  `fundEscrow` (debit psp_clearing / credit escrow_liability — **no revenue
+  account touched**), `recogniseCommission` (debit escrow_liability / credit
+  commission_revenue), `settle` (debit escrow_liability / credit
+  landlord_payable), `releaseToLandlord` (debit landlord_payable / credit
+  psp_clearing), and `refund` (debit escrow_liability / credit
+  psp_clearing).
+
+  **Product-agnostic by construction:** every method takes an explicit
+  `amount`. Nothing here computes a commission, reads a rent, or knows what
+  a listing is — the commission *figure* is computed by Deals (Stage 3)
+  from the deal's snapshots and handed in. This is what keeps Payments
+  reusable across Natural Intellects products (SSOT §5 rule 8).
+
+  **Sequencing is deliberately NOT enforced here.** The rule that funds
+  cannot be released before move-in is a property of the deal state
+  machine's transition graph (Stage 3) — there is no `escrow_funded →
+  settled` edge. These primitives are the mechanism; the guarantee is the
+  shape of the graph that calls them.
+
+**Acceptance criteria and the tests proving them** (`src/ledger/ledger.spec.ts`, 16 tests, all passing):
+
+| Acceptance criterion | Test |
+|---|---|
+| Unbalanced postings are rejected, and write nothing | `an unbalanced posting is REJECTED and writes nothing` (off by one shilling; asserts zero rows after) |
+| Non-positive amounts rejected (direction carries the sign) | `a zero or negative leg amount is REJECTED` |
+| Double-entry requires ≥ 2 legs | `a single-leg posting is REJECTED` |
+| The ledger always balances (property-tested) | `property test (2000 cases)` — tests `validate()` directly across 2000 randomised multi-leg shapes, asserting balanced ones pass and every one-shilling perturbation is rejected |
+| Randomised postings genuinely persist and still balance | `property test (persisted, 25 cases)` — asserts 25 distinct postings committed and accounts net to the exact expected total |
+| **Escrow inflow creates a LIABILITY and NO revenue** | `fundEscrow credits escrow_liability and touches NO revenue account` (asserts zero rows on any commission_revenue account) |
+| Large multi-month upfront still creates zero revenue | `funding a large multi-month upfront still creates zero revenue` |
+| **Commission revenue is recognised only at the recognise step** | `revenue is zero after funding, and exactly the commission after recognising` |
+| Recognise is the *only* posting that credits revenue | `the recognise posting is the only one that credits revenue` (runs the full fund→recognise→settle→release path, asserts exactly one revenue entry) |
+| The full settlement path nets out correctly | `fund → recognise → settle → release leaves liability zero, revenue = commission, psp net = landlord payout` |
+| **A refund fully unwinds a held escrow** | `a pre-move-in refund returns the full held amount and leaves zero liability and zero revenue` |
+| **No operation mutates a posted entry** | `no ledger operation mutates a posted entry — the DB rejects UPDATE and DELETE` (asserts the row is byte-identical after both attempts) |
+| Corrections are reversing postings, not edits | `reverse() writes an opposite-direction posting and nets the accounts back to zero` (asserts 4 rows exist — originals preserved, not erased) |
+| Money is integer shillings, no float precision loss | `amounts round-trip as bigint with no float precision loss at large values` (uses 2^53 + 1, beyond IEEE-754 safe range) |
+| Postings are atomic with the caller's transaction | `a posting made inside a caller transaction ROLLS BACK with it` and `... that COMMITS is persisted` |
+
+**A real bug these tests caught.** The two atomicity tests initially
+deadlocked, exposing that `EscrowService.accountFor()` (and
+`LedgerService.reverse()`'s read) used the base Prisma client even when the
+caller supplied a transaction client. Beyond the deadlock, that was a
+correctness defect: a ledger account created outside the caller's
+transaction would have survived a rollback that discarded the postings
+referencing it, and `reverse()` could read a pre-transaction snapshot.
+Both now take and honour the transaction client. This is exactly the class
+of bug Technical Architecture §8 (one transaction spanning ledger posting
+and state change) exists to prevent, and it would have been invisible
+without an explicit rollback test.
+
+**A test-hygiene fix, also caught here.** The Stage 0 immutability test
+wrote a *single-leg* `ledger_entry` directly (it only needed some row to
+attempt UPDATE/DELETE against). Because those rows are immutable by design,
+each run left permanent unbalanced-posting debris that broke
+`everyPostingBalances()` globally. It now writes a balanced pair. The dev
+database was reset once to clear the accumulated debris; the full suite has
+since run repeatedly with no cross-run pollution.
+
+**Deliberately deferred to later stages:** the deal state machine and the
+sequencing/guarantee it enforces (Stage 3); the commission *computation*
+from deal snapshots (Stage 3); the `PaymentProvider` interface, mock PSP,
+`psp_instruction` idempotency, and `reconciliation_check` (Stage 4). No
+HTTP routes.
+
+No SSOT conflict encountered in Stage 2.

@@ -227,17 +227,38 @@ describe('DB-level immutability of 🔒 tables', () => {
   });
 
   test('ledger_entry: UPDATE and DELETE are rejected', async () => {
-    const account = await prisma.ledgerAccount.create({
+    const liability = await prisma.ledgerAccount.create({
       data: { accountType: 'escrow_liability' },
     });
-    const row = await prisma.ledgerEntry.create({
-      data: {
-        postingId: crypto.randomUUID(),
-        accountId: account.id,
-        direction: 'credit',
-        amount: 1_000_000n,
-        occurredAt: new Date(),
-      },
+    const clearing = await prisma.ledgerAccount.create({
+      data: { accountType: 'psp_clearing' },
+    });
+    // Written as a BALANCED pair, even though this test only needs one row to
+    // attempt UPDATE/DELETE against. A stray single-leg posting would sit in
+    // the table permanently (these rows are, by design, undeletable) and
+    // would break the global "every posting balances" integrity check that
+    // the ledger suite and Stage 4 reconciliation rely on.
+    const postingId = crypto.randomUUID();
+    await prisma.ledgerEntry.createMany({
+      data: [
+        {
+          postingId,
+          accountId: clearing.id,
+          direction: 'debit',
+          amount: 1_000_000n,
+          occurredAt: new Date(),
+        },
+        {
+          postingId,
+          accountId: liability.id,
+          direction: 'credit',
+          amount: 1_000_000n,
+          occurredAt: new Date(),
+        },
+      ],
+    });
+    const row = await prisma.ledgerEntry.findFirstOrThrow({
+      where: { postingId, direction: 'credit' },
     });
 
     await expectRejected(() =>
