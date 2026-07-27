@@ -554,3 +554,89 @@ module wiring for the timeout window; everything in Stages 5–8.
 No SSOT conflict encountered in Stage 4. The §7.3 `escrow_funded → cancelled`
 ambiguity raised at Checkpoint 3 was **ruled at Stage 4 review** and is now
 Amendment A1 in `Data_Model.md` — the strict reading, confirmed.
+
+---
+
+## Stage 5 — Listings, search, availability
+
+Three modules: `backend/src/config/`, `backend/src/listings/`,
+`backend/src/search/`.
+
+### Config module (built here because Stage 5 is the first consumer)
+
+`ConfigService` serves versioned, effective-dated parameters
+(Data_Model.md §3.1). Two deliberate properties:
+
+- **A future-dated version is invisible until its effective date**, so a
+  scheduled change can be staged in advance without taking effect early.
+- **Reading an unset parameter THROWS rather than returning a default.** A
+  silent fallback is how an unvalidated business parameter (PRD §1.5)
+  becomes permanent without anyone deciding it. Callers must seed values
+  explicitly.
+
+Money-touching config stays out: the commission rate has its own
+`commission_rate_version` table and is consumed by *snapshot*, never by live
+lookup — that separation is what makes in-flight deals immune to a rate
+change, and merging the two would quietly destroy it.
+
+### Listings
+
+`ListingsService.publish()` is **the gate**. All three preconditions are
+enforced server-side, so no client can route around them:
+
+1. `verificationState === 'verified'` (FR-3.1)
+2. the property's neighbourhood is `inServiceArea` (FR-2.5)
+3. for `broker_agent` / `property_mgmt_company` listers, a verified
+   per-property mandate — delegated to `MandateService.canPublish()` from
+   Stage 1 rather than reimplemented, so the rule lives with the
+   verification data (FR-3.2)
+
+**Staleness is computed, never stored** (FR-2.3). Storing it would freeze
+yesterday's policy into the data and make a window change require a
+backfill. A listing whose availability was *never* confirmed is treated as
+stale — absence of evidence is not evidence of availability, and the whole
+proposition is that a live listing is genuinely available.
+
+### Search
+
+Three constraints apply regardless of filters, because they are what the
+public feed *means*: `live` + `verified` + `inServiceArea`. `filters` can
+only narrow, never widen past them. Stale listings are excluded by default
+and opt-in only. Results are ordered freshest-first — the most recently
+confirmed listing is the one a tenant is least likely to waste a trip on.
+
+Trust signals (`isVerified`, `daysSinceConfirmed`, `isStale`,
+`freeForTenants`) are returned as **data** (FR-4.2). The client renders
+them and cannot fabricate them; "verified" means something only if the
+server is the one asserting it. `freeForTenants` is asserted server-side
+rather than being client copy that could drift from Decision 3.
+
+### Acceptance criteria and the tests proving them
+
+`listings.spec.ts` (18 tests) and `search.spec.ts` (14 tests) — 32 tests.
+
+| Acceptance criterion | Test |
+|---|---|
+| **Out-of-service-area listings are excluded** | `an out-of-service-area listing CANNOT be published`; `an OUT-OF-CORRIDOR listing is never returned` (forces `live` first, proving search excludes it independently of publish) |
+| Adding a corridor is a data change, not a code change | `adding a corridor is a DATA change — flipping the flag makes the same listing publishable` |
+| **Unmandated broker listing is unpublishable** | `an unmandated BROKER listing cannot be published`; same for management companies; `a broker mandated on ANOTHER property still cannot publish this one` |
+| Property owners need no mandate | `a PROPERTY OWNER publishes with no mandate at all` |
+| Unverified listings cannot publish or appear | `an unverified listing CANNOT be published`; `an UNVERIFIED listing is never returned, even if forced live` |
+| **Stale availability is detectable and filterable** | `a listing confirmed beyond the window is excluded`; `...but is returned when the caller explicitly opts in, flagged as stale` |
+| Freshness window is genuinely configuration | `THE config test: widening the window makes the SAME listing fresh again, with no data change` — asserts the row is byte-identical and only the answer changes |
+| Never-confirmed listings are stale | `a listing whose availability was NEVER confirmed is stale` (+ the search-side equivalent) |
+| **No street address required** | `a listing publishes with neighbourhood + landmark and NO street address` |
+| Money is integer shillings | `monthly rent and deposit round-trip as bigint` |
+| Trust signals are data, not copy | `each result carries verified, freshness and free-for-tenants as fields` |
+| Honest empty states | `a zero-result search explains ongoing verification, not failure` — asserts the message mentions verification and contains no "error/sorry/failed" |
+| Field summary comes from structured data | `the summary projects structured fields, not free text`; `a listing with no field report yet returns null, not a fabricated summary` |
+| Config refuses to invent parameters | `reading an unset parameter THROWS rather than silently defaulting`; `a future-dated version is invisible until its effective date`; `config versions are immutable` |
+
+Full suite: **136/136 passing** across 11 suites; `tsc --noEmit` clean; app
+boots with all nine modules wired.
+
+**Deliberately deferred:** HTTP routes (no API spec exists yet); media
+upload (Stage 7); the viewing/introduction/field-report *write* flow (Stage
+7 — Stage 5 only reads the field report for FR-4.3); amenity seeding.
+
+No SSOT conflict encountered in Stage 5.
