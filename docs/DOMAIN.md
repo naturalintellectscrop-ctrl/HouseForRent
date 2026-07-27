@@ -221,3 +221,62 @@ No API routes, no NestJS modules/services/controllers beyond the default
 scaffold, no seed data, no business logic (mandate enforcement, ledger
 balancing, state-transition validation) — all of that is Stage 1 onward, per
 the Implementation Prompt Pack's sequencing.
+
+---
+
+## Stage 1 — Identity & Verification service
+
+Built as `backend/src/identity/`, a NestJS module wired into `AppModule`:
+
+- **`IdentityProvider` interface** (`interfaces/identity-provider.interface.ts`)
+  — `verifyNin`/`verifyPhone`/`verifySelfieMatch`, each returning only
+  `{ verified, providerRef }`. No raw NIN, phone, or selfie image crosses
+  this boundary back into the app — the interface is deliberately shaped so
+  it *cannot* leak the raw input, not just documented not to.
+- **`MockIdentityProvider`** — the V1 implementation (deterministic: any
+  input ending in `-fail` fails, everything else verifies). A real provider
+  is a later implementation of the same interface (SSOT §8, procurement-
+  gated); nothing in `IdentityService` or callers changes when it's swapped.
+- **`IdentityService`** — per-method verification rows
+  (`identity_verification`), consent recording (`consent_record`), and
+  `isIdentityVerified(partyId)` (true only when the latest attempt for
+  *every* required method — `nin`, `phone`, `selfie_match` — is `verified`).
+  Verification is refused with a clear error if no consent row exists for
+  purpose `identity_verification` yet — consent is a precondition, not an
+  afterthought.
+- **`MandateService`** — `submitMandate` / `decideMandate` /
+  `hasVerifiedMandate`, and `canPublish({ listerTier, listerPartyId,
+  propertyId })`, the domain-level enforcement primitive FR-3.2 calls for.
+  `property_owner` always returns `true` (no mandate row required, FR-3.2
+  AC); `broker_agent` / `property_mgmt_company` return `true` only if a
+  `verified` `property_mandate` row exists for that exact `(lister,
+  property)` pair. This method is the check — the Listings module (Stage 5)
+  will call it before allowing a `listing.publicationState` transition to
+  `live`; the transition itself is out of scope here.
+
+**Acceptance criteria and the tests proving them** (`src/identity/identity.spec.ts`, 11 tests, all passing):
+
+| Acceptance criterion | Test |
+|---|---|
+| Identity verification cannot proceed without recorded consent | `consent is recorded with purpose, timestamp, and policy version before verification is allowed` |
+| A party is identity-verified only when all 3 methods are verified | `a party is identity-verified only once ALL three methods ... are verified` |
+| The IdentityProvider is genuinely mockable/can fail (not hardcoded pass) | `the mock IdentityProvider surfaces failure deterministically` |
+| No plaintext NIN is stored anywhere, even transiently in a returned object | `no plaintext NIN is stored: only state and an opaque providerRef persist` |
+| Identity and mandate are independent: verified identity + zero mandates | `identity verification and mandate verification are independent: ...zero mandates` |
+| The inverse holds too: a verified mandate with zero identity verification | `the inverse also holds: a lister can have a verified mandate while NOT identity-verified` |
+| Mandate is per-property, not per-lister | `mandate is per-property, not per-lister: ...property A does not cover property B` |
+| `property_owner` publishes without any mandate row | `canPublish` → `property_owner CAN publish without any mandate row` |
+| `broker_agent` without a verified mandate cannot publish | `canPublish` → `broker_agent WITHOUT a verified mandate CANNOT publish` |
+| `broker_agent` with a verified mandate for that exact property can publish | `canPublish` → `broker_agent WITH a verified mandate ... CAN publish` |
+| A rejected (not just absent) mandate still blocks publish | `canPublish` → `property_mgmt_company WITH a REJECTED mandate CANNOT publish` |
+
+**Deliberately deferred** (belongs to later stages per the Implementation
+Prompt Pack): the actual `listing.publicationState` transition logic that
+*calls* `canPublish` (Stage 5, Listings module); screening (Stage 6, this is
+identity-only, not the tenant screening pipeline); any HTTP controllers/API
+routes exposing these services (no document in this stage set calls for
+routes yet — Stages 0–4 are deliberately API-light per the Implementation
+Prompt Pack's own Stage 1 scope, which lists tests, not endpoints, as the
+deliverable).
+
+No SSOT conflict encountered in Stage 1.
