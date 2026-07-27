@@ -9,6 +9,7 @@ import { PaymentsModule } from './payments/payments.module';
 import { ConfigModule } from './config/config.module';
 import { ListingsModule } from './listings/listings.module';
 import { SearchModule } from './search/search.module';
+import { ScreeningModule } from './screening/screening.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { SearchModule } from './search/search.module';
     PaymentsModule,
     ListingsModule,
     SearchModule,
+    ScreeningModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -640,3 +640,94 @@ upload (Stage 7); the viewing/introduction/field-report *write* flow (Stage
 7 — Stage 5 only reads the field report for FR-4.3); amenity seeding.
 
 No SSOT conflict encountered in Stage 5.
+
+---
+
+## Stage 6 — Modular screening pipeline & tenant onboarding
+
+Built as `backend/src/screening/`.
+
+### The pipeline (FR-6.1, FR-6.2)
+
+`ScreeningModule` is a one-method contract (`run(context) → outcome`).
+Modules are **registered** in `screening.module.ts`; which ones **run** comes
+from the `screening_modules` config value at runtime. That split is the
+entire seam: adding employment / references / rental-history / risk-scoring
+later is a new class plus a config edit, and `runScreening()` — the whole of
+the tenant-facing screening flow — does not change, nor does anything
+calling it.
+
+Modules deliberately cannot: write their own result rows, decide the overall
+verdict, or see each other. Keeping that authority in the pipeline is what
+stops a future module quietly changing how screening behaves as a whole.
+
+**V1 config is `['identity']`.** `IdentityScreeningModule` delegates entirely
+to the Stage 1 `IdentityService` rather than reimplementing the three-factor
+check — screening asks the question, Identity owns the answer, so the rule
+cannot drift between two copies.
+
+**`EmploymentStubModule` is registered and inert.** It collects and stores
+nothing; employment verification is post-V1 (SSOT §6) and building any part
+of it now would be scaffolding a deferred feature. It exists solely to make
+the seam demonstrable.
+
+### Three conservative choices worth noting
+
+1. **A configured-but-unregistered module throws** rather than being skipped.
+   Silently ignoring it would mean a tenant "passed" a check nobody ran.
+   The resolve-then-run ordering means an unknown key aborts *before* any
+   `screening_run` row is written.
+2. **An empty pipeline resolves to `pending`, never `passed`.** "No checks
+   ran" must never read as "cleared".
+3. **`skipped` does not block a pass, but never counts as one.** A module can
+   legitimately not apply without that being treated as a positive result.
+
+### Onboarding (FR-1.4, FR-6.3)
+
+`registerTenant()` creates the party, its tenant `user_account`, and the
+consent record in one step, so a tenant cannot exist in a state where
+verification was attempted without consent behind it. `IdentityService`
+independently refuses to verify without a consent row, so the ordering is
+enforced twice rather than merely intended.
+
+`tenantSummary()` — what a landlord-facing surface reads — returns a
+*verdict*, not PII: identity-verified yes/no, screening state, which modules
+ran, and consent/retention metadata. The landlord's assurance is
+"government-identified and escrow-funded", which needs no personal data
+disclosure.
+
+### Acceptance criteria and the tests proving them
+
+`screening.spec.ts` — 17 tests.
+
+| Acceptance criterion | Test |
+|---|---|
+| **Identity-only config runs only identity** | `with config = ["identity"], ONLY the identity module runs` |
+| **Enabling a module needs no tenant-flow change** | `enabling it by config ALONE changes behaviour — the tenant flow code is untouched` — makes the identical call before and after, changing only config |
+| The stub is present but inert under V1 config | `the stub module is REGISTERED but does not run under V1 config` |
+| Adding a module needs no schema change | same test — the new `module_key` row persists against the existing tables |
+| Run history stays interpretable after a config change | `the run snapshots WHICH modules ran` |
+| Unknown modules fail loudly, not silently | `a configured-but-unregistered module FAILS LOUDLY`; `an unknown module aborts BEFORE any run row is written` |
+| **No financial documents collected or stored** | `no financial or employment document is collected or stored anywhere` — greps the serialised run for payslip/bankStatement/salary/employerName/reference |
+| No raw PII in screening results | `the screening result carries no raw personal data` — asserts the NIN never appears |
+| Consent recorded with purpose + timestamp + retention | `onboarding records consent with purpose, timestamp and policy version` |
+| Verification refused without consent | `identity verification is refused for a party with no consent record` |
+| Partial verification fails | `a partially verified tenant (2 of 3 factors) still FAILS`; `a tenant whose selfie match FAILS is not identity-verified` |
+| Empty pipeline never reads as cleared | `"no checks ran" resolves to pending, never to passed` |
+
+**The seam test was verified to be load-bearing**: temporarily hardcoding the
+module set to ignore config failed exactly the five tests that assert
+config-driven behaviour, including the FR-6.2 seam test by name. A test that
+cannot fail proves nothing, so this was checked rather than assumed.
+
+A schema-wide grep confirms no `payslip` / `bank_statement` / `salary` /
+`employer` / `income` column exists anywhere (FR-6.3).
+
+Full suite: **153/153 passing** across 12 suites; `tsc --noEmit` clean; app
+boots with all ten modules.
+
+**Deliberately deferred:** HTTP routes; the viewing/field-report write flow
+and media pipeline (Stage 7); real employment/reference verification
+(post-V1).
+
+No SSOT conflict encountered in Stage 6.
