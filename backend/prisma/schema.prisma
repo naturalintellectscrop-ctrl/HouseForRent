@@ -5,9 +5,11 @@
 //
 // Conventions carried over from Data_Model.md:
 //   - All money is Int/BigInt shillings. Never Float/Decimal for money.
-//   - 🔒 in a comment marks an immutable table (app layer forbids update/delete
-//     on written rows; Postgres has no generic "insert-only" constraint, so this
-//     is enforced in the repository/service layer and covered by tests).
+//   - 🔒 in a comment marks an immutable table. Enforced at the DATABASE level
+//     by a BEFORE UPDATE OR DELETE trigger (see
+//     prisma/migrations/*_immutable_tables/migration.sql) that raises an
+//     exception regardless of which role or code path issues the write —
+//     not merely a service-layer convention. Corrections are new rows.
 //   - ⟡ in a comment marks a seam field: V1 constrains it to a single value via
 //     enum + check constraint / application validation, but future values are
 //     addable without migrating existing rows.
@@ -97,9 +99,29 @@ model UserAccount {
   authRole  AuthRole @map("auth_role")
   createdAt DateTime @default(now()) @map("created_at")
 
-  party Party @relation(fields: [partyId], references: [id])
+  party    Party     @relation(fields: [partyId], references: [id])
+  sessions Session[]
 
   @@map("user_account")
+}
+
+/// Standard session/refresh record (Data_Model.md §2.3 — "fields per auth
+/// choice, not detailed there"). Minimal V1 shape: an opaque refresh-token
+/// hash + expiry, revocable. Not immutable — sessions are legitimately
+/// mutated (revoked) and deleted (expiry cleanup); this is intentionally
+/// outside the 🔒 set.
+model Session {
+  id               String    @id @default(uuid())
+  userAccountId    String    @map("user_account_id")
+  refreshTokenHash String    @map("refresh_token_hash")
+  expiresAt        DateTime  @map("expires_at")
+  revokedAt        DateTime? @map("revoked_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+
+  userAccount UserAccount @relation(fields: [userAccountId], references: [id])
+
+  @@index([userAccountId])
+  @@map("session")
 }
 
 enum ListerTier {
