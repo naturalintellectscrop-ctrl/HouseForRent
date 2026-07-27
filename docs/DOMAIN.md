@@ -37,6 +37,30 @@ available later, `prisma migrate dev`/`deploy` should work normally against it
 with no schema changes — this workaround is purely about this sandbox's local
 dev server, not the schema or the app.
 
+**TODO — verify before relying on this for any real environment:** the
+standard `prisma migrate deploy` path is currently *unexercised* (only the
+`migrate diff` + raw-`pg`-apply workaround has actually run). The first time
+a real PostgreSQL instance (local install, Docker, or hosted — Supabase,
+Neon, Railway, RDS, etc.) is available, run `npx prisma migrate deploy`
+against it from a clean database and confirm all migrations in
+`prisma/migrations/` apply cleanly through the standard path before trusting
+it for staging/production.
+
+**Second quirk found, informational only:** this WASM Postgres server can
+also desync at the wire-protocol level when a script issues a query without
+awaiting/serializing around a *previous failed statement* on the same
+connection (observed as `pg` throwing `Received unexpected parseComplete
+message from backend` / `... commandComplete ...`, and a "success" being
+reported for a statement that the server actually rejected moments later,
+out of order). This was caught precisely because a follow-up trigger-check
+script raced ahead of an async rejection. It did **not** affect the real
+test suite (`src/schema/immutability.spec.ts`, run via Jest), where every
+assertion is a properly-awaited Prisma call — Jest's 10/10 pass is the
+trustworthy result. Lesson: any one-off diagnostic script against this dev
+server should wrap each statement in an explicit `BEGIN`/`ROLLBACK` (or just
+use the Jest suite) rather than firing bare sequential queries on one
+connection after a failure.
+
 ---
 
 ## Module ownership map
@@ -50,6 +74,7 @@ through interfaces once services are built in Stage 1+.)
 |---|---|---|
 | `party` | Decision 8 (tiers), general | Product-agnostic actor. Role is contextual via `UserAccount.authRole`, not a fixed column — one human can be both tenant and landlord. |
 | `user_account` | — (auth plumbing) | Auth binding for a party. V1: one primary role per account. |
+| `session` | — (auth plumbing) | Data_Model.md §2.3 lists this with "fields per auth choice, not detailed there." Added in the immutability-review pass (was omitted from the first Stage 0 pass — an oversight, not a deliberate exclusion). Minimal V1 shape: `userAccountId`, `refreshTokenHash`, `expiresAt`, `revokedAt`. **Deliberately NOT in the 🔒 set** — sessions are legitimately mutated (revocation) and deleted (expiry cleanup); marking it immutable would be wrong, not merely unnecessary. |
 | `lister_profile` | Decision 8 | Tier (`property_owner` / `broker_agent` / `property_mgmt_company`) drives verification + mandate requirements. |
 | `identity_verification` | Decision 10 (screening), Decision 8 | Who a party is. State-per-method (`nin`/`phone`/`selfie_match`), not a single boolean, so the three-factor requirement is explicit and auditable. No plaintext NIN — only state + opaque `providerRef`. |
 | `consent_record` 🔒 | Decision 10, DPA 2019 (SSOT §5, PRD NFR-3) | Immutable historical fact; purpose + timestamp + retention metadata. |
@@ -97,7 +122,7 @@ through interfaces once services are built in Stage 1+.)
 | Table | SSOT decision(s) | Notes |
 |---|---|---|
 | `ledger_account` | Decision 3, 7 | Typed accounts (`escrow_liability`, `commission_receivable`, `commission_revenue`, `landlord_payable`, `psp_clearing`) — product-agnostic, meaning comes from `accountType`. |
-| `ledger_entry` 🔒 | Decision 3, 7 (money invariants, SSOT §5) | Immutable, balanced double-entry postings grouped by `postingId`. `amount` is always positive `BigInt`; `direction` carries the sign. Balance/immutability are enforced in the service layer (Stage 2), proven by tests — Postgres has no generic "sum-must-balance-per-group" constraint. |
+| `ledger_entry` 🔒 | Decision 3, 7 (money invariants, SSOT §5) | Immutable, balanced double-entry postings grouped by `postingId`. `amount` is always positive `BigInt`; `direction` carries the sign. **Immutability (no UPDATE/DELETE) is DB-enforced by trigger, proven by test** (see item 4 below). Balance-per-`postingId` (sum of debits = sum of credits) is a cross-row invariant Postgres has no generic constraint primitive for — that is enforced in the service layer in Stage 2, where it belongs alongside the posting transaction logic. |
 | `psp_instruction` 🔒 | Decision 7 | Idempotent boundary to the external custodian; `idempotencyKey` is unique. |
 | `reconciliation_check` | Decision 7 | Ledger-vs-PSP reconciliation snapshot. |
 
@@ -151,19 +176,38 @@ migration of existing rows — matching the constraint Data_Model.md §11 sets.
 3. **`ListingAgreement.acceptedAt` is nullable** for the same reason — a
    `listing_agreement` row can exist in an unaccepted state (`accepted =
    false`) before signing.
-4. **Immutability (🔒) is not a database-level constraint in this migration.**
-   PostgreSQL has no native "reject UPDATE/DELETE on this table" primitive
-   short of triggers or revoking privileges. Data_Model.md §12 requires this
-   be provable by test, so Stage 1+ services enforce it at the
-   repository/service layer (never issuing UPDATE/DELETE against these
-   tables), and the test suite asserts the behavior. A `REVOKE UPDATE, DELETE`
-   + trigger-based hard-enforcement is a reasonable defense-in-depth addition
-   post-V1 but is not required by any FR and is not added here (build the
-   seam, not the feature — avoiding undirected scope growth).
+4. **Immutability (🔒) is enforced at the database level, not just the
+   service layer.** Every 🔒 table (`consent_record`, `config_version`,
+   `commission_rate_version`, `introduction_record`, `deal_transition`,
+   `ledger_entry`, `psp_instruction`, `listing_agreement`, `audit_event`) has
+   a `BEFORE UPDATE OR DELETE` trigger (`reject_mutation()`, one shared
+   function, migration `20260727150100_immutable_tables`) that raises an
+   exception on any attempted UPDATE or DELETE against an existing row,
+   regardless of which DB role or code path issues it. Service-layer
+   discipline alone was insufficient: a write path that bypasses the service
+   (a manual fix, a future bug, an ad-hoc script) must still be rejected for
+   the financial source of truth to actually be one. Corrections remain new
+   rows (e.g. a reversing `ledger_entry` posting), never edits. Proven in
+   `backend/src/schema/immutability.spec.ts` — one test per immutable table,
+   each writing a real row then asserting both an UPDATE and a DELETE against
+   it are rejected; plus one control-case test on `session` (not immutable),
+   asserting update/delete on it *succeed*, so the test methodology itself is
+   validated against a known-mutable table, not just proving absence of
+   failure. All 10 tests pass.
 5. **`ScreeningRun.dealId`, `LedgerAccount.dealId`/`ownerPartyId`,
    `LedgerEntry.dealId` are nullable**, matching Data_Model.md's explicit
    "nullable" notes in §6.1 and §8.1 (screening may precede a deal; some
    ledger accounts are internal/revenue accounts with no owner party).
+
+6. **Immutable-table list completeness, cross-checked against Data_Model.md
+   §12 rule 3.** That rule names exactly 9 tables:
+   `ledger_entry`, `consent_record`, `introduction_record`, `deal_transition`,
+   `commission_rate_version`, `config_version`, `listing_agreement`,
+   `psp_instruction`, `audit_event`. All 9 carry the 🔒 marker in
+   `schema.prisma` and all 9 have the DB trigger from item 4 above, verified
+   by `SELECT tgname, tgrelid::regclass FROM pg_trigger WHERE tgname LIKE
+   '%immutable%'` returning exactly these 9 rows. Nothing in that rule is
+   missed; nothing extra was added to the 🔒 set.
 
 No SSOT conflict was hit in Stage 0 — the Data Model's schema was
 implementable as specified once the above (all schema-notation
