@@ -387,7 +387,7 @@ Built as `backend/src/deals/`:
   immutable `deal_transition` audit row, and any ledger effect inside **one
   database transaction**, so money state and deal state cannot diverge.
 
-### ⚠️ FLAGGED SSOT AMBIGUITY — Data_Model.md §7.3 (needs your ruling)
+### ✅ RESOLVED — Data_Model.md §7.3, Amendment A1 (ruled 2026-07-27)
 
 §7.3's transition table contradicts itself about whether a **funded** deal
 can be cancelled:
@@ -403,12 +403,13 @@ These cannot both hold. Allowing `escrow_funded → cancelled` would let a
 funded deal reach a **terminal** state with no refund posting — held client
 money stranded, and the Move-In Guarantee broken.
 
-**Implemented: the strict reading** — the `escrow_funded → cancelled` edge is
-ABSENT — because it is the only reading that is safe if wrong, and it is the
-one both the row's own guard and the closing paragraph support. Recorded in
-code as the exported `ESCROW_FUNDED_CANCEL_AMBIGUITY` constant and asserted
-by test. **If you intend row 8's "From" column literally, this needs an
-explicit amendment**, since it would change a Move-In Guarantee property.
+**Ruling (Stage 4 review, 2026-07-27): the strict reading is confirmed.** A
+funded deal can never be cancelled; it exits only via `move_in_confirmed` or
+`refunded`. `Data_Model.md` §7.3 has been amended — `escrow_funded` struck
+from the `cancelled` row's "From" column, with the reasoning recorded there
+as **Amendment A1**. The implementation already matched, so no code change
+accompanied the ruling; the edge's absence is asserted by test and the
+ruling is recorded in code as `ESCROW_FUNDED_CANCEL_RULING`.
 
 ### Acceptance criteria and the tests proving them
 
@@ -551,5 +552,5 @@ authorisation matrix (the API spec is document 4, not yet written); Config
 module wiring for the timeout window; everything in Stages 5–8.
 
 No SSOT conflict encountered in Stage 4. The §7.3 `escrow_funded → cancelled`
-ambiguity raised at Checkpoint 3 **remains open and unruled** — the strict
-reading is still in force.
+ambiguity raised at Checkpoint 3 was **ruled at Stage 4 review** and is now
+Amendment A1 in `Data_Model.md` — the strict reading, confirmed.

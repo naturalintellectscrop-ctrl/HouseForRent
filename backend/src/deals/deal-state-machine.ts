@@ -30,7 +30,7 @@ export const ALLOWED_TRANSITIONS: Readonly<
   // | escrow_funded | move_in_confirmed | tenant confirms move-in |
   // | escrow_funded | refunded          | pre-move-in refund → full tenant refund |
   // NOTE: no 'settled' (the guarantee) and no 'cancelled' — see
-  // ESCROW_FUNDED_CANCEL_AMBIGUITY below.
+  // ESCROW_FUNDED_CANCEL_RULING below (Amendment A1).
   escrow_funded: ['move_in_confirmed', 'refunded', 'dispute_hold'],
 
   // | move_in_confirmed | commission_earned | Payments.recogniseCommission (EARNED here) |
@@ -55,27 +55,20 @@ export const ALLOWED_TRANSITIONS: Readonly<
 });
 
 /**
- * ⚠️ FLAGGED SSOT AMBIGUITY — Data_Model.md §7.3 (see /docs/DOMAIN.md).
+ * RESOLVED — Data_Model.md §7.3, Amendment A1 (2026-07-27).
  *
- * §7.3 row 8 lists `escrow_funded` in the "From" column for `cancelled`,
- * but that same row's guard reads "pre-funding cancel; if funded → must
- * route via refunded", which forbids exactly that transition. §7.3's
- * closing paragraph then states as a structural fact that "the only exits
- * from escrow_funded are move_in_confirmed (forward) or refunded (money
- * back)".
- *
- * Allowing `escrow_funded → cancelled` would let a funded deal reach a
- * terminal state with no refund posting — held tenant money stranded, and
- * the Move-In Guarantee broken. The strict reading is therefore implemented
- * (the edge is ABSENT) pending an explicit ruling, because it is the only
- * reading that is safe if wrong.
+ * §7.3's `cancelled` row used to list `escrow_funded` in its "From" column
+ * while its own guard said "if funded → must route via refunded". Raised at
+ * Stage 3, ruled at Stage 4 review: a funded deal can NEVER be cancelled.
+ * Cancelling to a terminal state with no refund posting would strand held
+ * client money and break the Move-In Guarantee (FR-8.2). The doc has been
+ * amended to match; the edge stays absent from the graph above and its
+ * absence is asserted by test.
  */
-export const ESCROW_FUNDED_CANCEL_AMBIGUITY = Object.freeze({
-  document: 'Data_Model.md §7.3',
-  conflict:
-    "row 8 lists escrow_funded → cancelled, but its own guard and §7.3's closing " +
-    'paragraph both forbid it',
-  implemented: 'strict reading — escrow_funded → cancelled is NOT permitted',
+export const ESCROW_FUNDED_CANCEL_RULING = Object.freeze({
+  document: 'Data_Model.md §7.3, Amendment A1',
+  ruledOn: '2026-07-27',
+  ruling: 'escrow_funded → cancelled is NOT permitted; a funded deal exits only via move_in_confirmed or refunded',
   rationale:
     'a funded deal reaching a terminal state without a refund posting would strand ' +
     'client money and break the Move-In Guarantee (FR-8.2)',

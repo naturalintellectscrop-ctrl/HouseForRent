@@ -336,12 +336,31 @@ Enforced in code; illegal transitions rejected (FR-8.1). This table **is** the m
 | move_in_confirmed | commission_earned | Payments.recogniseCommission (**earned here**, FR-7.5) |
 | commission_earned | settled | Payments.settle (landlord paid net via PSP) |
 | settled | closed | terminal |
-| tenant_matched / agreement_signed / escrow_funded | cancelled | pre-funding cancel; if funded → must route via refunded |
+| created / tenant_matched / agreement_signed | cancelled | pre-funding cancel only. A funded deal can NEVER be cancelled — it must route via `refunded` *(amended 2026-07-27, see Amendment A1 below)* |
 | escrow_funded | refunded | pre-move-in refund → **full tenant refund** (FR-7.7) |
 | any active | dispute_hold | ops action; blocks settle (FR-10.5) |
 | dispute_hold | (prior or refunded/settled) | ops resolution |
 
 **Move-In Guarantee (FR-8.2), stated as a structural fact:** there is **no transition from `escrow_funded` to `settled`**. The only exits from `escrow_funded` are `move_in_confirmed` (forward) or `refunded` (money back). Therefore funds are unreleasable until move-in — the guarantee is the *shape of the graph*, needing no reserve fund.
+
+#### Amendment A1 — `escrow_funded → cancelled` removed (2026-07-27)
+
+**What changed.** The `cancelled` row above previously listed `escrow_funded`
+in its "From" column while its own guard text read *"pre-funding cancel; if
+funded → must route via refunded"*. Those contradicted each other, and both
+contradicted the Move-In Guarantee paragraph directly above. `escrow_funded`
+has been struck from that row.
+
+**Why.** A funded deal reaching a *terminal* state via `cancelled` would exit
+with no refund posting — held tenant money stranded on the ledger with no
+path out, and the Move-In Guarantee broken. The only two exits from
+`escrow_funded` are forward (`move_in_confirmed`) or money back
+(`refunded`), exactly as the guarantee paragraph states.
+
+**Status.** Raised at Stage 3 (Checkpoint 3), implemented as the strict
+reading pending a ruling, ruled and ratified at Stage 4 review. The
+implementation (`backend/src/deals/deal-state-machine.ts`) already matched
+this and is asserted by test; no code change accompanied the amendment.
 
 ---
 
