@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ListingsService } from './listings.service';
+import { ListingsController } from './listings.controller';
 import { IdentityModule } from '../identity/identity.module';
 
 /**
@@ -9,6 +10,7 @@ import { IdentityModule } from '../identity/identity.module';
  */
 @Module({
   imports: [IdentityModule],
+  controllers: [ListingsController],
   providers: [ListingsService],
   exports: [ListingsService],
 })

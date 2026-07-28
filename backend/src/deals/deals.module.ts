@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { DealsService } from './deals.service';
+import { DealsController } from './deals.controller';
 import { LedgerModule } from '../ledger/ledger.module';
 import { PaymentsModule } from '../payments/payments.module';
 
@@ -10,6 +11,7 @@ import { PaymentsModule } from '../payments/payments.module';
  */
 @Module({
   imports: [LedgerModule, PaymentsModule],
+  controllers: [DealsController],
   providers: [DealsService],
   exports: [DealsService],
 })

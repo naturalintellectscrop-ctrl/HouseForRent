@@ -68,7 +68,8 @@ export const ALLOWED_TRANSITIONS: Readonly<
 export const ESCROW_FUNDED_CANCEL_RULING = Object.freeze({
   document: 'Data_Model.md §7.3, Amendment A1',
   ruledOn: '2026-07-27',
-  ruling: 'escrow_funded → cancelled is NOT permitted; a funded deal exits only via move_in_confirmed or refunded',
+  ruling:
+    'escrow_funded → cancelled is NOT permitted; a funded deal exits only via move_in_confirmed or refunded',
   rationale:
     'a funded deal reaching a terminal state without a refund posting would strand ' +
     'client money and break the Move-In Guarantee (FR-8.2)',
