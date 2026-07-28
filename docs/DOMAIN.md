@@ -731,3 +731,92 @@ and media pipeline (Stage 7); real employment/reference verification
 (post-V1).
 
 No SSOT conflict encountered in Stage 6.
+
+---
+
+## API layer — document 4 implemented (auth, guards, controllers)
+
+Built between Stages 6 and 7, because **NFR-1 was unenforced**: there were
+no endpoints, so nothing prevented cross-role access to money and
+state-transition operations. Every test to that point called services
+directly, as a trusted caller. Stages 7-8 both assume an API exists, and
+Stage 8's acceptance criteria name authz explicitly.
+
+`docs/House_For_Rent_API_Specification.md` was written first, completing the
+four-document set per the Data Model §13 handoff.
+
+### What was built
+
+- **Auth** (`src/auth/`) — register / login / refresh / logout, plus
+  admin-only staff provisioning. Refresh tokens are stored as SHA-256
+  hashes and **rotated** on use: a stolen token works at most once, and its
+  use invalidates the legitimate session, which surfaces the compromise
+  rather than letting it persist. Login compares against a dummy hash when
+  the account is absent, so a missing phone number and a wrong password
+  take indistinguishable time.
+- **`user_credential` table** — Data_Model.md §2.2 deliberately modelled no
+  password columns, noting "credentials handled by auth subsystem" and
+  leaving the shape to document 4. Kept separate from `user_account` so
+  reading an account (every authorised request) never loads the hash.
+- **Global guards** — `JwtAuthGuard` + `RolesGuard` registered via
+  `APP_GUARD`, so endpoints are **protected by default** and must opt out
+  with `@Public()`. Per-controller registration fails open: a new
+  controller written without the decorator would be silently
+  unauthenticated and no test would notice.
+- **`DealPartyGuard`** — being a tenant is not enough; being that specific
+  deal's tenant is required. Non-parties receive **404, not 403**, because
+  403 confirms the deal exists and enables ID enumeration.
+- **Global `ValidationPipe`** with `forbidNonWhitelisted`, so a body
+  carrying `status`, `commissionAmount` or `actorPartyId` is a 400 rather
+  than a silently ignored field.
+- **`BigIntSerializerInterceptor`** — money leaves as strings globally. Per
+  endpoint mapping would work until the first handler that forgets, and
+  that failure is silent, plausible-looking, and about money.
+- **`DomainExceptionFilter`** — maps domain errors to documented status
+  codes. Without it every rejected transition is a 500, which is both wrong
+  and dangerous: monitoring could not distinguish "a tenant tried something
+  illegal" from "the ledger is broken". Unrecognised errors fall through to
+  500 **without echoing their message**.
+- **Controllers** — deals (all 11 transitions), listings, search.
+
+### The role assignments that carry weight
+
+| Decision | Reasoning |
+|---|---|
+| `earn-commission` and `settle` are **admin-only** | Exposing settle to a landlord lets the beneficiary trigger their own payout; exposing earn-commission to a tenant lets them create revenue |
+| **The tenant** confirms move-in, not the landlord | It releases the tenant's own money from protection, so the party at risk states the condition is met |
+| `verify` is **FOO-only** | A lister verifying their own property dissolves the entire trust proposition |
+| A FOO — though staff — **cannot move money** | Field authority and financial authority are separate |
+| `publish` is lister-callable | Not a hole: the service independently re-checks verification, service area and mandate, so an unverified listing gets 422 |
+
+### Acceptance criteria and the tests proving them
+
+`authorization-matrix.spec.ts` — 68 tests.
+
+| Criterion | Test |
+|---|---|
+| **Every cell of the §4 matrix** | `matrixRow()` asserts, for all four roles on ten transition endpoints, that permitted roles are not blocked and denied roles get 403 with `FORBIDDEN_ROLE` |
+| Money endpoints deny cross-role access | `a tenant CANNOT settle`; `a LISTER cannot settle their own deal`; `a lister cannot earn commission on their own deal`; `a FOO — who is staff — still cannot move money` |
+| Authentication is required | `an unauthenticated request to a money endpoint is 401`; `a garbage bearer token is 401, not a crash` |
+| Role alone is insufficient | `a tenant CANNOT fund a stranger deal, and gets 404 not 403` |
+| Existence is not disclosed | `a non-existent deal returns the SAME 404 as a stranger deal` |
+| Privileged fields cannot be smuggled | bodies carrying `status`, `commissionAmount`, `actorPartyId` all 400 |
+| Money must be a string | `money as a JSON NUMBER is rejected`; `a non-numeric amount string is rejected` |
+| **Forbidden endpoints do not exist** | `there is NO generic status-patching endpoint`; `NO settle-from-funded shortcut`; `NO ledger-write endpoint at any role, including admin` |
+| Staff cannot self-register | registering as `admin` or `foo` is a 400; a tenant cannot provision staff |
+| A lister cannot self-verify | `THE KEY ONE: a lister CANNOT verify their own listing` |
+| Publish gates hold behind authz | `a lister publishing an UNVERIFIED listing gets 422, not 200` |
+
+**The matrix tests were verified to be load-bearing**: disabling the role
+check in `RolesGuard` failed exactly 30 of 60 — precisely the denial half —
+then restored. A permission test that passes with authz switched off proves
+nothing.
+
+Full suite: **221/221 passing** across 13 suites; `tsc --noEmit` clean; 26
+routes mapped and the app boots.
+
+**Deferred:** viewing/field-report endpoints and the media pipeline (Stage
+7); admin observability endpoints — reconciliation, launch gate,
+verification queue (Stage 8); rate limiting; the idempotency middleware
+(`settle`/`refund` already derive deterministic server-side keys, so
+retries are safe today, but the `Idempotency-Key` header is not yet read).

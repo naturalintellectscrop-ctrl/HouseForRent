@@ -99,10 +99,33 @@ model UserAccount {
   authRole  AuthRole @map("auth_role")
   createdAt DateTime @default(now()) @map("created_at")
 
-  party    Party     @relation(fields: [partyId], references: [id])
-  sessions Session[]
+  party      Party           @relation(fields: [partyId], references: [id])
+  sessions   Session[]
+  credential UserCredential?
 
   @@map("user_account")
+}
+
+/// Credential store. Data_Model.md §2.2 deliberately models no password
+/// columns on `user_account`, noting "credentials handled by auth
+/// subsystem" and leaving the shape to document 4 — this is that decision.
+///
+/// Kept in its own table rather than as columns on `user_account` so that
+/// reading an account (which happens on every authorised request) never
+/// loads the password hash, and so a future switch to a different
+/// credential type (OTP-only, WebAuthn) adds a table rather than migrating
+/// the account row. Only the bcrypt hash is stored; the password itself
+/// never touches the database.
+model UserCredential {
+  id            String   @id @default(uuid())
+  userAccountId String   @unique @map("user_account_id")
+  passwordHash  String   @map("password_hash")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  userAccount UserAccount @relation(fields: [userAccountId], references: [id])
+
+  @@map("user_credential")
 }
 
 /// Standard session/refresh record (Data_Model.md §2.3 — "fields per auth
