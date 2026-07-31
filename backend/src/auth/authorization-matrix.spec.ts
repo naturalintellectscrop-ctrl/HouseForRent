@@ -558,6 +558,42 @@ describe('Authorisation matrix (NFR-1, API Spec §4)', () => {
     });
   });
 
+  describe('GET /auth/me — self-disclosure only', () => {
+    for (const role of ALL_ROLES) {
+      test(`${role} can read their OWN caller identity`, async () => {
+        const res = await request(app.getHttpServer())
+          .get('/v1/auth/me')
+          .set('Authorization', `Bearer ${tokens[role]}`);
+
+        expect(res.status).toBe(200);
+        expect(res.body.role).toBe(role);
+        expect(res.body.partyId).toBe(partyIds[role]);
+      });
+    }
+
+    test('it is NOT public — an unauthenticated caller gets 401', async () => {
+      const res = await request(app.getHttpServer()).get('/v1/auth/me');
+      expect(res.status).toBe(401);
+    });
+
+    test('it discloses nothing about anyone else — no party lookup by id', async () => {
+      // There is no /auth/me/{id} and no way to name a subject: the endpoint
+      // reads the session and nothing else.
+      const res = await request(app.getHttpServer())
+        .get(`/v1/auth/me/${partyIds.admin}`)
+        .set('Authorization', `Bearer ${tokens.tenant}`);
+      expect(res.status).toBe(404);
+    });
+
+    test('a caller cannot elevate their own role through it', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/v1/auth/me')
+        .set('Authorization', `Bearer ${tokens.tenant}`)
+        .send({ role: 'admin' });
+      expect(res.status).toBe(404);
+    });
+  });
+
   describe('viewings & field ops (API Spec §4.3)', () => {
     /** A live, verified, in-corridor listing the matrix tenant may view. */
     async function seedLiveListing() {
@@ -798,6 +834,81 @@ describe('Authorisation matrix (NFR-1, API Spec §4)', () => {
           .set('Authorization', bearer)
           .send({});
         expect(conduct.status).toBeLessThan(400);
+      });
+    });
+
+    describe('GET /viewings/{id} — the field app read', () => {
+      test('the assigned foo reads the visit and what it still needs', async () => {
+        const viewing = await seedAssignedViewing();
+        const res = await request(app.getHttpServer())
+          .get(`/v1/viewings/${viewing.id}`)
+          .set('Authorization', `Bearer ${tokens.foo}`);
+
+        expect(res.status).toBe(200);
+        expect(res.body.viewing.id).toBe(viewing.id);
+        expect(res.body.fieldReport).toBeNull();
+        expect(res.body.canConduct).toBe(false);
+        expect(res.body.whatIsMissing).toEqual(['field_report']);
+      });
+
+      test('once a report is filed, the server says it can be conducted', async () => {
+        const viewing = await seedAssignedViewing();
+        await request(app.getHttpServer())
+          .post(`/v1/viewings/${viewing.id}/field-report`)
+          .set('Authorization', `Bearer ${tokens.foo}`)
+          .send({
+            conditionRating: 'good',
+            matchesListing: true,
+            isAvailable: true,
+          });
+
+        const res = await request(app.getHttpServer())
+          .get(`/v1/viewings/${viewing.id}`)
+          .set('Authorization', `Bearer ${tokens.foo}`);
+
+        expect(res.body.canConduct).toBe(true);
+        expect(res.body.whatIsMissing).toEqual([]);
+      });
+
+      test('an UNASSIGNED foo cannot read it', async () => {
+        seq += 1;
+        const primaryPhone = phone('rf');
+        await auth.provisionStaff({
+          displayName: 'Reader FOO',
+          primaryPhone,
+          password: 'correct-horse-battery',
+          role: 'foo',
+        });
+        const { accessToken } = await auth.login({
+          primaryPhone,
+          password: 'correct-horse-battery',
+        });
+
+        const viewing = await seedAssignedViewing();
+        const res = await request(app.getHttpServer())
+          .get(`/v1/viewings/${viewing.id}`)
+          .set('Authorization', `Bearer ${accessToken}`);
+
+        expect(res.status).toBe(403);
+        expect(res.body.error?.code).toBe('NOT_ASSIGNED_FOO');
+      });
+
+      test('a tenant cannot read it, even their own viewing', async () => {
+        const viewing = await seedAssignedViewing();
+        const res = await request(app.getHttpServer())
+          .get(`/v1/viewings/${viewing.id}`)
+          .set('Authorization', `Bearer ${tokens.tenant}`);
+
+        expect(res.status).toBe(403);
+      });
+
+      test('the literal /introductions route is not swallowed as an id', async () => {
+        const res = await request(app.getHttpServer())
+          .get('/v1/viewings/introductions')
+          .set('Authorization', `Bearer ${tokens.foo}`);
+
+        expect(res.status).toBe(200);
+        expect(Array.isArray(res.body)).toBe(true);
       });
     });
 
