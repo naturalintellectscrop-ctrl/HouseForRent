@@ -161,6 +161,10 @@ export class ViewingsController {
    * evidence. Staff-only: it is a linkage between two counterparties, and
    * exposing it to either would tell a landlord which other tenants an
    * officer introduced.
+   *
+   * Declared BEFORE `:viewingId` — Nest matches routes in declaration
+   * order, so a literal segment must come first or `introductions` would be
+   * swallowed as an id.
    */
   @Roles('foo', 'admin')
   @Get('introductions')
@@ -174,5 +178,35 @@ export class ViewingsController {
       landlordPartyId,
       listingId,
     });
+  }
+
+  /**
+   * One visit, with whatever evidence it has so far — what the field app
+   * needs to know which step is next.
+   *
+   * Carries the same ¹ assigned-FOO constraint as the write operations: an
+   * officer reads the visit they were dispatched to, not an arbitrary one.
+   * Returns `whatIsMissing` so the client renders the invariant rather than
+   * re-deriving it; the server stays the single source of that judgement
+   * (Technical Architecture §7).
+   */
+  @Roles('foo', 'admin')
+  @RequiresAssignedFoo()
+  @Get(':viewingId')
+  async getViewing(@Param('viewingId') viewingId: string) {
+    const viewing = await this.viewings.getViewingOrThrow(viewingId);
+    const fieldReport = await this.viewings.getFieldReport(viewingId);
+    const introduction = await this.viewings.getIntroduction(viewingId);
+
+    return {
+      viewing,
+      fieldReport,
+      introduction,
+      canConduct: viewing.status === 'scheduled' && fieldReport !== null,
+      whatIsMissing:
+        viewing.status === 'scheduled' && !fieldReport
+          ? ['field_report']
+          : [],
+    };
   }
 }

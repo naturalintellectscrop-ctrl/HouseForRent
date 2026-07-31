@@ -423,6 +423,10 @@ export class ViewingsService {
     return this.prisma.fieldReport.findUnique({ where: { viewingId } });
   }
 
+  async getIntroduction(viewingId: string): Promise<IntroductionRecord | null> {
+    return this.prisma.introductionRecord.findUnique({ where: { viewingId } });
+  }
+
   private async loadForUpdate(viewingId: string, tx: Tx): Promise<Viewing> {
     const viewing = await tx.viewing.findUnique({ where: { id: viewingId } });
     if (!viewing) {

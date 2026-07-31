@@ -1002,3 +1002,96 @@ agreement signing, and admin observability.
 No SSOT conflict encountered in Stage 7. One PRD-vs-Data-Model tension
 (FR-5.1's "scheduled") was flagged and resolved as prose without requiring
 an amendment; one API-spec gap was closed as Amendment A2.
+
+---
+
+## Stage 7b — the FOO console (`admin-web/`)
+
+Next.js 16 App Router. Technical Architecture §7 calls for *"web, not mobile,
+for V1 — it's an internal ops tool where clarity, form density, and speed
+beat native polish"*, with the field-capture parts working *"on a phone
+browser with low bandwidth"*.
+
+### It is a thin client, and that is load-bearing
+
+§7 again: *"all money, state, verification, and commission logic is
+server-side … It renders server state and issues intent."*
+
+Nothing in `admin-web/` decides whether a viewing may be conducted. The
+disabled **Close visit** button renders `canConduct` **as the server
+reported it** — which is why `GET /v1/viewings/{id}` returns `canConduct`
+and `whatIsMissing` rather than the client deriving them. A rule
+re-implemented in the console would be a second copy free to drift from the
+two that actually hold (the service and the DB trigger).
+
+Proven by breaking it: forcing `canConduct` true enabled the button, the
+browser test failed immediately, **and** the backend still answered
+`422 FIELD_REPORT_REQUIRED` when the request went through anyway.
+
+### Two backend additions the console required
+
+| Endpoint | Why |
+|---|---|
+| `GET /v1/auth/me` | The access token deliberately carries only `sub` — role and party are re-read from the database each request so a role change takes effect immediately. Correct, but it left a client no way to know its own role. Not role-gated: it discloses only what the caller proved by authenticating, and confers nothing. |
+| `GET /v1/viewings/{viewingId}` | The field app needs one visit plus whatever evidence it has. Carries the same ¹ assigned-FOO constraint as the writes. Declared *after* the literal `introductions` route, since Nest matches in declaration order — asserted by test. |
+
+### Low bandwidth as a build constraint, not a wish
+
+No component library, no web fonts, no Tailwind. Nearly every page is a
+server component shipping no interactive JS; `app/globals.css` is a few
+kilobytes of hand-written CSS, cached after first load. The four client
+components exist only where a pending state or a file picker genuinely
+requires one.
+
+Tokens live in `httpOnly` cookies and are attached **server-side**, so they
+never enter the client bundle — an XSS on this console cannot exfiltrate a
+field officer's session. The `hfr_role` cookie is deliberately *not*
+httpOnly: it picks which links render and nothing else, and the server
+re-authorises regardless, so tampering with it changes the menu only.
+
+### Backend error codes are surfaced, not paraphrased
+
+`FIELD_REPORT_REQUIRED` and `NOT_ASSIGNED_FOO` mean very different things to
+whoever an officer rings for help. Collapsing them into "something went
+wrong" destroys the only diagnostic available from a stairwell with one bar
+of signal.
+
+### The browser tests found a real defect
+
+`e2e/field-visit.spec.ts` — 8 Playwright tests against a **real backend and
+real database**, nothing mocked, in a Pixel-7 viewport.
+
+Their first run caught that a `'use server'` file **may only export async
+functions**: `export const IDLE = { error: null }` broke every Server Action
+at runtime while passing both `tsc --noEmit` and `next build`. Silent,
+type-clean, and total. Moved to `app/actions/state.ts`; the distinction that
+`export type` is safe (erased) while a value is not is now recorded there.
+
+| Acceptance criterion | Test |
+|---|---|
+| Unauthenticated access is refused | `an unauthenticated officer is sent to sign in` |
+| Login does not leak which half was wrong | `bad credentials are refused without saying which part was wrong` |
+| An officer sees only their own visits | `the officer signs in and sees only their own assigned visits` |
+| **The §5.1 invariant is what the officer SEES** | `THE INVARIANT: a visit cannot be closed until the report is filed` — asserts the button is disabled, files the structured report by tapping the real pills, then asserts it becomes enabled and mints the introduction record |
+| A conducted visit cannot be reopened | `a conducted visit offers no way to reopen or re-file` |
+| Evidence is queryable | `the introduction record is queryable as evidence` |
+| A no-show closes with **no** introduction record | `a no-show is recorded and closes the visit without an introduction` |
+| Sign-out revokes | `signing out clears the session` |
+
+Persistence was verified directly in the database after the run: the
+conducted viewing carries both artefacts, the no-show carries none, and the
+listing shows the field report's write-back (`availabilityConfirmedAt` set,
+`verificationState` verified).
+
+The suite **skips rather than passes** when its seed variables are absent,
+so an unseeded run cannot be mistaken for a green one.
+
+Full state: backend **308/308** across 14 suites, `tsc` clean; console
+`tsc` clean, `eslint` clean, `next build` clean, **8/8** e2e.
+
+**Deliberately not built:** admin observability screens (reconciliation,
+launch gate, verification queue) — those endpoints are Stage 8 and do not
+exist yet; building screens against stubs would be scaffolding ahead of the
+core, the exact failure mode the Prompt Pack's guardrails exist to prevent.
+Also absent: real byte upload (the storage provider is still the mock), and
+admin dispatch/assignment screens (assignment works over the API today).
