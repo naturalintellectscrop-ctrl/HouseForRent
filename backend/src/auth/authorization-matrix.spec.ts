@@ -6,6 +6,8 @@ import { AppModule } from '../app.module';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthService } from './auth.service';
 import { DealsService } from '../deals/deals.service';
+import { IdentityService } from '../identity/identity.service';
+import { ViewingsService } from '../viewings/viewings.service';
 
 /**
  * NFR-1 / API Spec §4 — the authorisation matrix, asserted cell by cell.
@@ -23,6 +25,8 @@ describe('Authorisation matrix (NFR-1, API Spec §4)', () => {
   let prisma: PrismaService;
   let auth: AuthService;
   let deals: DealsService;
+  let identity: IdentityService;
+  let viewings: ViewingsService;
 
   /** One logged-in account per role, reused across cases. */
   const tokens: Record<AuthRole, string> = {} as Record<AuthRole, string>;
@@ -45,6 +49,8 @@ describe('Authorisation matrix (NFR-1, API Spec §4)', () => {
     prisma = moduleRef.get(PrismaService);
     auth = moduleRef.get(AuthService);
     deals = moduleRef.get(DealsService);
+    identity = moduleRef.get(IdentityService);
+    viewings = moduleRef.get(ViewingsService);
 
     for (const role of ['tenant', 'lister', 'foo', 'admin'] as AuthRole[]) {
       const primaryPhone = phone(role.slice(0, 2));
@@ -549,6 +555,348 @@ describe('Authorisation matrix (NFR-1, API Spec §4)', () => {
 
       expect(res.status).toBe(422);
       expect(res.body.error?.code).toBe('LISTING_UNVERIFIED');
+    });
+  });
+
+  describe('viewings & field ops (API Spec §4.3)', () => {
+    /** A live, verified, in-corridor listing the matrix tenant may view. */
+    async function seedLiveListing() {
+      seq += 1;
+      const neighbourhood = await prisma.neighbourhood.create({
+        data: { name: `ViewAuthz-${Date.now()}-${seq}`, inServiceArea: true },
+      });
+      const property = await prisma.property.create({
+        data: {
+          ownerPartyId: partyIds.lister,
+          propertyType: 'apartment',
+          bedrooms: 2,
+          bathrooms: 1,
+          furnished: 'furnished',
+          neighbourhoodId: neighbourhood.id,
+          landmarkText: 'viewing authz',
+        },
+      });
+      const listing = await prisma.listing.create({
+        data: {
+          propertyId: property.id,
+          monthlyRent: 1_000_000n,
+          requiredMonthsUpfront: 3,
+          depositAmount: 1_000_000n,
+          verificationState: 'verified',
+          publicationState: 'live',
+        },
+      });
+      return listing;
+    }
+
+    /** The matrix tenant, identity-verified so FR-5.1's gate is not what fires. */
+    async function verifyMatrixTenant() {
+      const already = await prisma.identityVerification.findFirst({
+        where: { partyId: partyIds.tenant, method: 'nin', state: 'verified' },
+      });
+      if (already) return;
+      await identity.recordConsent({
+        partyId: partyIds.tenant,
+        purpose: 'identity_verification',
+        policyVersion: 'v1',
+      });
+      await identity.verifyNin(partyIds.tenant, `CM${partyIds.tenant}`);
+      await identity.verifyPhone(partyIds.tenant, phone('mv'));
+      await identity.verifySelfieMatch(
+        partyIds.tenant,
+        `selfie-${partyIds.tenant}`,
+        `idphoto-${partyIds.tenant}`,
+      );
+    }
+
+    /** A viewing assigned to the matrix FOO — the ¹ footnote's happy case. */
+    async function seedAssignedViewing() {
+      await verifyMatrixTenant();
+      const listing = await seedLiveListing();
+      const viewing = await viewings.requestViewing({
+        listingId: listing.id,
+        tenantPartyId: partyIds.tenant,
+        scheduledFor: new Date(Date.now() + 86_400_000),
+      });
+      return viewings.assign({
+        viewingId: viewing.id,
+        fooPartyId: partyIds.foo,
+      });
+    }
+
+    /**
+     * The §4.3 rows, both halves: permitted roles are not blocked by authz,
+     * every other role gets 403.
+     */
+    function viewingRow(
+      label: string,
+      path: (viewingId: string) => string,
+      permitted: AuthRole[],
+      body: Record<string, unknown> = {},
+    ) {
+      describe(label, () => {
+        for (const role of ALL_ROLES) {
+          const allowed = permitted.includes(role);
+
+          test(`${role} is ${allowed ? 'PERMITTED' : 'DENIED'}`, async () => {
+            const viewing = await seedAssignedViewing();
+            const res = await request(app.getHttpServer())
+              .post(path(viewing.id))
+              .set('Authorization', `Bearer ${tokens[role]}`)
+              .send(body);
+
+            if (allowed) {
+              expect(res.status).not.toBe(403);
+              expect(res.status).not.toBe(401);
+            } else {
+              expect(res.status).toBe(403);
+            }
+          });
+        }
+      });
+    }
+
+    describe('POST /viewings (request)', () => {
+      for (const role of ALL_ROLES) {
+        const allowed = role === 'tenant' || role === 'admin';
+        test(`${role} is ${allowed ? 'PERMITTED' : 'DENIED'}`, async () => {
+          await verifyMatrixTenant();
+          const listing = await seedLiveListing();
+          const res = await request(app.getHttpServer())
+            .post('/v1/viewings')
+            .set('Authorization', `Bearer ${tokens[role]}`)
+            .send({
+              listingId: listing.id,
+              scheduledFor: new Date(Date.now() + 86_400_000).toISOString(),
+            });
+
+          if (allowed) {
+            expect(res.status).not.toBe(403);
+            expect(res.status).not.toBe(401);
+          } else {
+            expect(res.status).toBe(403);
+            expect(res.body.error?.code).toBe('FORBIDDEN_ROLE');
+          }
+        });
+      }
+    });
+
+    viewingRow(
+      'POST /viewings/{id}/assign',
+      (id) => `/v1/viewings/${id}/assign`,
+      ['admin'],
+      { fooPartyId: '00000000-0000-0000-0000-000000000000' },
+    );
+
+    viewingRow(
+      'POST /viewings/{id}/field-report',
+      (id) => `/v1/viewings/${id}/field-report`,
+      ['foo', 'admin'],
+      { conditionRating: 'good', matchesListing: true, isAvailable: true },
+    );
+
+    viewingRow(
+      'POST /viewings/{id}/conduct',
+      (id) => `/v1/viewings/${id}/conduct`,
+      ['foo', 'admin'],
+    );
+
+    viewingRow(
+      'POST /viewings/{id}/no-show',
+      (id) => `/v1/viewings/${id}/no-show`,
+      ['foo', 'admin'],
+    );
+
+    viewingRow(
+      'POST /viewings/{id}/media',
+      (id) => `/v1/viewings/${id}/media`,
+      ['foo', 'admin'],
+      {
+        kind: 'image',
+        mimeType: 'image/jpeg',
+        sourceByteSize: 100_000,
+        sourceRef: 'authz-capture',
+      },
+    );
+
+    describe('THE ¹ FOOTNOTE — role alone is not enough (API Spec §4.3)', () => {
+      /** A second, genuinely different field officer. */
+      async function otherFoo() {
+        seq += 1;
+        const primaryPhone = phone('of');
+        await auth.provisionStaff({
+          displayName: 'Other FOO',
+          primaryPhone,
+          password: 'correct-horse-battery',
+          role: 'foo',
+        });
+        const { accessToken } = await auth.login({
+          primaryPhone,
+          password: 'correct-horse-battery',
+        });
+        return accessToken;
+      }
+
+      test('an UNASSIGNED foo cannot conduct someone else\'s viewing', async () => {
+        const viewing = await seedAssignedViewing();
+        const res = await request(app.getHttpServer())
+          .post(`/v1/viewings/${viewing.id}/conduct`)
+          .set('Authorization', `Bearer ${await otherFoo()}`)
+          .send({});
+
+        expect(res.status).toBe(403);
+        expect(res.body.error?.code).toBe('NOT_ASSIGNED_FOO');
+      });
+
+      test('an UNASSIGNED foo cannot file a field report on it either', async () => {
+        const viewing = await seedAssignedViewing();
+        const res = await request(app.getHttpServer())
+          .post(`/v1/viewings/${viewing.id}/field-report`)
+          .set('Authorization', `Bearer ${await otherFoo()}`)
+          .send({
+            conditionRating: 'excellent',
+            matchesListing: true,
+            isAvailable: true,
+          });
+
+        expect(res.status).toBe(403);
+        expect(res.body.error?.code).toBe('NOT_ASSIGNED_FOO');
+      });
+
+      test('an unassigned foo cannot capture media against it', async () => {
+        const viewing = await seedAssignedViewing();
+        const res = await request(app.getHttpServer())
+          .post(`/v1/viewings/${viewing.id}/media`)
+          .set('Authorization', `Bearer ${await otherFoo()}`)
+          .send({
+            kind: 'image',
+            mimeType: 'image/jpeg',
+            sourceByteSize: 1000,
+            sourceRef: 'not-mine',
+          });
+
+        expect(res.status).toBe(403);
+        expect(res.body.error?.code).toBe('NOT_ASSIGNED_FOO');
+      });
+
+      test('the ASSIGNED foo can do all three', async () => {
+        const viewing = await seedAssignedViewing();
+        const bearer = `Bearer ${tokens.foo}`;
+
+        const report = await request(app.getHttpServer())
+          .post(`/v1/viewings/${viewing.id}/field-report`)
+          .set('Authorization', bearer)
+          .send({
+            conditionRating: 'good',
+            matchesListing: true,
+            isAvailable: true,
+          });
+        expect(report.status).toBeLessThan(400);
+
+        const conduct = await request(app.getHttpServer())
+          .post(`/v1/viewings/${viewing.id}/conduct`)
+          .set('Authorization', bearer)
+          .send({});
+        expect(conduct.status).toBeLessThan(400);
+      });
+    });
+
+    describe('the invariant holds at the HTTP boundary too', () => {
+      test('conduct without a field report is 422 FIELD_REPORT_REQUIRED', async () => {
+        const viewing = await seedAssignedViewing();
+        const res = await request(app.getHttpServer())
+          .post(`/v1/viewings/${viewing.id}/conduct`)
+          .set('Authorization', `Bearer ${tokens.foo}`)
+          .send({});
+
+        expect(res.status).toBe(422);
+        expect(res.body.error?.code).toBe('FIELD_REPORT_REQUIRED');
+      });
+    });
+
+    describe('the client cannot smuggle privileged viewing fields', () => {
+      test('a field report carrying `viewingId` or `fooPartyId` is 400', async () => {
+        const viewing = await seedAssignedViewing();
+        for (const smuggled of [
+          { fooPartyId: partyIds.admin },
+          { viewingId: viewing.id },
+        ]) {
+          const res = await request(app.getHttpServer())
+            .post(`/v1/viewings/${viewing.id}/field-report`)
+            .set('Authorization', `Bearer ${tokens.foo}`)
+            .send({
+              conditionRating: 'good',
+              matchesListing: true,
+              isAvailable: true,
+              ...smuggled,
+            });
+          expect(res.status).toBe(400);
+        }
+      });
+
+      test('a viewing request naming another tenant is 400, not an impersonation', async () => {
+        await verifyMatrixTenant();
+        const listing = await seedLiveListing();
+        const res = await request(app.getHttpServer())
+          .post('/v1/viewings')
+          .set('Authorization', `Bearer ${tokens.tenant}`)
+          .send({
+            listingId: listing.id,
+            scheduledFor: new Date(Date.now() + 86_400_000).toISOString(),
+            tenantPartyId: partyIds.lister,
+          });
+
+        expect(res.status).toBe(400);
+      });
+
+      test('a conduct call cannot supply its own introducedAt or landlord', async () => {
+        const viewing = await seedAssignedViewing();
+        for (const smuggled of [
+          { introducedAt: new Date(0).toISOString() },
+          { landlordPartyId: partyIds.tenant },
+        ]) {
+          const res = await request(app.getHttpServer())
+            .post(`/v1/viewings/${viewing.id}/conduct`)
+            .set('Authorization', `Bearer ${tokens.foo}`)
+            .send(smuggled);
+          expect(res.status).toBe(400);
+        }
+      });
+    });
+
+    describe('endpoints that must NOT exist (API Spec §11)', () => {
+      test('there is NO endpoint that creates an introduction record directly', async () => {
+        const viewing = await seedAssignedViewing();
+        for (const path of [
+          `/v1/viewings/${viewing.id}/introduction`,
+          `/v1/introduction-records`,
+          `/v1/viewings/${viewing.id}/introduction-record`,
+        ]) {
+          const res = await request(app.getHttpServer())
+            .post(path)
+            .set('Authorization', `Bearer ${tokens.admin}`)
+            .send({});
+          expect(res.status).toBe(404);
+        }
+      });
+
+      test('there is NO cancel endpoint for a viewing (Decision 9 / §11)', async () => {
+        const viewing = await seedAssignedViewing();
+        const res = await request(app.getHttpServer())
+          .post(`/v1/viewings/${viewing.id}/cancel`)
+          .set('Authorization', `Bearer ${tokens.admin}`)
+          .send({});
+        expect(res.status).toBe(404);
+      });
+
+      test('introduction evidence is staff-only — a tenant cannot read it', async () => {
+        for (const role of ['tenant', 'lister'] as AuthRole[]) {
+          const res = await request(app.getHttpServer())
+            .get('/v1/viewings/introductions')
+            .set('Authorization', `Bearer ${tokens[role]}`);
+          expect(res.status).toBe(403);
+        }
+      });
     });
   });
 

@@ -172,8 +172,51 @@ enough; being *this deal's* tenant is required.
 | `POST /viewings/{id}/conduct` | — | — | ✅¹ | ✅ |
 | `POST /viewings/{id}/no-show` | — | — | ✅¹ | ✅ |
 | `POST /viewings/{id}/field-report` | — | — | ✅¹ | ✅ |
+| `POST /viewings/{id}/media` | — | — | ✅¹ | ✅ |
+| `GET /viewings/assigned/me` | — | — | ✅ | ✅ |
+| `GET /viewings/introductions` | — | — | ✅ | ✅ |
 
 ¹ must be the assigned FOO.
+
+#### Amendment A2 — media capture and field-ops reads added (2026-07-30)
+
+The original §4.3 listed no media endpoint. That was a **gap, not a
+prohibition**: FR-5.5 mandates that the field visit capture professional
+media, and §11 does not list media among the deliberate absences. Added
+`POST /viewings/{id}/media` under the same ¹ assigned-FOO constraint as the
+other field operations, since a capture is an assertion about what an
+officer saw.
+
+Two staff-only reads were added alongside it: `GET /viewings/assigned/me`
+(an officer's dispatch board, FR-5.2) and `GET /viewings/introductions`
+(introduction records as queryable circumvention evidence, FR-5.3/FR-8.3).
+The latter is **staff-only by design** — it is a linkage between two
+counterparties, and exposing it to either would tell a landlord which other
+tenants an officer introduced.
+
+> **[API Decision] There is NO endpoint that creates an introduction record.**
+> The record is a *consequence* of conducting a viewing, written in the same
+> transaction as the status change and never separately. If it were
+> independently creatable, an introduction could be fabricated for a visit
+> that never happened — which is precisely the evidence it exists to be.
+> Equally, `conduct` derives the landlord from the property and the
+> timestamp from the server; no caller chooses what the evidence says.
+
+> **[API Decision] `assign` is admin-only, not FOO-self-service.**
+> Assigning field work is an ops function. An officer who could assign
+> themselves would make the service-corridor and workload controls advisory
+> rather than enforced.
+
+> **[API Decision] A non-assigned FOO gets 403, not 404 (unlike §7.4).**
+> The deal-party 404 exists to stop *outsiders* enumerating deal IDs. Every
+> caller reaching the assigned-FOO check is already staff with legitimate
+> system-wide visibility, so concealing that a viewing exists buys no
+> security and costs a dispatched officer a baffling error. 403 with
+> `NOT_ASSIGNED_FOO` is both safe and operationally honest.
+
+**No viewing cancel endpoint exists.** `cancelled` is a value in the schema's
+status enum, but §4.3 lists no operation reaching it; adding one is a scope
+change requiring an SSOT amendment, not an API iteration (§11).
 
 ### 4.4 Screening, onboarding, config, admin
 

@@ -11,6 +11,8 @@ import { ConfigModule } from './config/config.module';
 import { ListingsModule } from './listings/listings.module';
 import { SearchModule } from './search/search.module';
 import { ScreeningModule } from './screening/screening.module';
+import { MediaModule } from './media/media.module';
+import { ViewingsModule } from './viewings/viewings.module';
 import { AuthModule } from './auth/auth.module';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { RolesGuard } from './auth/guards/roles.guard';
@@ -29,6 +31,8 @@ import { DomainExceptionFilter } from './common/domain-exception.filter';
     ListingsModule,
     SearchModule,
     ScreeningModule,
+    MediaModule,
+    ViewingsModule,
   ],
   controllers: [AppController],
   providers: [

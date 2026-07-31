@@ -317,7 +317,10 @@ describe('Search (Stage 5)', () => {
           tenantPartyId: tenant.id,
           conductedByPartyId: foo.id,
           scheduledFor: new Date(),
-          status: 'conducted',
+          // The summary reads the field report, not the viewing status, so
+          // this stays at `scheduled` rather than tripping the Stage 7
+          // trigger that requires an introduction record too.
+          status: 'scheduled',
         },
       });
       await prisma.fieldReport.create({

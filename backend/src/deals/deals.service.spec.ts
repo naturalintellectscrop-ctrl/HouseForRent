@@ -85,13 +85,26 @@ describe('Deals service (Stage 3)', () => {
         depositAmount: monthlyRent,
       },
     });
+    // Built in the order the Stage 7 DB trigger requires: evidence first,
+    // status last. A `conducted` viewing with no field report is rejected by
+    // the database now, not merely by ViewingsService.
     const viewing = await prisma.viewing.create({
       data: {
         listingId: listing.id,
         tenantPartyId: tenant.id,
         conductedByPartyId: foo.id,
         scheduledFor: new Date(),
-        status: 'conducted',
+        status: 'scheduled',
+      },
+    });
+    await prisma.fieldReport.create({
+      data: {
+        viewingId: viewing.id,
+        fooPartyId: foo.id,
+        conditionRating: 'good',
+        matchesListing: true,
+        isAvailable: true,
+        reportedAt: new Date(),
       },
     });
     const introduction = await prisma.introductionRecord.create({
@@ -103,6 +116,10 @@ describe('Deals service (Stage 3)', () => {
         fooPartyId: foo.id,
         introducedAt: new Date(),
       },
+    });
+    await prisma.viewing.update({
+      where: { id: viewing.id },
+      data: { status: 'conducted' },
     });
     const rateVersion = await prisma.commissionRateVersion.create({
       data: {
