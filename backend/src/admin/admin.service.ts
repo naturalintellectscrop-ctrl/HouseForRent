@@ -1,10 +1,37 @@
 import { Injectable } from '@nestjs/common';
-import { DealStatus } from '@prisma/client';
+import { ConfigValueType, DealStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ConfigService, CONFIG_KEYS } from '../config/config.service';
 import { PaymentsService } from '../payments/payments.service';
 import { LedgerService } from '../ledger/ledger.service';
 import { AuditService } from '../audit/audit.service';
+
+export class UnknownConfigKeyError extends Error {
+  constructor(key: string) {
+    super(
+      `"${key}" is not a configuration parameter. The V1 set is fixed ` +
+        `(${Object.keys(CONFIG_VALUE_TYPES).join(', ')}) — accepting an ` +
+        'arbitrary key would let a typo create a parameter nothing ever ' +
+        'reads, so the change would appear to succeed while having no ' +
+        'effect (FR-10.1).',
+    );
+    this.name = 'UnknownConfigKeyError';
+  }
+}
+
+/**
+ * The V1 configuration parameters and their storage types (PRD §1.5,
+ * Data_Model.md §3.1). Money-touching config is deliberately absent — the
+ * commission rate has its own versioned table and is consumed by snapshot,
+ * never by live lookup.
+ */
+const CONFIG_VALUE_TYPES: Record<string, ConfigValueType> = {
+  [CONFIG_KEYS.serviceArea]: 'json',
+  [CONFIG_KEYS.freshnessWindowDays]: 'int',
+  [CONFIG_KEYS.screeningModules]: 'json',
+  [CONFIG_KEYS.launchGateCount]: 'int',
+  [CONFIG_KEYS.requiredMonthsDefault]: 'int',
+};
 
 /**
  * Admin observability (PRD E10).
@@ -200,13 +227,29 @@ export class AdminService {
     };
   }
 
-  /** FR-10.1 — a config change is a NEW version, with an audit row. */
+  /**
+   * FR-10.1 — a config change is a NEW version, with an audit row.
+   *
+   * The key must be one of the V1 parameters. An arbitrary key would let a
+   * typo create a parameter nothing ever reads — the change would appear to
+   * succeed while having no effect, which is worse than a rejection.
+   *
+   * The parameter row is defined on demand (idempotent) so a fresh
+   * environment does not require a separate seeding step before an admin can
+   * set a value.
+   */
   async setConfigValue(params: {
     key: string;
     value: unknown;
     actorPartyId: string;
     effectiveFrom?: Date;
   }) {
+    const valueType = CONFIG_VALUE_TYPES[params.key];
+    if (!valueType) {
+      throw new UnknownConfigKeyError(params.key);
+    }
+    await this.config.defineParameter(params.key, valueType);
+
     const version = await this.config.setValue({
       key: params.key,
       value: params.value,
@@ -272,7 +315,15 @@ export class AdminService {
 
   /** FR-10.1 — the version history for a config key. */
   async configHistory(key: string) {
-    return this.config.history(key);
+    if (!CONFIG_VALUE_TYPES[key]) {
+      throw new UnknownConfigKeyError(key);
+    }
+    // A known key with no versions yet is an empty history, not an error —
+    // that is the normal state of a parameter nobody has set.
+    const parameter = await this.prisma.configParameter.findUnique({
+      where: { key },
+    });
+    return parameter ? this.config.history(key) : [];
   }
 
   /** NFR-2 — the audit trail for one subject. */

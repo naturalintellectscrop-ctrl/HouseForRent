@@ -48,6 +48,85 @@ export function ShortId({ value }: { value: string }) {
  * for help, and paraphrasing them into "something went wrong" destroys the
  * only diagnostic they have from a stairwell with one bar of signal.
  */
+/**
+ * What an admin-only page renders when a field officer opens it.
+ *
+ * The backend is what refuses (403); this turns that into an explanation
+ * rather than a stack trace. It is NOT the access control — hiding the link
+ * and rendering this page would both be trivially bypassed, which is
+ * precisely why neither is relied upon (NFR-1).
+ */
+export function AdminOnly({ what }: { what: string }) {
+  return (
+    <>
+      <h1>Admin only</h1>
+      <p className="lede">
+        {what} is restricted to admin accounts. Your account is a field
+        officer, so the server declined the request.
+      </p>
+      <p>
+        <a href="/" className="btn btn-secondary">
+          Back to your visits
+        </a>
+      </p>
+    </>
+  );
+}
+
+/**
+ * A status indicator. The label is REQUIRED, not optional — a status colour
+ * must never carry meaning alone (colour-vision deficiency, greyscale
+ * print, forced-colors).
+ */
+export function StatusDot({
+  tone,
+  label,
+}: {
+  tone: 'good' | 'warning' | 'critical';
+  label: string;
+}) {
+  return (
+    <span>
+      <span className={`dot dot-${tone}`} aria-hidden="true" />
+      {label}
+    </span>
+  );
+}
+
+/**
+ * A one-hue magnitude bar list. Identity comes from each row's label, never
+ * from a per-row colour — cycling hues here would encode identity in a
+ * channel that carries none, and bury whichever row actually matters.
+ */
+export function BarList({
+  rows,
+}: {
+  rows: Array<{ label: string; value: number }>;
+}) {
+  const max = Math.max(1, ...rows.map((r) => r.value));
+  return (
+    <div className="bars">
+      {rows.map((row) => (
+        <div key={row.label} className="bar-row">
+          <span>{row.label.replace(/_/g, ' ')}</span>
+          <span className="bar-track">
+            <span
+              className="bar-fill"
+              style={{ width: `${(row.value / max) * 100}%` }}
+            />
+          </span>
+          <span className="bar-value">{row.value}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Shillings arrive as strings; group them for reading without parsing. */
+export function shillings(value: string): string {
+  return `UGX ${value.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}`;
+}
+
 export function ApiAlert({
   message,
   code,

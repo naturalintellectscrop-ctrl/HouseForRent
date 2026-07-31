@@ -395,6 +395,207 @@ button:disabled {
   flex: 1 1 10rem;
 }
 
+/* ── ops dashboards ─────────────────────────────────────────
+ *
+ * No chart library. Every figure below is a single ratio, a handful of
+ * headline numbers, or a magnitude comparison — forms that are correctly
+ * rendered as a hero figure, a meter, a KPI row and a one-hue bar list
+ * respectively. A charting bundle would ship tens of kilobytes of
+ * JavaScript to draw rectangles, and this console must work on a phone in
+ * the field (NFR-5).
+ *
+ * There is deliberately NO categorical palette here. Nothing on these
+ * screens encodes identity-by-hue: magnitude uses one hue (the accent),
+ * and state uses the fixed status colours below — which always ship with a
+ * text label beside them, never colour alone.
+ */
+
+:root {
+  /* Status roles. Fixed, never reused as "series 4". */
+  --status-good: #0ca30c;
+  --status-warning: #fab219;
+  --status-critical: #d03b3b;
+  /* The unfilled meter track: a lighter step of the accent's own ramp, so
+     state reads across the whole bar rather than only in the fill. */
+  --meter-track: #d6e6df;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --meter-track: #23332c;
+  }
+}
+
+/* Hero figure — the one number a view leads with. Exactly one per page. */
+.hero {
+  font-size: 3rem;
+  line-height: 1.05;
+  font-weight: 650;
+  letter-spacing: -0.03em;
+  margin: 0;
+  /* Proportional figures, not tabular: at display size tabular-nums makes a
+     number like 121 look loose. Tabular is for columns (see .table). */
+}
+
+.hero-unit {
+  font-size: 1rem;
+  font-weight: 500;
+  color: var(--ink-soft);
+  letter-spacing: 0;
+}
+
+/* Meter — a single ratio against a limit. Not a two-slice pie. */
+.meter {
+  height: 0.75rem;
+  border-radius: 999px;
+  background: var(--meter-track);
+  overflow: hidden;
+  margin: 0.75rem 0 0.4rem;
+}
+
+.meter-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--accent);
+  transition: width 200ms ease;
+}
+
+.meter-fill.is-short {
+  background: var(--status-warning);
+}
+
+/* KPI row — a handful of headline numbers, not a grouped bar chart. */
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.kpi {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.85rem;
+}
+
+.kpi-label {
+  font-size: 0.8125rem;
+  color: var(--ink-soft);
+  margin: 0 0 0.25rem;
+}
+
+.kpi-value {
+  font-size: 1.5rem;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Magnitude bars — one hue. Identity comes from the label beside each row,
+   never from a different colour per row. */
+.bars {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+}
+
+.bar-row {
+  display: grid;
+  grid-template-columns: minmax(7rem, 10rem) 1fr auto;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.9375rem;
+}
+
+.bar-track {
+  background: var(--meter-track);
+  border-radius: 2px;
+  height: 0.6rem;
+}
+
+.bar-fill {
+  height: 100%;
+  background: var(--accent);
+  /* 4px rounded data-end, anchored square to the baseline at the origin. */
+  border-radius: 0 4px 4px 0;
+  min-width: 2px;
+}
+
+.bar-value {
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-soft);
+  font-size: 0.875rem;
+}
+
+/* Status dot — always accompanied by its label in the markup. */
+.dot {
+  display: inline-block;
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 999px;
+  margin-right: 0.4rem;
+  vertical-align: baseline;
+}
+
+.dot-good {
+  background: var(--status-good);
+}
+
+.dot-warning {
+  background: var(--status-warning);
+}
+
+.dot-critical {
+  background: var(--status-critical);
+}
+
+/* Tables — the right form for >7 classes that all carry meaning. Wide
+   content scrolls inside its own container; the page never scrolls
+   sideways. */
+.table-scroll {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  margin-bottom: 1rem;
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.9375rem;
+}
+
+th,
+td {
+  text-align: left;
+  padding: 0.55rem 0.7rem;
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+
+th {
+  font-size: 0.8125rem;
+  color: var(--ink-soft);
+  font-weight: 600;
+  background: var(--bg-soft);
+}
+
+tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+td.num {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.tags {
+  display: flex;
+  gap: 0.3rem;
+  flex-wrap: wrap;
+}
+
 /* ── messages ───────────────────────────────────────────── */
 
 .alert {

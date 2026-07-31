@@ -153,3 +153,81 @@ export interface MediaVariant {
   variantRef: string;
   byteSize: number;
 }
+
+/** ── Admin observability (PRD E10). ──
+ *
+ * Note that `gateMet`, `shortfall`, `blockedBy` and `isReconciled` all
+ * arrive as SERVER-COMPUTED fields. This console renders them; it does not
+ * re-derive them. A dashboard that computed "is the gate met?" locally
+ * would be a second implementation of a business rule, and the wrong one
+ * the moment the two disagreed (Technical Architecture §7).
+ */
+
+export interface LaunchGate {
+  gate: number;
+  qualifying: number;
+  staleExcluded: number;
+  freshnessWindowDays: number;
+  gateMet: boolean;
+  shortfall: number;
+  asOf: string;
+}
+
+export interface QueueRow {
+  listingId: string;
+  propertyId: string;
+  listerPartyId: string;
+  listerTier: string | null;
+  neighbourhood: string;
+  inServiceArea: boolean;
+  verificationState: string;
+  mandateState: string | null;
+  hasAcceptedAgreement: boolean;
+  blockedBy: string[];
+  createdAt: string;
+}
+
+export interface VerificationQueue {
+  total: number;
+  rows: QueueRow[];
+}
+
+export interface ReconciliationCheck {
+  id: string;
+  runAt: string;
+  /** Money, so it arrives as a string (API Spec §2). */
+  ledgerBalance: string;
+  pspBalance: string;
+  isReconciled: boolean;
+  discrepancyNote: string | null;
+}
+
+export interface Reconciliation {
+  latest: ReconciliationCheck;
+  /** The ledger agreeing with ITSELF — a different problem from the above. */
+  internallyConsistent: boolean;
+  history: ReconciliationCheck[];
+}
+
+export interface DealStates {
+  distribution: Record<string, number>;
+  total: number;
+}
+
+export interface ConfigVersion {
+  id: string;
+  parameterId: string;
+  value: unknown;
+  effectiveFrom: string;
+  createdByPartyId: string;
+  createdAt: string;
+}
+
+export interface AuditEvent {
+  id: string;
+  eventType: string;
+  actorPartyId: string;
+  subjectRef: string | null;
+  payload: Record<string, unknown> | null;
+  occurredAt: string;
+}

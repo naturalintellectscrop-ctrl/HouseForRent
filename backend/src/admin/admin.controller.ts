@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { DealStatus } from '@prisma/client';
 import {
+  Allow,
   IsIn,
   IsInt,
   IsISO8601,
@@ -15,7 +16,24 @@ import { Caller } from '../auth/caller.decorator';
 import type { AuthenticatedCaller } from '../auth/auth.service';
 
 export class CreateConfigVersionDto {
-  /** Any JSON value — config parameters are typed by their parameter row. */
+  /**
+   * Any JSON value — a config parameter is typed by its own
+   * `config_parameter.value_type` row (int / json / text), not by this DTO,
+   * so there is no single validator that fits.
+   *
+   * `@Allow()` is REQUIRED and not decorative. The global ValidationPipe
+   * runs with `whitelist: true`, which strips every property carrying no
+   * validation decorator, and `forbidNonWhitelisted: true`, which then
+   * rejects the request for containing an unexpected field. Without this,
+   * the endpoint refuses the one field it exists to accept — and it does so
+   * with a 400 that looks like a client error rather than a server defect.
+   *
+   * This was caught by driving the real form in a browser; `tsc`, the
+   * production build and the whole backend suite were all green, because no
+   * test posted to this endpoint. The regression test now lives in
+   * `authorization-matrix.spec.ts`.
+   */
+  @Allow()
   value!: unknown;
 
   @IsOptional() @IsISO8601() effectiveFrom?: string;
