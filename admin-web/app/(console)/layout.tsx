@@ -12,10 +12,7 @@ export default async function ConsoleLayout({
 }: {
   children: React.ReactNode;
 }) {
-  // Read but not branched on: both `foo` and `admin` see the same links in
-  // this slice. Kept so the gate's return value is used deliberately rather
-  // than discarded, and so a future admin-only link has an obvious home.
-  await requireStaff();
+  const role = await requireStaff();
 
   return (
     <>
@@ -27,6 +24,13 @@ export default async function ConsoleLayout({
           <nav>
             <Link href="/">Today</Link>
             <Link href="/introductions">Evidence</Link>
+            {/* Ops is FOO-reachable for the launch gate and the queue; the
+                page itself only fetches the admin-only figures when the
+                caller is an admin. Hiding a link is presentation, never
+                access control — the backend refuses regardless. */}
+            <Link href="/ops">Ops</Link>
+            {role === 'admin' && <Link href="/ops/config">Config</Link>}
+            {role === 'admin' && <Link href="/ops/audit">Audit</Link>}
             <form action={logoutAction}>
               <button type="submit">Sign out</button>
             </form>

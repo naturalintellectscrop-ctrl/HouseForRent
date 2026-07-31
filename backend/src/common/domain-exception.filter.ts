@@ -27,6 +27,7 @@ import {
 } from '../agreements/agreements.service';
 import { UnknownClauseVersionError } from '../agreements/circumvention-clause';
 import { AuditPayloadContainsPiiError } from '../audit/audit.service';
+import { UnknownConfigKeyError } from '../admin/admin.service';
 import {
   EmptyPostingError,
   InvalidAmountError,
@@ -129,7 +130,8 @@ export class DomainExceptionFilter implements ExceptionFilter {
       error instanceof DealNotFoundError ||
       error instanceof ListingNotFoundError ||
       error instanceof ViewingNotFoundError ||
-      error instanceof MediaAssetNotFoundError
+      error instanceof MediaAssetNotFoundError ||
+      error instanceof UnknownConfigKeyError
     ) {
       return { status: 404, code: 'NOT_FOUND' };
     }

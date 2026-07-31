@@ -736,6 +736,82 @@ describe('The full journey (Stage 8)', () => {
       expect(after.commissionAmount).toBe(before.commissionAmount);
     });
 
+    /**
+     * Regression: `CreateConfigVersionDto.value` carried no class-validator
+     * decorator, so the global `whitelist: true` stripped it and
+     * `forbidNonWhitelisted` then rejected the request for containing an
+     * unexpected field — the endpoint refused the one field it exists to
+     * accept, with a 400 that read like a client error. `tsc`, the
+     * production build and the entire suite were green, because nothing
+     * posted here. Found by driving the real form in a browser.
+     */
+    test('FR-10.1 a config version can actually be created — every value type', async () => {
+      // These write to `required_months_default` and `service_area`
+      // deliberately: config versions are append-only and the whole suite
+      // shares one database, so writing `freshness_window_days` or
+      // `screening_modules` here silently re-prices the Stage 5, 6 and 7
+      // suites that read them. It did, on the first run — eight tests in
+      // three other files went red. Neither key below is read elsewhere.
+      for (const [key, value] of [
+        ['required_months_default', 3],
+        ['service_area', { corridor: 'ntinda-kiwatule' }],
+      ] as const) {
+        await http()
+          .post(`/v1/admin/config/${key}/versions`)
+          .set('Authorization', as('admin'))
+          .send({ value })
+          .expect(201);
+      }
+
+      const res = await http()
+        .get('/v1/admin/config/required_months_default/versions')
+        .set('Authorization', as('admin'))
+        .expect(200);
+
+      expect((res.body as unknown[]).length).toBeGreaterThan(0);
+      expect((res.body as Array<{ value: unknown }>)[0].value).toBe(3);
+    });
+
+    test('a future-dated config version is accepted and stays scheduled', async () => {
+      const effectiveFrom = new Date(Date.now() + 86_400_000).toISOString();
+      const created = await http()
+        .post('/v1/admin/config/required_months_default/versions')
+        .set('Authorization', as('admin'))
+        .send({ value: 99, effectiveFrom })
+        .expect(201);
+
+      expect(new Date(created.body.effectiveFrom as string).getTime()).toBe(
+        new Date(effectiveFrom).getTime(),
+      );
+
+      // Invisible until its date: the value in force is still the old one.
+      expect(
+        await config.getValue<number>('required_months_default'),
+      ).not.toBe(99);
+    });
+
+    test('an UNKNOWN config key is a 404, not a 500', async () => {
+      // A typo must not create a parameter nothing reads — the change would
+      // appear to succeed while having no effect.
+      const res = await http()
+        .post('/v1/admin/config/freshness_window_dayz/versions')
+        .set('Authorization', as('admin'))
+        .send({ value: 7 });
+
+      expect(res.status).toBe(404);
+      expect(res.body.error?.code).toBe('NOT_FOUND');
+    });
+
+    test('a config version still cannot carry unexpected fields', async () => {
+      // @Allow() opens `value` specifically — it must not have opened the
+      // body generally.
+      await http()
+        .post('/v1/admin/config/required_months_default/versions')
+        .set('Authorization', as('admin'))
+        .send({ value: 7, createdByPartyId: parties.tenant })
+        .expect(400);
+    });
+
     test('there is NO endpoint that edits a rate version or a config version', async () => {
       const rate = await prisma.commissionRateVersion.findFirstOrThrow({});
 
