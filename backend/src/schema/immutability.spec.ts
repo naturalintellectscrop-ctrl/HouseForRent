@@ -141,7 +141,10 @@ describe('DB-level immutability of 🔒 tables', () => {
         tenantPartyId: tenant.id,
         conductedByPartyId: foo.id,
         scheduledFor: new Date(),
-        status: 'conducted',
+        // Left at `scheduled`: this test only needs an introduction_record
+        // to attempt UPDATE/DELETE against, and the Stage 7 trigger rejects
+        // a `conducted` viewing with no field report behind it.
+        status: 'scheduled',
       },
     });
     const row = await prisma.introductionRecord.create({

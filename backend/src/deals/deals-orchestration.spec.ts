@@ -100,13 +100,25 @@ describe('Deal orchestration with PSP (Stage 4)', () => {
         depositAmount: monthlyRent,
       },
     });
+    // Evidence first, status last — the Stage 7 DB trigger rejects a
+    // `conducted` viewing that has no field report behind it.
     const viewing = await prisma.viewing.create({
       data: {
         listingId: listing.id,
         tenantPartyId: tenant.id,
         conductedByPartyId: foo.id,
         scheduledFor: new Date(),
-        status: 'conducted',
+        status: 'scheduled',
+      },
+    });
+    await prisma.fieldReport.create({
+      data: {
+        viewingId: viewing.id,
+        fooPartyId: foo.id,
+        conditionRating: 'good',
+        matchesListing: true,
+        isAvailable: true,
+        reportedAt: new Date(),
       },
     });
     const introduction = await prisma.introductionRecord.create({
@@ -118,6 +130,10 @@ describe('Deal orchestration with PSP (Stage 4)', () => {
         fooPartyId: foo.id,
         introducedAt: new Date(),
       },
+    });
+    await prisma.viewing.update({
+      where: { id: viewing.id },
+      data: { status: 'conducted' },
     });
     const rateVersion = await prisma.commissionRateVersion.create({
       data: {

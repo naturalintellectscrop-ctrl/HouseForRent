@@ -820,3 +820,185 @@ routes mapped and the app boots.
 verification queue (Stage 8); rate limiting; the idempotency middleware
 (`settle`/`refund` already derive deterministic server-side keys, so
 retries are safe today, but the `Idempotency-Key` header is not yet read).
+
+---
+
+## Stage 7 — Field Operations Officer workflow
+
+Two modules: `backend/src/viewings/` and `backend/src/media/`.
+
+### THE invariant, and where it actually lives
+
+Data_Model.md §5.1 states it as a requirement on document 4:
+
+> *"[Invariant, for document 4] A `viewing` cannot move to `conducted`
+> without (a) an `introduction_record` and (b) a `field_report` (FR-5.3,
+> FR-5.4)."*
+
+It is enforced **twice**, deliberately:
+
+1. `ViewingsService.conduct()` refuses without a field report, then writes
+   the introduction record and the status change in one transaction.
+2. A **database trigger** (`viewing_conducted_requires_evidence`, migration
+   `20260730120000_conducted_viewing_evidence`) rejects any INSERT or UPDATE
+   setting `status = 'conducted'` unless both rows already exist for that
+   viewing.
+
+The second exists for the same reason the 🔒 immutability triggers do: an
+introduction record is **evidence**. If any path that bypasses the service —
+a manual fix, an ad-hoc script, a future bug, a test fixture — can produce a
+`conducted` viewing with nothing behind it, then "every conducted viewing
+produced an introduction record" stops being a fact about the data and
+becomes a fact about one code path. The circumvention clause is only
+enforceable if it is the former.
+
+**This was not theoretical.** The whole-table invariant test failed on its
+first run, finding `conducted` viewings with no field report — created
+directly by the Stage 3/4 test fixtures (`deals.service.spec.ts`,
+`deals-orchestration.spec.ts`, `search.spec.ts`, `immutability.spec.ts`),
+which had been constructing a state production code can never reach. All
+four fixtures were rewritten to build evidence first and flip status last;
+the migration demotes (never deletes) any pre-existing violating row before
+the trigger takes effect.
+
+### Ordering: field report first, then conduct
+
+§4.3 lists `field-report` and `conduct` as separate endpoints, and there is
+no introduction-record endpoint at all. The only coherent composition is:
+the report is filed against a `scheduled` viewing, and `conduct` is the
+closing operation that requires it, mints the introduction record, and flips
+the status. `conduct` therefore takes no report in its body — which also
+means the "cannot close without a report" test is meaningful rather than
+tautological.
+
+### The write-back: a field report is not just a record
+
+Filing a report updates the listing in the same transaction (FR-5.4 AC,
+Data_Model.md §5.3):
+
+- **availability + freshness clock**, from `isAvailable`. The clock is
+  refreshed *either way* — a visit is a visit; what changed is the answer,
+  not our confidence in its age (FR-2.3).
+- **verification state**, from `matchesListing`. A report matching the
+  listing verifies it; one finding it inaccurate *removes* its verified
+  standing, so it cannot be re-published on the strength of a check that has
+  since been contradicted. This is what makes FR-5.5's "verification
+  originates from a field visit" true rather than merely intended.
+
+It deliberately does **not** auto-withdraw a live-but-inaccurate listing.
+Withdrawing inventory is an ops decision nobody has taken; inventing one
+here would be exactly the silent business-rule invention this build avoids
+(same posture as Stage 4's timeout window). An admin or FOO calls
+`withdraw()`.
+
+### Media: interface + mock, policy on our side of the boundary
+
+`MediaStorageProvider` follows the `PaymentProvider` / `IdentityProvider`
+pattern — bound by DI token, no storage vendor named anywhere in the domain.
+The **compression policy** (a three-rung ladder with byte ceilings, the
+accepted MIME set, the source ceiling) lives in `MediaService`, not the
+provider, so swapping the storage backend cannot silently change what "low
+bandwidth" means (NFR-5).
+
+Two properties worth naming:
+
+- The ladder is a **post-condition, not a promise**: after the provider
+  returns, every rung is checked against its ceiling, and an oversized one
+  is a `502`, not a quietly-served unusable file.
+- `forBandwidth()` returns the **smallest** rung when nothing fits, never
+  null. A thumbnail beats a broken image.
+
+No schema change was needed: `media_asset` is written with exactly the
+columns Data_Model.md §10.1 specifies, and the variant ladder is resolved
+through the provider from `storage_ref`.
+
+### ✅ FLAGGED — PRD FR-5.1 AC vs Data_Model.md §5.1 (resolved, no amendment)
+
+FR-5.1's AC reads *"a viewing request creates a **scheduled** viewing tied to
+tenant + property + time"*, while Data_Model.md §5.1 defaults `status` to
+`'requested'` and API Spec §4.3 has a separate `assign` endpoint.
+
+Taken literally, `requested` would be a state nothing ever enters and
+`assign` a near no-op — making the schema incoherent. **Resolved as prose,
+not a status literal:** the AC's own enumeration is "tenant + property +
+**time**", about the linkage rather than the enum value. Implemented as
+`request → requested`, `assign → scheduled`. Raised with the user before
+building rather than silently resolved; no doc amendment was needed because
+neither document changes meaning under this reading.
+
+### Amendment A2 — API Spec §4.3 extended
+
+§4.3 listed no media endpoint despite FR-5.5 mandating field media capture,
+and §11 did not list media among the deliberate absences — a gap, not a
+prohibition. `POST /viewings/{id}/media` was added under the same ¹
+assigned-FOO constraint, plus two staff-only reads (`GET
+/viewings/assigned/me`, `GET /viewings/introductions`). Recorded in
+`House_For_Rent_API_Specification.md` §4.3 as Amendment A2.
+
+### The authz decisions that carry weight
+
+| Decision | Reasoning |
+|---|---|
+| `assign` is **admin-only** | An officer who could assign themselves would make the corridor and workload controls advisory |
+| `conduct` / `field-report` / `media` require the **assigned** FOO | Both are evidence; evidence signed by an officer who was never dispatched is worse than none |
+| A non-assigned FOO gets **403, not 404** | Unlike §7.4's deal guard, every caller here is already staff with system-wide visibility. Concealing existence buys nothing and costs a dispatched officer a baffling error |
+| `GET /viewings/introductions` is **staff-only** | It is a linkage between two counterparties; exposing it to either tells a landlord which other tenants an officer introduced |
+| **No** introduction-record endpoint exists | The record is a consequence of conducting, never independently creatable — otherwise an introduction could be fabricated for a visit that never happened |
+
+### Acceptance criteria and the tests proving them
+
+`viewings.spec.ts` (40 tests) plus 35 new cells in
+`authorization-matrix.spec.ts`.
+
+| Acceptance criterion | Test |
+|---|---|
+| **No viewing closes without a report + introduction record** | `conduct() WITHOUT a field report is REJECTED`; `a rejected conduct leaves NO trace: still scheduled, no introduction record`; `with a report filed, conduct() succeeds and mints the introduction record` |
+| The invariant holds against the DATABASE, not just the service | `THE DATABASE refuses a conducted viewing with no evidence, even bypassing the service` — asserts both branches of the trigger by writing straight through Prisma |
+| It holds table-wide, not just for rows this test made | `no conducted viewing anywhere in the database lacks either artefact` |
+| Both artefacts exist the instant the status changes | `BOTH artefacts exist the instant the status is conducted` |
+| It holds at the HTTP boundary too | `conduct without a field report is 422 FIELD_REPORT_REQUIRED` |
+| A conducted viewing cannot be retroactively denied | `a conducted viewing is TERMINAL — it cannot be reopened as no_show`; `conduct() cannot be replayed to mint a second introduction record` |
+| **Availability confirmation flows to listing freshness** | `the report UPDATES AVAILABILITY FRESHNESS (FR-5.4 AC → FR-2.3)` — asserts stale-before / fresh-after with `daysSinceConfirmed === 0` |
+| An unavailable finding refreshes the clock too | `a report of NOT available also refreshes the clock, and marks it unavailable` |
+| Verification originates from the field visit (FR-5.5) | `a report matching the listing VERIFIES it`; `a report finding the listing INACCURATE removes its verified standing` (then asserts publish is refused) |
+| **Introduction records are queryable as evidence** | `the record is QUERYABLE by tenant, by landlord and by listing` |
+| The evidence survives with no deal at all | `THE circumvention case: the evidence persists with NO deal ever created` — asserts zero deals, then the linkage still resolves |
+| The evidence is immutable and not caller-authored | `the record is IMMUTABLE — the database rejects UPDATE and DELETE`; `the landlord on the record is DERIVED from the property, not supplied` |
+| Only verified tenants request viewings | `an UNVERIFIED tenant cannot request a viewing` |
+| Dispatch is corridor-bounded | `dispatch is CORRIDOR-BOUNDED: an out-of-corridor viewing cannot be assigned` — publishes in-corridor first, then moves the neighbourhood out, isolating the dispatch check from the publish gate |
+| Only real field officers can be assigned | `a party who is NOT a field officer cannot be assigned` |
+| No-shows are tracked | `a NO-SHOW is tracked as a status, not deleted` |
+| **Media handles low bandwidth** | `EVERY rung honours its byte ceiling`; `GRACEFUL DEGRADATION: a tiny byte budget still yields an image, not a failure` |
+| The ceiling check is real, not decorative | `a provider that BREAKS the ceiling is rejected, and no asset row is written` — forces the mock to misbehave |
+| Bad captures are refused at the boundary | `an unacceptable MIME type is refused BEFORE any storage call`; `an oversized source is refused at the boundary, not after the upload` |
+| Storage is swappable | `the storage backend is genuinely swappable behind the interface` |
+| **The partner-viewing seam (FR-5.6)** | `"conducted by" is a role-typed reference, and V1 permits only foo` — queries `enum_range(NULL::"ConductedByRole")` and asserts exactly `['foo']` |
+| The transition graph is frozen and correct | `there is NO requested → conducted edge`; `conducted, no_show and cancelled are all terminal`; `the graph is frozen at runtime` |
+| **Every cell of the §4.3 matrix** | `viewingRow()` asserts all four roles across five endpoints, plus the `POST /viewings` row |
+| Role alone is insufficient (the ¹ footnote) | `an UNASSIGNED foo cannot conduct someone else's viewing` / `...file a field report` / `...capture media`; `the ASSIGNED foo can do all three` |
+| Privileged fields cannot be smuggled | `a field report carrying viewingId or fooPartyId is 400`; `a viewing request naming another tenant is 400`; `a conduct call cannot supply its own introducedAt or landlord` |
+| **Forbidden endpoints do not exist** | `there is NO endpoint that creates an introduction record directly`; `there is NO cancel endpoint for a viewing`; `introduction evidence is staff-only` |
+
+### Both safeguards were verified load-bearing
+
+- **`AssignedFooGuard`**: disabling the assignment comparison failed exactly
+  3 of 103 authz tests — precisely the three ¹-footnote denial cases, and
+  nothing else. Restored.
+- **The DB trigger**: disabling `conduct()`'s service-layer report check did
+  **not** let the invariant break — Postgres rejected the transition with
+  `23514 check_violation: no field_report exists`. The test failed only on
+  the error *type*, which is the strongest possible result: the guarantee
+  survived its service-layer enforcement being removed. Restored.
+
+Full suite: **296/296 passing** across 14 suites; `tsc --noEmit` clean; 34
+routes mapped (was 26) and the app boots with all twelve modules.
+
+**Deliberately deferred:** real byte handling (multipart, transcoding) —
+the interface + mock is the agreed scope, matching the pack's own guardrail
+that real integrations sit behind interfaces; the FOO web console itself
+(next); Stage 8's end-to-end integration, circumvention-clause surfacing at
+agreement signing, and admin observability.
+
+No SSOT conflict encountered in Stage 7. One PRD-vs-Data-Model tension
+(FR-5.1's "scheduled") was flagged and resolved as prose without requiring
+an amendment; one API-spec gap was closed as Amendment A2.

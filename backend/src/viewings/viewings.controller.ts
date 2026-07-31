@@ -1,0 +1,178 @@
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
+import { ViewingsService } from './viewings.service';
+import { Roles } from '../auth/roles.decorator';
+import { Caller } from '../auth/caller.decorator';
+import { RequiresAssignedFoo } from '../auth/assigned-foo.decorator';
+import { AssignedFooGuard } from '../auth/guards/assigned-foo.guard';
+import type { AuthenticatedCaller } from '../auth/auth.service';
+import {
+  AssignViewingDto,
+  CaptureMediaDto,
+  ConductViewingDto,
+  FieldReportDto,
+  NoShowDto,
+  RequestViewingDto,
+} from './dto/viewing.dto';
+
+/**
+ * Viewings and field ops (API Spec §4.3).
+ *
+ * Note what is absent: there is no cancel endpoint and no endpoint that
+ * accepts a target status. `cancelled` exists in the schema's enum but §4.3
+ * lists no operation reaching it, and adding one would be a scope change
+ * requiring an SSOT amendment rather than an API iteration (§11).
+ *
+ * There is also no endpoint that creates an introduction record directly.
+ * The record is a CONSEQUENCE of conducting a viewing, written in the same
+ * transaction as the status change. If it were separately creatable, an
+ * introduction could be fabricated for a visit that never happened — which
+ * is precisely the evidence it exists to be.
+ */
+@Controller('v1/viewings')
+@UseGuards(AssignedFooGuard)
+export class ViewingsController {
+  constructor(private readonly viewings: ViewingsService) {}
+
+  /**
+   * FR-5.1. The requesting tenant comes from the session, never the body:
+   * a tenant cannot book a viewing in someone else's name.
+   */
+  @Roles('tenant', 'admin')
+  @Post()
+  async request(
+    @Caller() caller: AuthenticatedCaller,
+    @Body() dto: RequestViewingDto,
+  ) {
+    return this.viewings.requestViewing({
+      listingId: dto.listingId,
+      tenantPartyId: caller.partyId,
+      scheduledFor: new Date(dto.scheduledFor),
+    });
+  }
+
+  /**
+   * FR-5.2 — dispatch. Admin-only: assigning work to staff is an ops
+   * function, and letting an officer assign themselves would make the
+   * corridor and workload controls advisory.
+   */
+  @Roles('admin')
+  @Post(':viewingId/assign')
+  async assign(
+    @Param('viewingId') viewingId: string,
+    @Body() dto: AssignViewingDto,
+  ) {
+    return this.viewings.assign({
+      viewingId,
+      fooPartyId: dto.fooPartyId,
+      scheduledFor: dto.scheduledFor ? new Date(dto.scheduledFor) : undefined,
+    });
+  }
+
+  /** FR-5.4 — the structured report. Assigned officer only. */
+  @Roles('foo', 'admin')
+  @RequiresAssignedFoo()
+  @Post(':viewingId/field-report')
+  async fieldReport(
+    @Param('viewingId') viewingId: string,
+    @Caller() caller: AuthenticatedCaller,
+    @Body() dto: FieldReportDto,
+  ) {
+    return this.viewings.submitFieldReport({
+      viewingId,
+      fooPartyId: caller.partyId,
+      conditionRating: dto.conditionRating,
+      matchesListing: dto.matchesListing,
+      isAvailable: dto.isAvailable,
+      issuesText: dto.issuesText,
+      timingNote: dto.timingNote,
+      mediaAssetIds: dto.mediaAssetIds,
+    });
+  }
+
+  /**
+   * FR-5.3 — closes the viewing and mints the introduction record.
+   * Rejected with 422 if no field report exists (Data_Model.md §5.1).
+   */
+  @Roles('foo', 'admin')
+  @RequiresAssignedFoo()
+  @Post(':viewingId/conduct')
+  async conduct(
+    @Param('viewingId') viewingId: string,
+    @Caller() caller: AuthenticatedCaller,
+    @Body() _dto: ConductViewingDto,
+  ) {
+    return this.viewings.conduct({ viewingId, fooPartyId: caller.partyId });
+  }
+
+  /** FR-5.2 — no-shows are tracked, not deleted. */
+  @Roles('foo', 'admin')
+  @RequiresAssignedFoo()
+  @Post(':viewingId/no-show')
+  async noShow(
+    @Param('viewingId') viewingId: string,
+    @Body() _dto: NoShowDto,
+  ) {
+    return this.viewings.markNoShow({ viewingId });
+  }
+
+  /**
+   * FR-5.5 — professional media captured on the visit.
+   *
+   * [Amendment A2] §4.3 listed no media endpoint, which was a gap rather
+   * than a prohibition: FR-5.5 mandates the capability and §11 does not
+   * list it among the deliberate absences. Added to the spec with the same
+   * ¹ assigned-FOO constraint as the other field operations.
+   */
+  @Roles('foo', 'admin')
+  @RequiresAssignedFoo()
+  @Post(':viewingId/media')
+  async captureMedia(
+    @Param('viewingId') viewingId: string,
+    @Caller() caller: AuthenticatedCaller,
+    @Body() dto: CaptureMediaDto,
+  ) {
+    return this.viewings.captureMedia({
+      viewingId,
+      fooPartyId: caller.partyId,
+      kind: dto.kind,
+      mimeType: dto.mimeType,
+      sourceByteSize: dto.sourceByteSize,
+      sourceRef: dto.sourceRef,
+    });
+  }
+
+  /** An officer's dispatch board (FR-5.2). */
+  @Roles('foo', 'admin')
+  @Get('assigned/me')
+  async assignedToMe(@Caller() caller: AuthenticatedCaller) {
+    return this.viewings.findAssignedTo(caller.partyId);
+  }
+
+  /**
+   * FR-5.3 / FR-8.3 — introduction records as queryable circumvention
+   * evidence. Staff-only: it is a linkage between two counterparties, and
+   * exposing it to either would tell a landlord which other tenants an
+   * officer introduced.
+   */
+  @Roles('foo', 'admin')
+  @Get('introductions')
+  async introductions(
+    @Query('tenantPartyId') tenantPartyId?: string,
+    @Query('landlordPartyId') landlordPartyId?: string,
+    @Query('listingId') listingId?: string,
+  ) {
+    return this.viewings.findIntroductions({
+      tenantPartyId,
+      landlordPartyId,
+      listingId,
+    });
+  }
+}

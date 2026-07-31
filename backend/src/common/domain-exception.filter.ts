@@ -26,6 +26,22 @@ import {
 } from '../ledger/ledger.types';
 import { ConfigNotSetError } from '../config/config.service';
 import { UnknownScreeningModuleError } from '../screening/screening.service';
+import { IllegalViewingTransitionError } from '../viewings/viewing-state-machine';
+import {
+  FieldReportAlreadyFiledError,
+  FieldReportRequiredError,
+  ListingNotViewableError,
+  NotAFieldOfficerError,
+  OutsideServiceCorridorError,
+  TenantNotVerifiedError,
+  ViewingNotFoundError,
+} from '../viewings/viewings.service';
+import {
+  CompressionPolicyViolationError,
+  MediaAssetNotFoundError,
+  MediaTooLargeError,
+  UnsupportedMediaTypeError,
+} from '../media/media.service';
 
 /**
  * Maps domain errors to the status codes of API Spec §2.
@@ -84,13 +100,29 @@ export class DomainExceptionFilter implements ExceptionFilter {
     if (error instanceof SnapshotImmutableError) {
       return { status: 409, code: 'SNAPSHOT_IMMUTABLE' };
     }
+    if (error instanceof IllegalViewingTransitionError) {
+      return { status: 409, code: 'ILLEGAL_VIEWING_TRANSITION' };
+    }
+    if (error instanceof FieldReportAlreadyFiledError) {
+      return { status: 409, code: 'FIELD_REPORT_ALREADY_FILED' };
+    }
 
     // 404 — absent, or not disclosable to this caller
     if (
       error instanceof DealNotFoundError ||
-      error instanceof ListingNotFoundError
+      error instanceof ListingNotFoundError ||
+      error instanceof ViewingNotFoundError ||
+      error instanceof MediaAssetNotFoundError
     ) {
       return { status: 404, code: 'NOT_FOUND' };
+    }
+
+    // 413 / 415 — the capture boundary refused the source outright
+    if (error instanceof MediaTooLargeError) {
+      return { status: 413, code: 'MEDIA_TOO_LARGE' };
+    }
+    if (error instanceof UnsupportedMediaTypeError) {
+      return { status: 415, code: 'UNSUPPORTED_MEDIA_TYPE' };
     }
 
     // 422 — a domain rule rejected an otherwise well-formed request
@@ -105,6 +137,21 @@ export class DomainExceptionFilter implements ExceptionFilter {
     }
     if (error instanceof MissingIntroductionRecordError) {
       return { status: 422, code: 'INTRODUCTION_RECORD_REQUIRED' };
+    }
+    if (error instanceof FieldReportRequiredError) {
+      return { status: 422, code: 'FIELD_REPORT_REQUIRED' };
+    }
+    if (error instanceof TenantNotVerifiedError) {
+      return { status: 422, code: 'TENANT_NOT_VERIFIED' };
+    }
+    if (error instanceof ListingNotViewableError) {
+      return { status: 422, code: 'LISTING_NOT_VIEWABLE' };
+    }
+    if (error instanceof OutsideServiceCorridorError) {
+      return { status: 422, code: 'OUTSIDE_SERVICE_AREA' };
+    }
+    if (error instanceof NotAFieldOfficerError) {
+      return { status: 422, code: 'NOT_A_FIELD_OFFICER' };
     }
     if (error instanceof UnbalancedPostingError) {
       return { status: 422, code: 'UNBALANCED_POSTING' };
@@ -122,9 +169,12 @@ export class DomainExceptionFilter implements ExceptionFilter {
       return { status: 422, code: 'CONFIG_NOT_SET' };
     }
 
-    // 502 — the external custodian declined
+    // 502 — an external provider declined or misbehaved
     if (error instanceof SettlementReleaseFailedError) {
       return { status: 502, code: 'PROVIDER_REJECTED' };
+    }
+    if (error instanceof CompressionPolicyViolationError) {
+      return { status: 502, code: 'MEDIA_PROVIDER_POLICY_VIOLATION' };
     }
 
     return null;
