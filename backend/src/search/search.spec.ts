@@ -101,8 +101,29 @@ describe('Search (Stage 5)', () => {
       depositAmount: 1_000_000n,
     });
 
+    // publish() now requires an accepted listing agreement (FR-9.1), so the
+    // fixture accepts one. Written directly — this suite tests Search.
+    const rate = await prisma.commissionRateVersion.create({
+      data: {
+        rateBpOfMonth: 10000,
+        effectiveFrom: new Date(Date.now() - 60_000),
+        createdByPartyId: lister.id,
+      },
+    });
+    await prisma.listingAgreement.create({
+      data: {
+        listingId: listing.id,
+        listerPartyId: lister.id,
+        commissionRateVersionId: rate.id,
+        monthlyRentAtSigning: listing.monthlyRent,
+        circumventionClauseVersion: 'v1',
+        accepted: true,
+        acceptedAt: new Date(),
+      },
+    });
+
     if (opts.verified !== false) {
-      await listings.markVerified(listing.id);
+      await listings.markVerified(listing.id, lister.id);
     }
     if (opts.confirmedDaysAgo !== null) {
       await listings.confirmAvailability({

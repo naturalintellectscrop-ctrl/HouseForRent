@@ -8,6 +8,20 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { ConfigService } from '../config/config.service';
 import { MandateService } from '../identity/mandate.service';
+import { AuditService } from '../audit/audit.service';
+
+export class MissingListingAgreementError extends Error {
+  constructor(listingId: string) {
+    super(
+      `listing ${listingId} cannot go live: its lister has not accepted the ` +
+        'listing agreement. The commission terms and the circumvention ' +
+        'clause must be presented and accepted BEFORE a listing is public ' +
+        '(FR-9.1) — an agreement signed afterwards is one the landlord ' +
+        'never had the chance to decline.',
+    );
+    this.name = 'MissingListingAgreementError';
+  }
+}
 
 export class ListingNotFoundError extends Error {
   constructor(listingId: string) {
@@ -61,6 +75,7 @@ export class ListingsService {
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
     private readonly mandates: MandateService,
+    private readonly audit: AuditService,
   ) {}
 
   async createProperty(params: {
@@ -116,10 +131,30 @@ export class ListingsService {
    * Records that a field visit verified this listing (FR-3.1, FR-5.5). Only
    * a verified listing may go live.
    */
-  async markVerified(listingId: string) {
-    return this.prisma.listing.update({
-      where: { id: listingId },
-      data: { verificationState: 'verified' },
+  /**
+   * `verifiedByPartyId` is REQUIRED, not optional. An audit row naming the
+   * wrong actor is worse than none: it asserts something false about who
+   * inspected a property, which is exactly the claim the trust proposition
+   * rests on (NFR-2, FR-3.1).
+   */
+  async markVerified(listingId: string, verifiedByPartyId: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const listing = await tx.listing.update({
+        where: { id: listingId },
+        data: { verificationState: 'verified' },
+      });
+
+      await this.audit.record(
+        {
+          eventType: 'listing_verified',
+          actorPartyId: verifiedByPartyId,
+          subjectRef: listing.id,
+          payload: { verificationState: listing.verificationState },
+        },
+        tx,
+      );
+
+      return listing;
     });
   }
 
@@ -138,6 +173,7 @@ export class ListingsService {
             ownerParty: { include: { listerProfile: true } },
           },
         },
+        listingAgreements: { where: { accepted: true }, take: 1 },
       },
     });
     if (!listing) {
@@ -170,9 +206,34 @@ export class ListingsService {
       }
     }
 
-    return this.prisma.listing.update({
-      where: { id: listingId },
-      data: { publicationState: 'live' },
+    // 4. an accepted listing agreement (FR-9.1). The landlord must have
+    //    been shown the commission terms and the circumvention clause, and
+    //    have accepted them, BEFORE the listing is public — an agreement
+    //    signed afterwards is one they never had the chance to decline.
+    if (listing.listingAgreements.length === 0) {
+      throw new MissingListingAgreementError(listingId);
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const published = await tx.listing.update({
+        where: { id: listingId },
+        data: { publicationState: 'live' },
+      });
+
+      await this.audit.record(
+        {
+          eventType: 'listing_published',
+          actorPartyId: listing.property.ownerPartyId,
+          subjectRef: published.id,
+          payload: {
+            publicationState: published.publicationState,
+            agreementId: listing.listingAgreements[0].id,
+          },
+        },
+        tx,
+      );
+
+      return published;
     });
   }
 

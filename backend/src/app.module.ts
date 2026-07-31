@@ -13,6 +13,9 @@ import { SearchModule } from './search/search.module';
 import { ScreeningModule } from './screening/screening.module';
 import { MediaModule } from './media/media.module';
 import { ViewingsModule } from './viewings/viewings.module';
+import { AuditModule } from './audit/audit.module';
+import { AgreementsModule } from './agreements/agreements.module';
+import { AdminModule } from './admin/admin.module';
 import { AuthModule } from './auth/auth.module';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { RolesGuard } from './auth/guards/roles.guard';
@@ -22,6 +25,7 @@ import { DomainExceptionFilter } from './common/domain-exception.filter';
 @Module({
   imports: [
     PrismaModule,
+    AuditModule,
     ConfigModule,
     AuthModule,
     IdentityModule,
@@ -33,6 +37,8 @@ import { DomainExceptionFilter } from './common/domain-exception.filter';
     ScreeningModule,
     MediaModule,
     ViewingsModule,
+    AgreementsModule,
+    AdminModule,
   ],
   controllers: [AppController],
   providers: [

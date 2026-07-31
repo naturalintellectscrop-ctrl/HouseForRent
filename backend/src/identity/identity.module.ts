@@ -3,6 +3,7 @@ import { IdentityService } from './identity.service';
 import { MandateService } from './mandate.service';
 import { MockIdentityProvider } from './mock-identity.provider';
 import { IDENTITY_PROVIDER } from './interfaces/identity-provider.interface';
+import { AuditModule } from '../audit/audit.module';
 
 /**
  * Company-level Identity & Verification module (Technical Architecture
@@ -11,6 +12,7 @@ import { IDENTITY_PROVIDER } from './interfaces/identity-provider.interface';
  * specific property) as two separate services, deliberately not merged.
  */
 @Module({
+  imports: [AuditModule],
   providers: [
     IdentityService,
     MandateService,

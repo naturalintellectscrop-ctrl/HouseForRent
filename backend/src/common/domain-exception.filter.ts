@@ -15,10 +15,18 @@ import {
 } from '../deals/deals.service';
 import {
   ListingNotFoundError,
+  MissingListingAgreementError,
   MissingMandateError,
   OutsideServiceAreaError,
   UnverifiedListingError,
 } from '../listings/listings.service';
+import {
+  AgreementAlreadyAcceptedError,
+  NoCommissionRateInForceError,
+  NotTheListerError,
+} from '../agreements/agreements.service';
+import { UnknownClauseVersionError } from '../agreements/circumvention-clause';
+import { AuditPayloadContainsPiiError } from '../audit/audit.service';
 import {
   EmptyPostingError,
   InvalidAmountError,
@@ -106,6 +114,15 @@ export class DomainExceptionFilter implements ExceptionFilter {
     if (error instanceof FieldReportAlreadyFiledError) {
       return { status: 409, code: 'FIELD_REPORT_ALREADY_FILED' };
     }
+    if (error instanceof AgreementAlreadyAcceptedError) {
+      return { status: 409, code: 'AGREEMENT_ALREADY_ACCEPTED' };
+    }
+
+    // 403 — the caller is the wrong party, and saying so is safe here
+    // because they already hold the role and know the listing exists.
+    if (error instanceof NotTheListerError) {
+      return { status: 403, code: 'NOT_THE_LISTER' };
+    }
 
     // 404 — absent, or not disclosable to this caller
     if (
@@ -131,6 +148,18 @@ export class DomainExceptionFilter implements ExceptionFilter {
     }
     if (error instanceof UnverifiedListingError) {
       return { status: 422, code: 'LISTING_UNVERIFIED' };
+    }
+    if (error instanceof MissingListingAgreementError) {
+      return { status: 422, code: 'AGREEMENT_REQUIRED' };
+    }
+    if (error instanceof NoCommissionRateInForceError) {
+      return { status: 422, code: 'NO_RATE_IN_FORCE' };
+    }
+    if (error instanceof UnknownClauseVersionError) {
+      return { status: 422, code: 'UNKNOWN_CLAUSE_VERSION' };
+    }
+    if (error instanceof AuditPayloadContainsPiiError) {
+      return { status: 422, code: 'AUDIT_PAYLOAD_PII' };
     }
     if (error instanceof OutsideServiceAreaError) {
       return { status: 422, code: 'OUTSIDE_SERVICE_AREA' };

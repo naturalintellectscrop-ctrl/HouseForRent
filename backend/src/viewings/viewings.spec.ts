@@ -154,7 +154,27 @@ describe('Viewings & field ops (Stage 7)', () => {
       requiredMonthsUpfront: 3,
       depositAmount: 1_000_000n,
     });
-    await listings.markVerified(listing.id);
+    // publish() requires an accepted listing agreement (FR-9.1).
+    const rate = await prisma.commissionRateVersion.create({
+      data: {
+        rateBpOfMonth: 10000,
+        effectiveFrom: new Date(Date.now() - 60_000),
+        createdByPartyId: landlord.id,
+      },
+    });
+    await prisma.listingAgreement.create({
+      data: {
+        listingId: listing.id,
+        listerPartyId: landlord.id,
+        commissionRateVersionId: rate.id,
+        monthlyRentAtSigning: listing.monthlyRent,
+        circumventionClauseVersion: 'v1',
+        accepted: true,
+        acceptedAt: new Date(),
+      },
+    });
+
+    await listings.markVerified(listing.id, foo.id);
     await listings.publish(listing.id);
 
     return { tenant, landlord, foo, listing, property, neighbourhood };

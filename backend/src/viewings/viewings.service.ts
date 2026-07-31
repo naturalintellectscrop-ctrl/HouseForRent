@@ -10,6 +10,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { IdentityService } from '../identity/identity.service';
 import { ListingNotFoundError } from '../listings/listings.service';
 import { MediaService } from '../media/media.service';
+import { AuditService } from '../audit/audit.service';
 import type { MediaKindName } from '../media/interfaces/media-storage-provider.interface';
 import { assertViewingTransitionAllowed } from './viewing-state-machine';
 
@@ -120,6 +121,7 @@ export class ViewingsService {
     private readonly prisma: PrismaService,
     private readonly identity: IdentityService,
     private readonly media: MediaService,
+    private readonly audit: AuditService,
   ) {}
 
   /**
@@ -282,6 +284,30 @@ export class ViewingsService {
           verificationState: params.matchesListing ? 'verified' : 'unverified',
         },
       });
+
+      // NFR-2: this path changes a listing's verification state, so it is a
+      // verification event in its own right — auditing only the explicit
+      // `verify` endpoint would leave the field-visit route, which is the
+      // one that actually reflects an inspection, invisible.
+      await this.audit.record(
+        {
+          eventType: 'listing_verified',
+          actorPartyId: params.fooPartyId,
+          subjectRef: viewing.listingId,
+          payload: {
+            via: 'field_report',
+            viewingId: viewing.id,
+            matchesListing: params.matchesListing,
+            isAvailable: params.isAvailable,
+            conditionRating: params.conditionRating,
+            verificationState: params.matchesListing
+              ? 'verified'
+              : 'unverified',
+          },
+          occurredAt: report.reportedAt,
+        },
+        tx,
+      );
 
       return report;
     });

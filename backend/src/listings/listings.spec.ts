@@ -12,6 +12,7 @@ import { MandateService } from '../identity/mandate.service';
 import { ListingsModule } from './listings.module';
 import {
   ListingsService,
+  MissingListingAgreementError,
   MissingMandateError,
   OutsideServiceAreaError,
   UnverifiedListingError,
@@ -73,10 +74,57 @@ describe('Listings (Stage 5)', () => {
     });
   }
 
+  /**
+   * A field officer to attribute verification to. `markVerified` requires
+   * one because an audit row naming the wrong actor asserts something false
+   * about who inspected a property (NFR-2).
+   */
+  let verifier: { id: string };
+  async function fieldOfficer() {
+    if (!verifier) {
+      verifier = await prisma.party.create({
+        data: { displayName: 'Listings FOO', primaryPhone: phone('foo') },
+      });
+    }
+    return verifier;
+  }
+
+  /**
+   * Accepts a listing agreement, which publish() now requires (FR-9.1).
+   * Written directly rather than through AgreementsService so this suite
+   * stays a test of Listings, not of Agreements.
+   */
+  async function acceptAgreement(listingId: string, listerPartyId: string) {
+    const by = await admin();
+    const rate = await prisma.commissionRateVersion.create({
+      data: {
+        rateBpOfMonth: 10000,
+        effectiveFrom: new Date(Date.now() - 60_000),
+        createdByPartyId: by.id,
+      },
+    });
+    const listing = await prisma.listing.findUniqueOrThrow({
+      where: { id: listingId },
+    });
+    return prisma.listingAgreement.create({
+      data: {
+        listingId,
+        listerPartyId,
+        commissionRateVersionId: rate.id,
+        monthlyRentAtSigning: listing.monthlyRent,
+        circumventionClauseVersion: 'v1',
+        accepted: true,
+        acceptedAt: new Date(),
+      },
+    });
+  }
+
   async function seedListing(opts?: {
     tier?: 'property_owner' | 'broker_agent' | 'property_mgmt_company';
     inServiceArea?: boolean;
     streetAddress?: string;
+    /** Skip the FR-9.1 agreement, to test that gate specifically. */
+    withoutAgreement?: boolean;
   }) {
     seq += 1;
     const lister = await prisma.party.create({
@@ -109,6 +157,9 @@ describe('Listings (Stage 5)', () => {
       requiredMonthsUpfront: 3,
       depositAmount: 1_200_000n,
     });
+    if (!opts?.withoutAgreement) {
+      await acceptAgreement(listing.id, lister.id);
+    }
     return { lister, neighbourhood, property, listing };
   }
 
@@ -118,7 +169,7 @@ describe('Listings (Stage 5)', () => {
       expect(s.property.streetAddress).toBeNull();
       expect(s.property.landmarkText).toBe('past the blue kiosk');
 
-      await listings.markVerified(s.listing.id);
+      await listings.markVerified(s.listing.id, (await fieldOfficer()).id);
       const published = await listings.publish(s.listing.id);
       expect(published.publicationState).toBe('live');
     });
@@ -126,6 +177,63 @@ describe('Listings (Stage 5)', () => {
     test('a street address is accepted when offered, but never required', async () => {
       const s = await seedListing({ streetAddress: 'Plot 4, Kira Road' });
       expect(s.property.streetAddress).toBe('Plot 4, Kira Road');
+    });
+  });
+
+  describe('THE AGREEMENT GATE (FR-9.1)', () => {
+    test('a verified, in-corridor listing with NO accepted agreement cannot be published', async () => {
+      const s = await seedListing({ withoutAgreement: true });
+      await listings.markVerified(s.listing.id, (await fieldOfficer()).id);
+
+      await expect(listings.publish(s.listing.id)).rejects.toThrow(
+        MissingListingAgreementError,
+      );
+
+      // Every other gate passed — this one alone held it back.
+      const reloaded = await listings.getListing(s.listing.id);
+      expect(reloaded?.verificationState).toBe('verified');
+      expect(reloaded?.publicationState).toBe('draft');
+    });
+
+    test('accepting the agreement is what unblocks it', async () => {
+      const s = await seedListing({ withoutAgreement: true });
+      await listings.markVerified(s.listing.id, (await fieldOfficer()).id);
+      await expect(listings.publish(s.listing.id)).rejects.toThrow(
+        MissingListingAgreementError,
+      );
+
+      await acceptAgreement(s.listing.id, s.lister.id);
+
+      const published = await listings.publish(s.listing.id);
+      expect(published.publicationState).toBe('live');
+    });
+
+    test('an UNACCEPTED agreement row does not count', async () => {
+      const s = await seedListing({ withoutAgreement: true });
+      await listings.markVerified(s.listing.id, (await fieldOfficer()).id);
+
+      const by = await admin();
+      const rate = await prisma.commissionRateVersion.create({
+        data: {
+          rateBpOfMonth: 10000,
+          effectiveFrom: new Date(Date.now() - 60_000),
+          createdByPartyId: by.id,
+        },
+      });
+      await prisma.listingAgreement.create({
+        data: {
+          listingId: s.listing.id,
+          listerPartyId: s.lister.id,
+          commissionRateVersionId: rate.id,
+          monthlyRentAtSigning: s.listing.monthlyRent,
+          circumventionClauseVersion: 'v1',
+          accepted: false,
+        },
+      });
+
+      await expect(listings.publish(s.listing.id)).rejects.toThrow(
+        MissingListingAgreementError,
+      );
     });
   });
 
@@ -141,7 +249,7 @@ describe('Listings (Stage 5)', () => {
   describe('CORRIDOR SCOPING (FR-2.5)', () => {
     test('an out-of-service-area listing CANNOT be published', async () => {
       const s = await seedListing({ inServiceArea: false });
-      await listings.markVerified(s.listing.id);
+      await listings.markVerified(s.listing.id, (await fieldOfficer()).id);
 
       await expect(listings.publish(s.listing.id)).rejects.toThrow(
         OutsideServiceAreaError,
@@ -153,7 +261,7 @@ describe('Listings (Stage 5)', () => {
 
     test('adding a corridor is a DATA change — flipping the flag makes the same listing publishable', async () => {
       const s = await seedListing({ inServiceArea: false });
-      await listings.markVerified(s.listing.id);
+      await listings.markVerified(s.listing.id, (await fieldOfficer()).id);
       await expect(listings.publish(s.listing.id)).rejects.toThrow(
         OutsideServiceAreaError,
       );
@@ -181,7 +289,7 @@ describe('Listings (Stage 5)', () => {
   describe('MANDATE ENFORCEMENT AT PUBLISH (FR-3.2) — server-side, not UI', () => {
     test('an unmandated BROKER listing cannot be published', async () => {
       const s = await seedListing({ tier: 'broker_agent' });
-      await listings.markVerified(s.listing.id);
+      await listings.markVerified(s.listing.id, (await fieldOfficer()).id);
 
       await expect(listings.publish(s.listing.id)).rejects.toThrow(
         MissingMandateError,
@@ -193,7 +301,7 @@ describe('Listings (Stage 5)', () => {
 
     test('an unmandated MANAGEMENT COMPANY listing cannot be published either', async () => {
       const s = await seedListing({ tier: 'property_mgmt_company' });
-      await listings.markVerified(s.listing.id);
+      await listings.markVerified(s.listing.id, (await fieldOfficer()).id);
       await expect(listings.publish(s.listing.id)).rejects.toThrow(
         MissingMandateError,
       );
@@ -201,7 +309,7 @@ describe('Listings (Stage 5)', () => {
 
     test('a broker WITH a verified mandate for that property CAN publish', async () => {
       const s = await seedListing({ tier: 'broker_agent' });
-      await listings.markVerified(s.listing.id);
+      await listings.markVerified(s.listing.id, (await fieldOfficer()).id);
 
       const verifier = await admin();
       const mandate = await mandates.submitMandate({
@@ -220,14 +328,14 @@ describe('Listings (Stage 5)', () => {
 
     test('a PROPERTY OWNER publishes with no mandate at all', async () => {
       const s = await seedListing({ tier: 'property_owner' });
-      await listings.markVerified(s.listing.id);
+      await listings.markVerified(s.listing.id, (await fieldOfficer()).id);
       const published = await listings.publish(s.listing.id);
       expect(published.publicationState).toBe('live');
     });
 
     test('a broker mandated on ANOTHER property still cannot publish this one', async () => {
       const s = await seedListing({ tier: 'broker_agent' });
-      await listings.markVerified(s.listing.id);
+      await listings.markVerified(s.listing.id, (await fieldOfficer()).id);
 
       // mandate for a different property entirely
       const other = await listings.createProperty({

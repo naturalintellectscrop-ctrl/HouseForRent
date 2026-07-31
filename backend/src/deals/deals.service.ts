@@ -9,6 +9,23 @@ import {
   TERMINAL_STATUSES,
 } from './deal-state-machine';
 import { computeCommission } from './commission';
+import { AuditService, type AuditEventType } from '../audit/audit.service';
+
+/**
+ * Deal statuses whose arrival is a MONEY EVENT in the NFR-2 sense, and the
+ * audit type each maps to.
+ *
+ * Mapping here — rather than calling the audit service from each transition
+ * method — means the audit write happens on the single path every
+ * transition already takes. A transition added later is audited by
+ * construction; one that had to remember would eventually forget.
+ */
+const AUDITED_STATUSES: Partial<Record<DealStatus, AuditEventType>> = {
+  escrow_funded: 'escrow_funded',
+  commission_earned: 'commission_earned',
+  settled: 'deal_settled',
+  refunded: 'deal_refunded',
+};
 
 type Tx = Prisma.TransactionClient;
 
@@ -70,6 +87,7 @@ export class DealsService {
     private readonly prisma: PrismaService,
     private readonly escrow: EscrowService,
     private readonly payments: PaymentsService,
+    private readonly audit: AuditService,
   ) {}
 
   async createDeal(params: {
@@ -615,10 +633,39 @@ export class DealsService {
       },
     });
 
-    return tx.deal.update({
+    const updated = await tx.deal.update({
       where: { id: params.deal.id },
       data: { ...params.data, status: params.to },
     });
+
+    // NFR-2: money events are audit-logged, inside the SAME transaction, so
+    // the log cannot claim a payment that rolled back or miss one that
+    // committed. Amounts go in as strings — the payload is JSON, and a
+    // bigint rendered as a JS number is exactly the precision loss the whole
+    // money core exists to prevent.
+    const auditType = AUDITED_STATUSES[params.to];
+    if (auditType) {
+      await this.audit.record(
+        {
+          eventType: auditType,
+          actorPartyId: params.actorPartyId,
+          subjectRef: updated.id,
+          payload: {
+            fromStatus: params.deal.status,
+            toStatus: params.to,
+            commissionAmount: updated.commissionAmount?.toString() ?? null,
+            monthlyRentSnapshot:
+              updated.monthlyRentSnapshot?.toString() ?? null,
+            commissionRateBpSnapshot:
+              updated.commissionRateBpSnapshot ?? null,
+          },
+          occurredAt,
+        },
+        tx,
+      );
+    }
+
+    return updated;
   }
 }
 
