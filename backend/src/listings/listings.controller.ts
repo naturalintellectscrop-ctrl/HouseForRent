@@ -62,8 +62,14 @@ export class ListingsController {
    */
   @Roles('foo', 'admin')
   @Post('listings/:id/verify')
-  async verify(@Param('id') id: string) {
-    return this.listings.markVerified(id);
+  async verify(
+    @Param('id') id: string,
+    @Caller() caller: AuthenticatedCaller,
+  ) {
+    // The verifying officer comes from the session, never the body — an
+    // audit row naming an actor the client chose would prove nothing
+    // (NFR-2).
+    return this.listings.markVerified(id, caller.partyId);
   }
 
   /** FOO-only: availability is confirmed on the ground, not asserted remotely. */

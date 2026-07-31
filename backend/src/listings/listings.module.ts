@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ListingsService } from './listings.service';
 import { ListingsController } from './listings.controller';
 import { IdentityModule } from '../identity/identity.module';
+import { AuditModule } from '../audit/audit.module';
 
 /**
  * Listings & Properties. Calls Identity for mandate enforcement at publish
@@ -9,7 +10,7 @@ import { IdentityModule } from '../identity/identity.module';
  * reimplement either rule locally.
  */
 @Module({
-  imports: [IdentityModule],
+  imports: [IdentityModule, AuditModule],
   controllers: [ListingsController],
   providers: [ListingsService],
   exports: [ListingsService],

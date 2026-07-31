@@ -3,6 +3,7 @@ import { ViewingsService } from './viewings.service';
 import { ViewingsController } from './viewings.controller';
 import { IdentityModule } from '../identity/identity.module';
 import { MediaModule } from '../media/media.module';
+import { AuditModule } from '../audit/audit.module';
 
 /**
  * Viewings & field operations (Data_Model.md §5, PRD FR-5.x).
@@ -13,7 +14,7 @@ import { MediaModule } from '../media/media.module';
  * copies is a rule that will drift.
  */
 @Module({
-  imports: [IdentityModule, MediaModule],
+  imports: [IdentityModule, MediaModule, AuditModule],
   controllers: [ViewingsController],
   providers: [ViewingsService],
   exports: [ViewingsService],

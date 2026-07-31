@@ -1005,6 +1005,190 @@ an amendment; one API-spec gap was closed as Amendment A2.
 
 ---
 
+## Stage 8 — Full flow integration, agreements, audit, observability
+
+Three new modules — `backend/src/audit/`, `backend/src/agreements/`,
+`backend/src/admin/` — plus `src/integration/full-journey.spec.ts`.
+
+### The gap Stage 8 opened with
+
+`audit_event` had existed since Stage 0 and was written **nowhere in
+production code** — the only writer was an immutability test. NFR-2 requires
+money, verification, consent and configuration events to be audit-logged, so
+that requirement was entirely unmet across Stages 0–7 despite the table
+being present. Having the table looked like having the feature.
+
+`AuditService` now covers all four categories. Three properties carry the
+weight:
+
+- **`AuditEventType` is a union, not free text.** A caller cannot invent a
+  category no query will look for, and the complete audited set is auditable
+  by reading one file.
+- **Every writer passes its transaction client.** An audit row written
+  outside the transaction that caused it can survive a rollback (claiming a
+  payment that never happened) or be lost when one commits. Proven by
+  `a money event that ROLLS BACK leaves no audit row claiming it happened`.
+- **Payloads are PII-checked at the boundary.** `assertNoPii` rejects a
+  payload carrying `nin`, `phone`, `password`, `selfieRef` or a token. What
+  is auditable is that a check ran and how it resolved — not the contents of
+  anyone's identity documents (NFR-3).
+
+Money events attach inside `applyTransition`, the single path every deal
+transition already takes, so a transition added later is audited by
+construction rather than by remembering.
+
+### `@Global` was tried for AuditModule, and rejected
+
+Registering `AuditModule` globally made `AuditService` resolvable anywhere,
+and immediately broke seven suites that compose narrower testing modules.
+That failure was the useful signal: a global provider hides the dependency
+(a module needing auditing looks, from its own definition, like one that
+does not) and only resolves when the global module happens to be in the
+graph — so a narrower composition silently loses auditing at runtime.
+Explicit imports in all six consumers make a missing one a loud DI error at
+startup instead of a quietly incomplete audit trail.
+
+### FR-9.1 added a FOURTH publish gate
+
+> *"Before a listing goes live, the lister MUST accept a listing agreement
+> presenting, in plain language: the commission terms (with the snapshotted
+> rate...) and the circumvention clause."* — PRD FR-9.1
+
+`ListingsService.publish()` previously enforced three preconditions
+(verified, in-corridor, mandated). It now enforces four. This has real blast
+radius — the Stage 5, 6 and 7 fixtures all published without an agreement —
+and the fixtures were corrected rather than the rule softened.
+
+`listing_agreement` is 🔒 immutable, so `accept()` writes `accepted: true`
+and `acceptedAt` in the **same insert**; a create-then-update would be
+rejected by the database. An unaccepted agreement row is therefore never
+written by the service at all — the row's existence *is* the acceptance.
+(A directly-inserted `accepted: false` row is still rejected by the publish
+gate, asserted by `an UNACCEPTED agreement row does not count`.)
+
+### The clause text is versioned in code, not in the database
+
+`listing_agreement.circumvention_clause_version` records **which** text a
+landlord accepted. That reference proves nothing if the text it points at
+can change, so versions are append-only constants in
+`circumvention-clause.ts`, and `clauseText()` throws on an unknown version
+rather than accepting a reference to text that is not on record.
+
+`presentTerms()` quotes the commission **in shillings**, computed by the
+same `computeCommission()` the deal will later use — so the figure a
+landlord is shown and the figure they are charged come from one
+implementation rather than two that can drift. `accept()` also re-reads the
+rate in force and refuses if it differs from the one presented
+(`expectedRateVersionId`), so a rate change landing mid-flight cannot bind a
+landlord to terms they never saw.
+
+### Admin observability: reads only, and two version-creators
+
+`AdminController` has **no PUT, PATCH or DELETE anywhere**. Both write
+endpoints create new immutable versions. An admin console powerful enough to
+rewrite the books is one that can destroy the audit trail it exists to
+display.
+
+Two deliberate choices in the numbers it reports:
+
+- **The launch gate counts stale inventory separately** rather than silently
+  excluding it. "40 listings, 18 stale" is a different operational problem
+  from "22 listings", and an admin needs to know which one they have.
+- **Reconciliation reports internal consistency alongside the custodian
+  comparison.** The ledger disagreeing with the PSP is a real, actionable
+  divergence; the ledger disagreeing with *itself* is a defect. They need
+  different responses, so they are not collapsed into one boolean.
+
+The verification queue returns `blockedBy` per listing rather than a bare
+list, because the queue's purpose is dispatch: an officer needs to know
+whether a property waits on a field visit, a mandate, or an agreement.
+
+### Amendment A3 — API Spec §4.2 extended
+
+§4.2 listed no agreement endpoints, yet FR-9.1 requires acceptance before a
+listing goes live and §11 does not name agreements among the deliberate
+absences — a gap, not a prohibition. Added `GET /listings/{id}/agreement`
+(lister, admin) and `POST /listings/{id}/agreement/accept` (**lister only** —
+admin may read the terms for support, but cannot sign a contract on a
+landlord's behalf). Also added `GET /auth/me`, because the access token
+deliberately carries only `sub` (role and party are re-read per request, so
+a suspension takes effect immediately) — which left a client no way to learn
+its own role for rendering. It discloses only what the caller proved by
+authenticating and confers no privilege.
+
+### Acceptance criteria and the tests proving them
+
+`full-journey.spec.ts` — 28 tests, all over HTTP against the real database.
+
+| Acceptance criterion | Test |
+|---|---|
+| **Full journey passes end-to-end** | `the WHOLE journey completes over HTTP, each step by its permitted role` — asserts the exact seven-transition sequence; every step is made by the role §4 permits, through real endpoints |
+| **Settlement commission = snapshot × monthly rent** | `SETTLEMENT COMMISSION equals the snapshot × monthly rent, not the escrow total` — 4,000,000 into escrow, commission exactly 1,000,000 |
+| The ledger fully discharges | `the ledger fully discharges: liability zero, revenue = commission`; `every posting in the database still balances after the journey` |
+| **Circumvention evidence linkage works** | `a tenant introduced via a FOO is LINKED to the landlord and property`; `the linkage survives with NO deal ever created — the bypass case` |
+| **Agreement presents terms and stores acceptance** | `the terms show the commission in SHILLINGS, the clause, and name the LANDLORD as payer`; `acceptance is stored with the rate-version reference and a timestamp` |
+| The agreement cannot be altered after the fact | `the agreement is IMMUTABLE — the database rejects UPDATE and DELETE` |
+| Only the landlord signs their own agreement | `a tenant cannot accept a landlord agreement, and a stranger lister cannot either` |
+| **FR-9.2 positioning consistency** | `FR-9.2 POSITIONING: nothing tenant-facing carries a charge` — asserts `freeForTenants` on every public result, greps the feed for any fee/charge/commission field, and asserts the landlord agreement names the payer |
+| **Money events are audit-logged** | `every MONEY event on the journey is audit-logged`; `the audit row for commission carries the SNAPSHOTS, as strings` |
+| Verification, consent, config are logged | `verification, consent and agreement events are logged too` |
+| **No PII in the audit log** | `NO audit payload anywhere carries a NIN, phone number or token` — asserts key-form absence *and* greps for MSISDN/NIN-shaped values under any key |
+| Audit rows are immutable | `audit rows are IMMUTABLE — the database rejects UPDATE and DELETE` |
+| A rolled-back money event leaves no audit row | `a money event that ROLLS BACK leaves no audit row claiming it happened` |
+| **Launch-gate inventory is observable** | `FR-10.3 launch gate counts verified, in-corridor, FRESH inventory` |
+| **Reconciliation dashboard exists** | `FR-10.4 reconciliation reports ledger vs custodian, and internal consistency` |
+| Verification queue reflects real states | `FR-10.2 verification queue says WHAT BLOCKS each listing` |
+| Deal-state monitoring | `FR-10.4 deal-state distribution is observable` |
+| A rate change cannot re-price an in-flight deal | `FR-10.1 a rate change creates a NEW version and cannot re-price a signed deal` |
+| No endpoint edits a version | `there is NO endpoint that edits a rate version or a config version` |
+| **Authz on every Stage 8 endpoint** | `/v1/admin/reconciliation` and `/v1/admin/deals` deny tenant/lister/FOO; `launch-gate and verification-queue are staff-only, not public`; `a non-admin cannot create a commission rate version` |
+| Rate input cannot be smuggled | `a rate version cannot be smuggled past validation` — rejects 0, −1, 1.5, 40000 and `"10000"` |
+
+Plus 3 new tests in `listings.spec.ts` for the FR-9.1 gate, and 5 in
+`authorization-matrix.spec.ts` for `GET /auth/me`.
+
+### Both new safeguards were verified load-bearing
+
+- **The FR-9.1 publish gate**: disabling it failed exactly 3 of 48 tests —
+  precisely the three agreement-gate cases, nothing else. Restored.
+- **The NFR-2 money audit**: disabling the write in `applyTransition` failed
+  exactly 3 of 28 journey tests — the three that assert money events are
+  logged. Restored.
+
+### A test bug this caught, worth recording
+
+The PII assertion originally checked `serialised.not.toContain('"phone"')`
+and failed on correct code: `{"method":"phone"}` records *which* check ran,
+not anyone's number. An assertion that cannot tell a field name from a field
+value fails on correct code, and teaches whoever hits it to loosen the
+check — which is how a PII test stops being one. It now asserts key-form
+(`"phone":`) plus regexes for actual MSISDN and NIN shapes, which is
+narrower *and* stronger.
+
+Full suite: **339/339 passing** across 15 suites; `tsc --noEmit` clean; 46
+routes mapped (was 34) and the app boots with all fifteen modules.
+
+**Deliberately deferred:** rate limiting and the `Idempotency-Key` header
+(`settle`/`refund` already derive deterministic server-side keys, so retries
+are safe today); real PSP, NIN provider and object storage (all behind
+interfaces, procurement-gated per SSOT §8); the tenant/landlord mobile app —
+see below.
+
+### Where the surfaces actually stand
+
+The Implementation Prompt Pack heads Stage 5 *"Listings, search, availability
+**(tenant/landlord app begins)**"*. It did not begin there, correctly: no
+HTTP API existed until the API layer was built between Stages 6 and 7. The
+FOO/admin console (Stage 7b, `admin-web/`) is the first surface built. The
+**tenant/landlord app is therefore the one piece genuinely behind the pack's
+own schedule**, and is the natural next body of work — it is not part of
+Stage 8, whose acceptance criteria are all server-side or admin-facing.
+
+No SSOT conflict encountered in Stage 8. One API-spec gap was closed as
+Amendment A3.
+
+---
+
 ## Stage 7b — the FOO console (`admin-web/`)
 
 Next.js 16 App Router. Technical Architecture §7 calls for *"web, not mobile,

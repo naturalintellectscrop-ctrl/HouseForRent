@@ -3,6 +3,7 @@ import { DealsService } from './deals.service';
 import { DealsController } from './deals.controller';
 import { LedgerModule } from '../ledger/ledger.module';
 import { PaymentsModule } from '../payments/payments.module';
+import { AuditModule } from '../audit/audit.module';
 
 /**
  * Deals & Guarantee — the deal state machine and commission engine
@@ -10,7 +11,7 @@ import { PaymentsModule } from '../payments/payments.module';
  * Guarantee is the shape of the transition graph, not a separate feature.
  */
 @Module({
-  imports: [LedgerModule, PaymentsModule],
+  imports: [LedgerModule, PaymentsModule, AuditModule],
   controllers: [DealsController],
   providers: [DealsService],
   exports: [DealsService],

@@ -154,6 +154,32 @@ enough; being *this deal's* tenant is required.
 | `POST /listings/{id}/confirm-availability` | — | — | ✅ | ✅ |
 | `POST /mandates` | — | ✅ | — | ✅ |
 | `POST /mandates/{id}/decide` | — | — | ✅ | ✅ |
+| `GET /listings/{id}/agreement` | — | ✅ | — | ✅ |
+| `POST /listings/{id}/agreement/accept` | — | ✅¹ | — | — |
+
+¹ and must be the lister who owns that listing.
+
+#### Amendment A3 — agreement endpoints and `GET /auth/me` added (2026-07-31)
+
+§4.2 listed no agreement endpoints, yet **FR-9.1 requires the lister to
+accept a listing agreement before the listing goes live** and §11 does not
+name agreements among the deliberate absences — a gap, not a prohibition.
+`publish` accordingly enforces a **fourth** gate: verified, in-corridor,
+mandated, **and an accepted agreement**.
+
+> **[API Decision] Admin may READ the terms but may NOT accept them.**
+> Support needs to answer "what was I shown?", which is a read. Acceptance
+> is a landlord signing a contract that names them as the payer (FR-9.2);
+> no operator may do that on their behalf. This is the one row in §4 where
+> admin is deliberately absent.
+
+`GET /auth/me` was also added (any authenticated role). The access token
+carries only `sub` — role and party are re-read from the database on every
+request, so a role change or suspension takes effect immediately rather than
+lingering until expiry. That is the right design, but it leaves a client no
+way to learn its own role in order to render the correct surface. The
+endpoint discloses only what the caller already proved by authenticating,
+confers no privilege, and cannot be used to learn about anyone else.
 
 > **[API Decision] A lister may call `publish`, but cannot bypass its gates.**
 > `publish` is lister-callable because publishing is their action. It is not
