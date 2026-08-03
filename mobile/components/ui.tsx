@@ -1,5 +1,6 @@
 import {
   ActivityIndicator,
+  Image,
   Pressable,
   ScrollView,
   Text,
@@ -17,6 +18,7 @@ import {
   space,
   TOUCH_TARGET,
   tracking,
+  useIsDark,
   usePalette,
 } from '@/lib/theme';
 
@@ -63,59 +65,54 @@ export function Screen({
 /* ── the wordmark ───────────────────────────────────────────────────── */
 
 /**
- * The logo lockup in type: HOUSE in ink, FOR with the red rule, RENT in
- * brand green — the arrangement and the colour roles of the real mark.
+ * The House For Rent mark.
+ *
+ * The real logo, cropped to its content and downscaled to 512px with box
+ * averaging — nearest-neighbour aliased the thin red roof stripe badly at
+ * small sizes. Transparent background so it sits on either surface.
+ *
+ * ── Why a `tint` variant exists ──
+ * The mark's "HOUSE" wordmark and house outline are near-black (#080808),
+ * which vanishes on the dark surface. Rather than ship a second artwork
+ * that could drift from the first, `onDark` renders the same asset over a
+ * light plate — the mark is always the real mark, and the plate is what
+ * changes.
  */
-export function Wordmark({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' }) {
-  const p = usePalette();
-  const scale = size === 'lg' ? 1.35 : size === 'sm' ? 0.72 : 1;
-  const base = 26 * scale;
+export function Wordmark({
+  size = 'md',
+  onDark,
+}: {
+  size?: 'sm' | 'md' | 'lg';
+  onDark?: boolean;
+}) {
+  const px = size === 'lg' ? 168 : size === 'sm' ? 88 : 124;
+  const dark = useIsDark();
+  const needsPlate = onDark ?? dark;
 
   return (
-    <View accessibilityRole="header" accessibilityLabel="House For Rent">
-      <Text
-        style={{
-          fontSize: base,
-          fontWeight: '800',
-          color: p.ink,
-          letterSpacing: tracking.wordmark * scale,
-          lineHeight: base * 1.1,
-        }}
-      >
-        HOUSE
-      </Text>
-      <View
-        style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: space.sm,
-          marginVertical: 2 * scale,
-        }}
-      >
-        <View style={{ flex: 1, height: 2, backgroundColor: BRAND.red }} />
-        <Text
-          style={{
-            fontSize: base * 0.5,
-            fontWeight: '700',
-            color: p.ink,
-            letterSpacing: tracking.wordmark * scale,
-          }}
-        >
-          FOR
-        </Text>
-        <View style={{ flex: 1, height: 2, backgroundColor: BRAND.red }} />
-      </View>
-      <Text
-        style={{
-          fontSize: base,
-          fontWeight: '800',
-          color: p.brand,
-          letterSpacing: tracking.wordmark * scale,
-          lineHeight: base * 1.1,
-        }}
-      >
-        RENT
-      </Text>
+    <View
+      accessibilityRole="image"
+      accessibilityLabel="House For Rent"
+      style={
+        needsPlate
+          ? {
+              backgroundColor: '#FFFFFF',
+              borderRadius: radius.md,
+              padding: space.md,
+            }
+          : undefined
+      }
+    >
+      {/* React Native's own Image, not expo-image: this is one bundled
+          static asset with no remote loading, caching or placeholder
+          needs, so the extra dependency would buy nothing and cost bundle
+          size (NFR-5). */}
+      <Image
+        source={require('@/assets/logo.png')}
+        style={{ width: px, height: px }}
+        resizeMode="contain"
+        accessible={false}
+      />
     </View>
   );
 }

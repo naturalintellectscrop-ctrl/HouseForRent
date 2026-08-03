@@ -19,6 +19,14 @@ export default async function ConsoleLayout({
       <header className="topbar">
         <div className="topbar-inner">
           <Link href="/" className="brand">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/logo.png"
+              alt=""
+              width={28}
+              height={28}
+              className="brand-mark"
+            />
             House For Rent <span>· Field Console</span>
           </Link>
           <nav>
