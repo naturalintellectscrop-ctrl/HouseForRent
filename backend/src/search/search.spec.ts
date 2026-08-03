@@ -145,6 +145,70 @@ describe('Search (Stage 5)', () => {
     return { listing, neighbourhood, property, lister };
   }
 
+  describe('public listing detail (API Spec §9.1)', () => {
+    test('a live, verified, in-corridor listing is returned with its terms', async () => {
+      const s = await makeListing({ confirmedDaysAgo: 1 });
+
+      const detail = await search.publicDetail(s.listing.id);
+
+      expect(detail).not.toBeNull();
+      expect(detail!.listingId).toBe(s.listing.id);
+      expect(detail!.isVerified).toBe(true);
+      expect(detail!.freeForTenants).toBe(true);
+      expect(typeof detail!.depositAmount).toBe('bigint');
+      expect(detail!.requiredMonthsUpfront).toBeGreaterThan(0);
+    });
+
+    test('an UNVERIFIED listing is not disclosable, even by direct id', async () => {
+      // The deep-link path must not become the hole the feed closed.
+      const s = await makeListing({ verified: false, confirmedDaysAgo: 1 });
+      await prisma.listing.update({
+        where: { id: s.listing.id },
+        data: { publicationState: 'live' },
+      });
+
+      expect(await search.publicDetail(s.listing.id)).toBeNull();
+    });
+
+    test('an OUT-OF-CORRIDOR listing is not disclosable by direct id either', async () => {
+      const s = await makeListing({
+        inServiceArea: false,
+        confirmedDaysAgo: 1,
+      });
+      await prisma.listing.update({
+        where: { id: s.listing.id },
+        data: { publicationState: 'live' },
+      });
+
+      expect(await search.publicDetail(s.listing.id)).toBeNull();
+    });
+
+    test('a STALE listing IS reachable by direct link, flagged as stale', async () => {
+      // Stale listings are excluded from the feed but a tenant following a
+      // shared link should see the home and its age, not a dead end.
+      // (The suite's window is seeded to 7 days in beforeAll.)
+      const s = await makeListing({ confirmedDaysAgo: 30 });
+
+      const detail = await search.publicDetail(s.listing.id);
+
+      expect(detail).not.toBeNull();
+      expect(detail!.isStale).toBe(true);
+      expect(detail!.daysSinceConfirmed).toBe(30);
+    });
+
+    test('a listing with no field report returns null, not a fabricated summary', async () => {
+      const s = await makeListing({ confirmedDaysAgo: 1 });
+      const detail = await search.publicDetail(s.listing.id);
+      expect(detail!.fieldConfirmed).toBeNull();
+    });
+
+    test('an unknown id returns null', async () => {
+      expect(
+        await search.publicDetail('00000000-0000-0000-0000-000000000000'),
+      ).toBeNull();
+    });
+  });
+
   describe('the public feed is verified, in-corridor and fresh (FR-4.1)', () => {
     test('a fresh, verified, in-corridor listing IS returned', async () => {
       const s = await makeListing({ confirmedDaysAgo: 1 });

@@ -220,6 +220,19 @@ export class DealsController {
     });
   }
 
+  /**
+   * The caller's own deals — every deal they are a party to.
+   *
+   * Scoped from the SESSION, never from a query parameter: an endpoint that
+   * accepted a party id would let any authenticated user read anyone's
+   * rentals, which the per-deal guard exists to prevent. Declared before
+   * `:dealId` so the empty path is not matched as an id.
+   */
+  @Get()
+  async myDeals(@Caller() caller: AuthenticatedCaller) {
+    return this.deals.findForParty(caller.partyId);
+  }
+
   /** Parties and staff only (API Spec §7.4 — non-parties get 404). */
   @RequiresDealParty()
   @Get(':dealId')

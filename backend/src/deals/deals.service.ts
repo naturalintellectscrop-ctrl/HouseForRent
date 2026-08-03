@@ -592,6 +592,23 @@ export class DealsService {
     });
   }
 
+  /**
+   * Every deal the party is on either side of.
+   *
+   * One query covering both sides rather than a `role` argument: a party
+   * can legitimately be a tenant on one deal and a landlord on another, and
+   * asking the caller which they "are" would be asking a question the data
+   * does not have a single answer to.
+   */
+  async findForParty(partyId: string): Promise<Deal[]> {
+    return this.prisma.deal.findMany({
+      where: {
+        OR: [{ tenantPartyId: partyId }, { landlordPartyId: partyId }],
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
   private async loadForUpdate(dealId: string, tx: Tx): Promise<Deal> {
     const deal = await tx.deal.findUnique({ where: { id: dealId } });
     if (!deal) {

@@ -768,8 +768,12 @@ describe('The full journey (Stage 8)', () => {
         .set('Authorization', as('admin'))
         .expect(200);
 
-      expect((res.body as unknown[]).length).toBeGreaterThan(0);
-      expect((res.body as Array<{ value: unknown }>)[0].value).toBe(3);
+      // Asserted by PRESENCE, not position. History is ordered by
+      // effectiveFrom and config versions are append-only across runs, so a
+      // future-dated version left by the scheduling test below legitimately
+      // sorts first — indexing [0] would make this fail on correct code.
+      const values = (res.body as Array<{ value: unknown }>).map((v) => v.value);
+      expect(values).toContain(3);
     });
 
     test('a future-dated config version is accepted and stays scheduled', async () => {
@@ -828,6 +832,179 @@ describe('The full journey (Stage 8)', () => {
   // ────────────────────────────────────────────────────────────────────
   // NFR-1 — the security pass, on the endpoints Stage 8 added
   // ────────────────────────────────────────────────────────────────────
+
+  /**
+   * The mobile client needs three caller-scoped lists. Each is scoped from
+   * the SESSION, never a query parameter — an endpoint that accepted a
+   * party id would undo the per-deal guard by letting any authenticated
+   * user read anyone's rentals.
+   */
+  describe('caller-scoped reads for the mobile client (NFR-1)', () => {
+    test('GET /deals returns ONLY the caller\'s own deals, both sides', async () => {
+      const { dealId } = await journey('closed');
+
+      for (const role of ['tenant', 'lister'] as const) {
+        const res = await http()
+          .get('/v1/deals')
+          .set('Authorization', as(role))
+          .expect(200);
+
+        const ids = (res.body as Array<{ id: string }>).map((d) => d.id);
+        expect(ids).toContain(dealId);
+        // Every row must have the caller on one side of it.
+        for (const deal of res.body as Array<{
+          tenantPartyId: string;
+          landlordPartyId: string;
+        }>) {
+          expect(
+            deal.tenantPartyId === parties[role] ||
+              deal.landlordPartyId === parties[role],
+          ).toBe(true);
+        }
+      }
+    });
+
+    test('a stranger sees none of them', async () => {
+      await journey('closed');
+      seq += 1;
+      const primaryPhone = phone('sx');
+      await auth.register({
+        displayName: 'Stranger',
+        primaryPhone,
+        password: PASSWORD,
+        role: 'tenant',
+      });
+      const { accessToken } = await auth.login({
+        primaryPhone,
+        password: PASSWORD,
+      });
+
+      const res = await http()
+        .get('/v1/deals')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .expect(200);
+
+      expect(res.body).toEqual([]);
+    });
+
+    test('GET /deals cannot be widened by a party-id query', async () => {
+      await journey('closed');
+      // forbidNonWhitelisted has nothing to whitelist on a GET, so the
+      // guarantee is that the handler never READS a query param — asserted
+      // by the answer being identical with one present.
+      const withParam = await http()
+        .get(`/v1/deals?partyId=${parties.lister}`)
+        .set('Authorization', as('tenant'))
+        .expect(200);
+      const without = await http()
+        .get('/v1/deals')
+        .set('Authorization', as('tenant'))
+        .expect(200);
+
+      expect(withParam.body).toEqual(without.body);
+    });
+
+    test('GET /viewings/mine is the tenant\'s own, and not FOO-readable', async () => {
+      await journey('introduced');
+
+      const mine = await http()
+        .get('/v1/viewings/mine')
+        .set('Authorization', as('tenant'))
+        .expect(200);
+
+      expect((mine.body as unknown[]).length).toBeGreaterThan(0);
+      for (const viewing of mine.body as Array<{ tenantPartyId: string }>) {
+        expect(viewing.tenantPartyId).toBe(parties.tenant);
+      }
+
+      // A field officer has their own board; this route is not theirs.
+      await http()
+        .get('/v1/viewings/mine')
+        .set('Authorization', as('foo'))
+        .expect(403);
+    });
+
+    test('the literal /viewings/mine route is not swallowed as an id', async () => {
+      const res = await http()
+        .get('/v1/viewings/mine')
+        .set('Authorization', as('tenant'));
+      expect(res.status).toBe(200);
+      expect(Array.isArray(res.body)).toBe(true);
+    });
+
+    test('GET /listings/mine returns the lister\'s inventory with blockedBy', async () => {
+      const { listingId } = await journey('published');
+
+      const res = await http()
+        .get('/v1/listings/mine')
+        .set('Authorization', as('lister'))
+        .expect(200);
+
+      const row = (res.body as Array<Record<string, unknown>>).find(
+        (l) => l.id === listingId,
+      );
+      expect(row).toBeDefined();
+      expect(row!.publicationState).toBe('live');
+      // A published listing has cleared every gate.
+      expect(row!.blockedBy).toEqual([]);
+      expect(row!.canPublish).toBe(true);
+      // Money leaves as strings, here too.
+      expect(typeof row!.monthlyRent).toBe('string');
+    });
+
+    test('an unpublished listing reports WHAT it is waiting on', async () => {
+      seq += 1;
+      const neighbourhood = await prisma.neighbourhood.create({
+        data: { name: `MineHood-${Date.now()}-${seq}`, inServiceArea: true },
+      });
+      const property = await prisma.property.create({
+        data: {
+          ownerPartyId: parties.lister,
+          propertyType: 'room',
+          bedrooms: 1,
+          bathrooms: 1,
+          furnished: 'unfurnished',
+          neighbourhoodId: neighbourhood.id,
+          landmarkText: 'mine test',
+        },
+      });
+      const listing = await prisma.listing.create({
+        data: {
+          propertyId: property.id,
+          monthlyRent: 400_000n,
+          requiredMonthsUpfront: 3,
+          depositAmount: 400_000n,
+        },
+      });
+
+      const res = await http()
+        .get('/v1/listings/mine')
+        .set('Authorization', as('lister'))
+        .expect(200);
+
+      const row = (res.body as Array<Record<string, unknown>>).find(
+        (l) => l.id === listing.id,
+      );
+      expect(row!.blockedBy).toEqual(
+        expect.arrayContaining(['field_verification', 'listing_agreement']),
+      );
+      expect(row!.canPublish).toBe(false);
+    });
+
+    test('a tenant cannot read a lister\'s inventory', async () => {
+      await http()
+        .get('/v1/listings/mine')
+        .set('Authorization', as('tenant'))
+        .expect(403);
+    });
+
+    test('the /listings/mine route is not matched as a public listing id', async () => {
+      // `GET /v1/listings/:id` is public; `mine` must not resolve through it
+      // and disclose an inventory to an anonymous caller.
+      const res = await http().get('/v1/listings/mine');
+      expect(res.status).toBe(401);
+    });
+  });
 
   describe('authz on the Stage 8 endpoints (NFR-1)', () => {
     const ADMIN_ONLY = [
