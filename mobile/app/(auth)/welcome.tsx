@@ -1,7 +1,7 @@
 import { View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { AuthBackdrop } from '@/components/auth-backdrop';
-import { Body, Button, Display, Eyebrow } from '@/components/ui';
+import { Body, Button, Display, Eyebrow, Wordmark } from '@/components/ui';
 import { space, tracking, usePalette } from '@/lib/theme';
 import { Text } from 'react-native';
 
@@ -33,6 +33,9 @@ export default function Welcome() {
         }}
       >
         <View style={{ alignItems: 'center', marginBottom: space.lg }}>
+          <View style={{ marginBottom: space.md }}>
+            <Wordmark size="sm" />
+          </View>
           <Eyebrow>Welcome to House For Rent</Eyebrow>
           <Display>Let&apos;s Get You Closer</Display>
           <Text

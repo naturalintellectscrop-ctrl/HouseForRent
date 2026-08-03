@@ -6,6 +6,7 @@ export const metadata: Metadata = {
   description:
     'Internal Field Operations Officer console. Not a public surface.',
   robots: { index: false, follow: false },
+  icons: { icon: '/favicon.png' },
 };
 
 export const viewport: Viewport = {

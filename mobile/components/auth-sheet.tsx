@@ -8,7 +8,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { AuthBackdrop } from '@/components/auth-backdrop';
-import { Body, Title } from '@/components/ui';
+import { Body, Title, Wordmark } from '@/components/ui';
 import { elevation, font, radius, space, usePalette } from '@/lib/theme';
 
 /**
@@ -78,6 +78,9 @@ export function AuthSheet({
               paddingBottom: space.xxl,
             }}
           >
+            <View style={{ alignItems: 'center', marginBottom: space.md }}>
+              <Wordmark size="sm" />
+            </View>
             <Title>{title}</Title>
             <Body muted style={{ marginBottom: space.xl }}>
               {subtitle}
