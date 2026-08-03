@@ -1,4 +1,4 @@
-import { Body, Controller, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post } from '@nestjs/common';
 import { ListingsService } from './listings.service';
 import { Roles } from '../auth/roles.decorator';
 import { Caller } from '../auth/caller.decorator';
@@ -24,6 +24,20 @@ export class ListingsController {
       ownerPartyId: caller.partyId,
       ...dto,
     });
+  }
+
+  /**
+   * The caller's own listings, with what each is waiting on.
+   *
+   * Scoped from the session rather than a query parameter — a lister may
+   * only ever see their own inventory. `blockedBy` is computed here, on the
+   * server, for the same reason the admin queue computes it there: the
+   * client must not hold its own opinion about what publishing requires.
+   */
+  @Roles('lister', 'admin')
+  @Get('listings/mine')
+  async myListings(@Caller() caller: AuthenticatedCaller) {
+    return this.listings.findForLister(caller.partyId);
   }
 
   @Roles('lister', 'admin')

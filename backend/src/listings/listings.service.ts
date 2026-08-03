@@ -290,6 +290,73 @@ export class ListingsService {
     return this.prisma.listing.findUnique({ where: { id: listingId } });
   }
 
+  /**
+   * A lister's own inventory, with what each listing is waiting on.
+   *
+   * `blockedBy` is computed HERE rather than in the client, mirroring the
+   * admin verification queue: a landlord's app must not hold its own
+   * opinion about what publishing requires, or the two will disagree and
+   * the app will be the one that is wrong.
+   */
+  async findForLister(listerPartyId: string) {
+    const listings = await this.prisma.listing.findMany({
+      where: { property: { ownerPartyId: listerPartyId } },
+      include: {
+        property: { include: { neighbourhood: true } },
+        listingAgreements: { where: { accepted: true }, take: 1 },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const tier = (
+      await this.prisma.listerProfile.findUnique({
+        where: { partyId: listerPartyId },
+      })
+    )?.tier;
+
+    return Promise.all(
+      listings.map(async (listing) => {
+        const blockedBy: string[] = [];
+        if (listing.verificationState !== 'verified') {
+          blockedBy.push('field_verification');
+        }
+        if (!listing.property.neighbourhood.inServiceArea) {
+          blockedBy.push('outside_service_area');
+        }
+        if (listing.listingAgreements.length === 0) {
+          blockedBy.push('listing_agreement');
+        }
+        if (tier && tier !== 'property_owner') {
+          const permitted = await this.mandates.canPublish({
+            listerTier: tier,
+            listerPartyId,
+            propertyId: listing.propertyId,
+          });
+          if (!permitted) blockedBy.push('mandate');
+        }
+
+        return {
+          id: listing.id,
+          propertyId: listing.propertyId,
+          monthlyRent: listing.monthlyRent,
+          depositAmount: listing.depositAmount,
+          requiredMonthsUpfront: listing.requiredMonthsUpfront,
+          bedrooms: listing.property.bedrooms,
+          bathrooms: listing.property.bathrooms,
+          neighbourhoodName: listing.property.neighbourhood.name,
+          landmarkText: listing.property.landmarkText,
+          verificationState: listing.verificationState,
+          publicationState: listing.publicationState,
+          availabilityStatus: listing.availabilityStatus,
+          availabilityConfirmedAt: listing.availabilityConfirmedAt,
+          hasAcceptedAgreement: listing.listingAgreements.length > 0,
+          blockedBy,
+          canPublish: blockedBy.length === 0,
+        };
+      }),
+    );
+  }
+
   /** Withdraws a listing from the public feed. */
   async withdraw(listingId: string) {
     return this.prisma.listing.update({

@@ -157,6 +157,19 @@ export class ViewingsController {
   }
 
   /**
+   * The viewings a tenant requested (FR-5.1).
+   *
+   * Scoped from the session, so it can only ever return the caller's own.
+   * Declared before `:viewingId` — Nest matches in declaration order, and a
+   * literal segment placed after a parameter would be swallowed as an id.
+   */
+  @Roles('tenant', 'admin')
+  @Get('mine')
+  async myViewings(@Caller() caller: AuthenticatedCaller) {
+    return this.viewings.findForTenant(caller.partyId);
+  }
+
+  /**
    * FR-5.3 / FR-8.3 — introduction records as queryable circumvention
    * evidence. Staff-only: it is a linkage between two counterparties, and
    * exposing it to either would tell a landlord which other tenants an

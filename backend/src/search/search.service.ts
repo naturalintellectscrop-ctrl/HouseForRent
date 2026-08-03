@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma, PropertyType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ConfigService } from '../config/config.service';
 
@@ -25,6 +25,8 @@ export interface SearchResult {
   monthlyRent: bigint;
   bedrooms: number;
   bathrooms: number;
+  /** Drives the client's type filter; V1 values: apartment, house, room, other. */
+  propertyType: PropertyType;
   neighbourhoodName: string;
   landmarkText: string;
   isVerified: boolean;
@@ -135,6 +137,7 @@ export class SearchService {
         monthlyRent: listing.monthlyRent,
         bedrooms: listing.property.bedrooms,
         bathrooms: listing.property.bathrooms,
+        propertyType: listing.property.propertyType,
         neighbourhoodName: listing.property.neighbourhood.name,
         landmarkText: listing.property.landmarkText,
         isVerified: listing.verificationState === 'verified',
@@ -171,6 +174,53 @@ export class SearchService {
       );
     }
     return null;
+  }
+
+  /**
+   * One listing's public detail (API Spec §9.1).
+   *
+   * Reuses `search()` with a single-listing filter rather than querying
+   * directly, so the three public-feed constraints (live, verified,
+   * in-corridor) and the freshness rule apply identically. A separate query
+   * here would be a second implementation of "what a tenant may see" — and
+   * the one that eventually disagrees is the one that leaks an unverified
+   * property into a deep link.
+   *
+   * Returns null when the listing is not publicly visible, so the caller
+   * can 404 rather than disclose that an unpublished listing exists.
+   */
+  async publicDetail(listingId: string, asOf?: Date) {
+    const listing = await this.prisma.listing.findUnique({
+      where: { id: listingId },
+      select: { propertyId: true },
+    });
+    if (!listing) return null;
+
+    const feed = await this.search(
+      { neighbourhoodIds: undefined, includeStale: true },
+      asOf,
+    );
+    const result = feed.results.find((r) => r.listingId === listingId);
+    if (!result) return null;
+
+    const [full, fieldConfirmed] = await Promise.all([
+      this.prisma.listing.findUniqueOrThrow({
+        where: { id: listingId },
+        include: { property: { include: { neighbourhood: true } } },
+      }),
+      this.fieldConfirmedSummary(listingId),
+    ]);
+
+    return {
+      ...result,
+      depositAmount: full.depositAmount,
+      requiredMonthsUpfront: full.requiredMonthsUpfront,
+      descriptionText: full.descriptionText,
+      furnished: full.property.furnished,
+      propertyType: full.property.propertyType,
+      /** null when no report exists — never a fabricated placeholder. */
+      fieldConfirmed,
+    };
   }
 
   /**

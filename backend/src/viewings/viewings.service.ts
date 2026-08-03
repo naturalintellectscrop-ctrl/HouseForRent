@@ -427,6 +427,18 @@ export class ViewingsService {
     });
   }
 
+  /**
+   * A tenant's own viewings (FR-5.1) — including closed ones, because
+   * "the officer marked you as a no-show" is exactly the outcome a tenant
+   * needs to be able to see.
+   */
+  async findForTenant(tenantPartyId: string): Promise<Viewing[]> {
+    return this.prisma.viewing.findMany({
+      where: { tenantPartyId },
+      orderBy: { scheduledFor: 'desc' },
+    });
+  }
+
   /** The dispatch board for an officer (FR-5.2). */
   async findAssignedTo(fooPartyId: string): Promise<Viewing[]> {
     return this.prisma.viewing.findMany({
