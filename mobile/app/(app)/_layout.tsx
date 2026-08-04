@@ -48,6 +48,11 @@ export default function AppLayout() {
   return (
     <Tabs
       screenOptions={{
+        // Each tab screen renders its own <Title>, which gives it control
+        // over the copy and the spacing beneath it. Leaving the navigator
+        // header on as well printed "Find a home" twice down the top of the
+        // screen, and cost a whole header's height for the privilege.
+        headerShown: false,
         headerStyle: { backgroundColor: p.bg },
         headerShadowVisible: false,
         headerTintColor: p.ink,
@@ -97,12 +102,32 @@ export default function AppLayout() {
           tabBarIcon: ({ color }) => <PersonIcon size={24} color={color} />,
         }}
       />
-      {/* Detail routes live in the tab tree but are not themselves tabs. */}
+      {/* Detail routes live in the tab tree but are not themselves tabs.
+          These DO keep the navigator header: it carries the back affordance,
+          and unlike the tab screens they are pushed onto a stack you have to
+          be able to get out of. */}
+      {/* The tab bar is hidden on both: each carries its own pinned action,
+          and stacking a tab bar under that gives the bottom of the screen
+          two competing bars and about a fifth of the viewport. You leave
+          these by the back arrow, which the header provides. */}
       <Tabs.Screen
         name="listing/[id]"
-        options={{ href: null, title: 'Home details' }}
+        options={{
+          href: null,
+          title: 'Home details',
+          headerShown: true,
+          tabBarStyle: { display: 'none' },
+        }}
       />
-      <Tabs.Screen name="deal/[id]" options={{ href: null, title: 'Rental' }} />
+      <Tabs.Screen
+        name="deal/[id]"
+        options={{
+          href: null,
+          title: 'Rental',
+          headerShown: true,
+          tabBarStyle: { display: 'none' },
+        }}
+      />
     </Tabs>
   );
 }

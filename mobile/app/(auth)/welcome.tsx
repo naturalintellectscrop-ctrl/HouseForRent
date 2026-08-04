@@ -8,7 +8,12 @@ import {
   Label,
   Wordmark,
 } from '@/components/ui';
-import { ChevronRightIcon, ShieldIcon, VerifiedIcon } from '@/components/icons';
+import {
+  ChevronRightIcon,
+  ShieldIcon,
+  TagIcon,
+  VerifiedIcon,
+} from '@/components/icons';
 import { space, usePalette } from '@/lib/theme';
 
 /**
@@ -72,7 +77,7 @@ export default function Welcome() {
           detail="Your upfront payment sits with a licensed provider — never with us — and is released only once you confirm you have moved in."
         />
         <Proof
-          icon={<ShieldIcon size={20} color={p.brand} />}
+          icon={<TagIcon size={20} color={p.brand} />}
           title="Free for tenants"
           detail="No search fee, no viewing fee, no fee to move in. The landlord pays our commission, and only after a completed let."
           last
