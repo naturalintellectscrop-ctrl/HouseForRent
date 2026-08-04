@@ -1,0 +1,182 @@
+<html lang="en"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport"/><link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config = { darkMode: "class", theme: { extend: { "colors": { "secondary-container": "#dfe0dd", "on-surface": "#1c1b1b", "on-secondary-container": "#616361", "on-surface-variant": "#41493e", "background": "#fcf8f8", "surface-container-low": "#f6f3f2", "error-container": "#ffdad6", "surface-container-highest": "#e5e2e1", "on-primary-fixed": "#002203", "surface-tint": "#276c28", "primary-container": "#0a5514", "tertiary-fixed": "#ffdad5", "inverse-surface": "#313030", "surface-dim": "#dcd9d9", "on-secondary": "#ffffff", "primary-fixed-dim": "#8fd887", "primary-fixed": "#aaf5a0", "primary": "#003c08", "surface-bright": "#fcf8f8", "tertiary": "#6c0002", "surface-container-high": "#ebe7e7", "inverse-primary": "#8fd887", "on-primary": "#ffffff", "on-secondary-fixed-variant": "#454745", "on-primary-fixed-variant": "#065312", "secondary-fixed": "#e2e3e0", "on-tertiary-container": "#ff9e91", "surface-container": "#f0edec", "on-tertiary-fixed": "#410001", "on-error": "#ffffff", "inverse-on-surface": "#f3f0ef", "secondary": "#5c5f5d", "secondary-fixed-dim": "#c5c7c4", "on-tertiary-fixed-variant": "#930004", "surface-variant": "#e5e2e1", "on-background": "#1c1b1b", "outline": "#717a6c", "surface": "#fcf8f8", "outline-variant": "#c0c9ba", "on-primary-container": "#81c97a", "surface-container-lowest": "#ffffff", "on-tertiary": "#ffffff", "on-secondary-fixed": "#191c1b", "on-error-container": "#93000a", "tertiary-fixed-dim": "#ffb4a9", "tertiary-container": "#970004", "error": "#ba1a1a" }, "borderRadius": { "DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px" }, "spacing": { "section-gap": "48px", "stack-md": "16px", "stack-lg": "32px", "gutter": "16px", "container-margin": "20px", "unit": "4px", "stack-sm": "8px" }, "fontFamily": { "body-md": ["Hanken Grotesk"], "label-sm": ["Hanken Grotesk"], "display-lg": ["Hanken Grotesk"], "headline-lg": ["Hanken Grotesk"], "body-lg": ["Hanken Grotesk"], "label-md": ["Hanken Grotesk"], "headline-sm": ["Hanken Grotesk"], "headline-md": ["Hanken Grotesk"] }, "fontSize": { "body-md": ["16px", { "lineHeight": "24px", "fontWeight": "400" }], "label-sm": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600" }], "display-lg": ["40px", { "lineHeight": "48px", "letterSpacing": "-0.02em", "fontWeight": "700" }], "headline-lg": ["32px", { "lineHeight": "40px", "fontWeight": "600" }], "body-lg": ["18px", { "lineHeight": "28px", "fontWeight": "400" }], "label-md": ["14px", { "lineHeight": "20px", "letterSpacing": "0.01em", "fontWeight": "500" }], "headline-sm": ["20px", { "lineHeight": "28px", "fontWeight": "600" }], "headline-md": ["24px", { "lineHeight": "32px", "fontWeight": "600" }] } } } }</script><style>@layer base { body { -webkit-tap-highlight-color: transparent; overscroll-behavior-y: contain; } .pt-safe { padding-top: env(safe-area-inset-top, 0px); } }</style><style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head><body class="bg-background font-body-md text-on-background"><header class="fixed top-0 w-full z-50 bg-surface/80 backdrop-blur-xl pt-safe"><div class="h-16 px-container-margin flex items-center gap-4"><button class="w-10 h-10 flex items-center justify-center rounded-full active:bg-surface-variant transition-colors" onclick="history.back()"><span class="material-symbols-outlined">arrow_back</span></button><span class="font-headline-sm text-headline-sm text-primary">Mandate Evidence</span></div></header><main class="pt-16 min-h-screen"><div class="flex flex-col w-full px-container-margin">
+<!-- Hero Illustration & Context -->
+<div class="flex flex-col items-center text-center space-y-stack-md pb-stack-lg">
+<div class="relative w-24 h-24 flex items-center justify-center">
+<!-- Animated Shield Pulse -->
+<div class="absolute inset-0 bg-primary-fixed opacity-20 rounded-full animate-ping"></div>
+<div class="relative w-20 h-20 bg-primary-container rounded-full flex items-center justify-center text-on-primary-container shadow-md">
+<span class="material-symbols-outlined text-[40px]" style="font-variation-settings: 'FILL' 1;">verified_user</span>
+</div>
+</div>
+<div class="space-y-unit">
+<h1 class="font-headline-md text-headline-md text-on-surface">Verify your authority</h1>
+<p class="font-body-md text-body-md text-on-surface-variant max-w-[280px] mx-auto">
+                To maintain trust on our platform, brokers must prove they are authorized to market properties.
+            </p>
+</div>
+</div>
+<!-- Info Card -->
+<div class="bg-surface-container-low rounded-xl p-stack-md flex gap-4 items-start mb-stack-lg shadow-sm">
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'wght' 500;">info</span>
+<div class="flex flex-col gap-1">
+<span class="font-label-md text-label-md text-on-surface">Why this matters</span>
+<p class="font-body-md text-body-md text-on-surface-variant">
+                This process keeps the Ugandan real estate market safe and professional for everyone.
+            </p>
+</div>
+</div>
+<!-- Requirements List -->
+<div class="space-y-stack-sm mb-stack-lg">
+<span class="font-label-sm text-label-sm text-secondary uppercase tracking-wider">Required Documents</span>
+<div class="space-y-unit">
+<div class="flex items-center gap-3 py-2">
+<span class="material-symbols-outlined text-primary text-body-lg">check_circle</span>
+<span class="font-body-md text-body-md text-on-surface">Official Listing Mandate</span>
+</div>
+<div class="flex items-center gap-3 py-2">
+<span class="material-symbols-outlined text-primary text-body-lg">check_circle</span>
+<span class="font-body-md text-body-md text-on-surface">Signed Authorization Letter from Owner</span>
+</div>
+</div>
+</div>
+<!-- Upload Area -->
+<div class="relative group cursor-pointer" id="drop-zone">
+<input accept=".pdf,.jpg,.jpeg,.png" class="hidden" id="file-input" type="file"/>
+<div class="flex flex-col items-center justify-center p-stack-lg bg-surface-container-lowest rounded-xl border-2 border-dashed border-outline-variant group-active:border-primary transition-all duration-300">
+<div class="w-16 h-16 bg-surface-container rounded-full flex items-center justify-center mb-stack-md transition-transform group-hover:scale-110" id="upload-icon-container">
+<span class="material-symbols-outlined text-on-surface-variant text-headline-md">upload_file</span>
+</div>
+<div class="text-center" id="upload-text">
+<span class="font-headline-sm text-headline-sm text-on-surface block">Upload Document</span>
+<p class="font-label-md text-label-md text-on-surface-variant mt-1">Tap to browse or drop file here</p>
+<p class="font-label-sm text-label-sm text-outline mt-2">PDF, JPG or PNG (Max 10MB)</p>
+</div>
+<!-- File Preview State (Hidden by default) -->
+<div class="hidden w-full flex items-center gap-4 p-3 bg-secondary-container/30 rounded-lg" id="file-preview">
+<span class="material-symbols-outlined text-primary">description</span>
+<div class="flex-1 min-w-0">
+<p class="font-label-md text-label-md text-on-surface truncate" id="file-name">document_name.pdf</p>
+<p class="font-label-sm text-label-sm text-on-secondary-container" id="file-size">1.2 MB</p>
+</div>
+<button class="p-2 text-error hover:bg-error-container/20 rounded-full" id="remove-file">
+<span class="material-symbols-outlined">close</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Trust Reassurance -->
+<div class="mt-stack-lg flex items-center justify-center gap-2 text-on-secondary-container">
+<span class="material-symbols-outlined text-body-md">lock</span>
+<span class="font-label-md text-label-md">Documents are encrypted and stored securely</span>
+</div>
+<!-- Action Bar -->
+<div class="mt-section-gap pb-stack-lg">
+<button class="w-full h-14 bg-primary text-on-primary rounded-xl font-label-md text-label-md flex items-center justify-center gap-2 shadow-md active:scale-95 transition-all opacity-50 cursor-not-allowed" disabled="" id="submit-btn">
+<span>Submit for verification</span>
+<span class="material-symbols-outlined">arrow_forward</span>
+</button>
+<p class="text-center mt-stack-md font-label-sm text-label-sm text-on-surface-variant px-stack-md">
+            By submitting, you confirm these documents are genuine and legally binding.
+        </p>
+</div>
+</div>
+<script>
+    const dropZone = document.getElementById('drop-zone');
+    const fileInput = document.getElementById('file-input');
+    const uploadIcon = document.getElementById('upload-icon-container');
+    const uploadText = document.getElementById('upload-text');
+    const filePreview = document.getElementById('file-preview');
+    const fileNameDisplay = document.getElementById('file-name');
+    const fileSizeDisplay = document.getElementById('file-size');
+    const removeBtn = document.getElementById('remove-file');
+    const submitBtn = document.getElementById('submit-btn');
+
+    const handleFile = (file) => {
+        if (!file) return;
+        
+        // Update UI to preview state
+        uploadIcon.classList.add('hidden');
+        uploadText.classList.add('hidden');
+        filePreview.classList.remove('hidden');
+        
+        fileNameDisplay.textContent = file.name;
+        fileSizeDisplay.textContent = (file.size / (1024 * 1024)).toFixed(2) + ' MB';
+        
+        // Enable submit button
+        submitBtn.disabled = false;
+        submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+        
+        // Visual flair
+        dropZone.querySelector('div').classList.add('border-primary', 'bg-primary/5');
+    };
+
+    dropZone.addEventListener('click', () => fileInput.click());
+
+    fileInput.addEventListener('change', (e) => {
+        handleFile(e.target.files[0]);
+    });
+
+    removeBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        fileInput.value = '';
+        uploadIcon.classList.remove('hidden');
+        uploadText.classList.remove('hidden');
+        filePreview.classList.add('hidden');
+        submitBtn.disabled = true;
+        submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
+        dropZone.querySelector('div').classList.remove('border-primary', 'bg-primary/5');
+    });
+
+    // Drag and drop visual cues
+    dropZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropZone.querySelector('div').classList.add('bg-primary/10', 'border-primary');
+    });
+
+    dropZone.addEventListener('dragleave', () => {
+        if (fileInput.files.length === 0) {
+            dropZone.querySelector('div').classList.remove('bg-primary/10', 'border-primary');
+        }
+    });
+
+    dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        const file = e.dataTransfer.files[0];
+        handleFile(file);
+    });
+
+    submitBtn.addEventListener('click', () => {
+        if (!submitBtn.disabled) {
+            submitBtn.innerHTML = `
+                <svg class="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <span>Processing...</span>
+            `;
+            
+            setTimeout(() => {
+                submitBtn.innerHTML = `
+                    <span class="material-symbols-outlined">check_circle</span>
+                    <span>Submitted successfully</span>
+                `;
+                submitBtn.classList.replace('bg-primary', 'bg-surface-tint');
+            }, 1500);
+        }
+    });
+</script>
+<style>
+    @keyframes pulse-soft {
+        0%, 100% { opacity: 0.2; transform: scale(1); }
+        50% { opacity: 0.4; transform: scale(1.1); }
+    }
+    .animate-ping {
+        animation: pulse-soft 3s cubic-bezier(0, 0, 0.2, 1) infinite;
+    }
+</style></main></body></html>

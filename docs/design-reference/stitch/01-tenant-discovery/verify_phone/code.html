@@ -1,0 +1,201 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport"><link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"><style>@layer base { html, body { width: 100vw; margin: 0; padding: 0; background-color: #fcf8f8; } body { overscroll-behavior: none; } .pb-safe { padding-bottom: env(safe-area-inset-bottom, 0px); } .pt-safe { padding-top: env(safe-area-inset-top, 0px); } } ::-webkit-scrollbar { display: none; }</style><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config = { darkMode: 'class', theme: { extend: { colors: { 'on-background': '#1c1b1b', 'on-primary-fixed-variant': '#065312', 'on-secondary-fixed': '#191c1b', 'secondary-container': '#dfe0dd', 'tertiary': '#6c0002', 'on-primary-container': '#81c97a', 'surface-container': '#f0edec', 'secondary': '#5c5f5d', 'outline': '#717a6c', 'on-tertiary-fixed': '#410001', 'on-tertiary-fixed-variant': '#930004', 'primary-fixed-dim': '#8fd887', 'surface': '#fcf8f8', 'on-surface': '#1c1b1b', 'on-tertiary': '#ffffff', 'on-secondary': '#ffffff', 'outline-variant': '#c0c9ba', 'inverse-surface': '#313030', 'surface-tint': '#276c28', 'error': '#ba1a1a', 'background': '#fcf8f8', 'surface-dim': '#dcd9d9', 'on-error-container': '#93000a', 'surface-variant': '#e5e2e1', 'secondary-fixed': '#e2e3e0', 'tertiary-fixed-dim': '#ffb4a9', 'secondary-fixed-dim': '#c5c7c4', 'on-primary-fixed': '#002203', 'surface-container-low': '#f6f3f2', 'inverse-on-surface': '#f3f0ef', 'on-tertiary-container': '#ff9e91', 'surface-container-highest': '#e5e2e1', 'surface-container-lowest': '#ffffff', 'tertiary-fixed': '#ffdad5', 'on-primary': '#ffffff', 'primary-fixed': '#aaf5a0', 'on-error': '#ffffff', 'tertiary-container': '#970004', 'on-secondary-fixed-variant': '#454745', 'error-container': '#ffdad6', 'on-secondary-container': '#616361', 'primary': '#003c08', 'on-surface-variant': '#41493e', 'primary-container': '#0a5514', 'surface-container-high': '#ebe7e7', 'inverse-primary': '#8fd887', 'surface-bright': '#fcf8f8' }, borderRadius: { 'DEFAULT': '0.25rem', 'lg': '0.5rem', 'xl': '0.75rem', 'full': '9999px' }, spacing: { 'stack-md': '16px', 'container-margin': '20px', 'unit': '4px', 'section-gap': '48px', 'gutter': '16px', 'stack-sm': '8px', 'stack-lg': '32px' }, fontFamily: { 'body-lg': ['Hanken Grotesk'], 'headline-lg': ['Hanken Grotesk'], 'display-lg': ['Hanken Grotesk'], 'label-sm': ['Hanken Grotesk'], 'headline-sm': ['Hanken Grotesk'], 'headline-md': ['Hanken Grotesk'], 'label-md': ['Hanken Grotesk'], 'body-md': ['Hanken Grotesk'] } } } };</script></head><body class="bg-background pt-safe pb-safe flex flex-col min-h-screen"><main class="flex flex-col flex-1 relative w-full"><div class="flex flex-col w-full px-container-margin py-section-gap gap-section-gap font-body-md text-on-surface">
+<!-- Header Section -->
+<div class="flex flex-col gap-stack-sm text-center"><div class="flex justify-center mb-stack-md"><img src="https://lh3.googleusercontent.com/aida-public/AB6AXuDdL1fDCJCDOaWRQoDnqWv0YufNBDh_gdlHkDqFCfAYB_72fzQo2GLrvvck9kqxK2vdkuin_FP0rexHiRuhEqUIEz28YtlPJcHzDmfo3xBMTqxHe-gC2rhbVbIWf7Q991dk9Pjg0EBkB4OjpelVxgm7jlrG59mUKt3sN_7wqGRRQIjxtgYl432Pp1du4M6XZHyccfT16hcJYBInTJALBmQmkUWvpiACu5fWdErhc5C-PW77zOQy_-145KiUMCpPXHn2eCO1LJNMmj4" alt="House For Rent Logo" class="h-24 w-auto object-contain"></div>
+<h1 class="font-headline-lg-mobile text-on-surface">Enter your phone number</h1>
+<p class="font-body-md text-on-surface-variant">We'll send a code to verify your account.</p>
+</div>
+<!-- Interactive Form Area -->
+<div class="bg-surface rounded-xl flex flex-col gap-stack-lg p-container-margin shadow-sm relative overflow-hidden" id="auth-container">
+<!-- Subtle gradient overlay for depth -->
+<div class="absolute inset-0 bg-gradient-to-br from-surface-tint/5 to-transparent pointer-events-none"></div>
+<!-- Phone Number Step -->
+<div class="flex flex-col gap-stack-sm relative z-10 transition-opacity duration-300" id="phone-step">
+<label class="font-label-md text-on-surface-variant" for="phone-input">Phone Number</label>
+<div class="flex flex-row items-center relative group">
+<!-- Country Code Selector (Simulated) -->
+<div class="absolute left-0 top-0 bottom-0 flex items-center pl-3 pr-2 text-on-surface-variant border-r border-outline-variant group-focus-within:border-primary transition-colors cursor-pointer">
+<span class="font-label-md mr-1">+256</span>
+<span class="material-symbols-outlined text-[16px]">expand_more</span>
+</div>
+<!-- Input Field -->
+<input autocomplete="tel" class="w-full bg-surface-container-low text-on-surface font-body-md rounded-lg py-3 pl-[90px] pr-4 border border-outline-variant focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all placeholder:text-on-surface-variant/50" id="phone-input" placeholder="7XX XXX XXX" type="tel">
+</div>
+</div>
+<!-- OTP Step (Initially Hidden) -->
+<div class="flex flex-col gap-stack-md relative z-10 hidden opacity-0 transition-opacity duration-300" id="otp-step">
+<div class="flex flex-row items-center justify-between">
+<label class="font-label-md text-on-surface-variant">Verification Code</label>
+<button class="font-label-sm text-primary hover:text-primary-container transition-colors" id="edit-phone-btn" type="button">Edit Number</button>
+</div>
+<div class="flex flex-row justify-between gap-unit">
+<!-- 4 Digit OTP Inputs -->
+<input class="w-12 h-14 text-center font-headline-md bg-surface-container-low border border-outline-variant rounded-lg focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all otp-input" inputmode="numeric" maxlength="1" type="text">
+<input class="w-12 h-14 text-center font-headline-md bg-surface-container-low border border-outline-variant rounded-lg focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all otp-input" inputmode="numeric" maxlength="1" type="text">
+<input class="w-12 h-14 text-center font-headline-md bg-surface-container-low border border-outline-variant rounded-lg focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all otp-input" inputmode="numeric" maxlength="1" type="text">
+<input class="w-12 h-14 text-center font-headline-md bg-surface-container-low border border-outline-variant rounded-lg focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all otp-input" inputmode="numeric" maxlength="1" type="text">
+</div>
+<div class="flex flex-row justify-center items-center gap-2 mt-stack-sm">
+<span class="font-label-sm text-on-surface-variant">Didn't receive it?</span>
+<button class="font-label-sm text-primary hover:text-primary-container transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed" disabled="" id="resend-btn" type="button">Resend in 30s</button>
+</div>
+</div>
+<!-- Action Area -->
+<div class="flex flex-col gap-stack-sm mt-stack-md relative z-10">
+<button class="w-full bg-primary text-on-primary font-label-md py-4 rounded-lg flex items-center justify-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-md active:scale-[0.98]" disabled="" id="main-action-btn" type="button">
+<span class="">Continue</span>
+<span class="material-symbols-outlined text-[18px]">arrow_forward</span>
+</button>
+<div class="flex flex-row items-center justify-center gap-2 text-center mt-stack-sm">
+<span class="material-symbols-outlined text-[16px] text-surface-tint">lock</span>
+<p class="font-label-sm text-on-surface-variant">Your data is protected and never shared.</p>
+</div>
+</div>
+</div>
+</div>
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const phoneInput = document.getElementById('phone-input');
+        const mainBtn = document.getElementById('main-action-btn');
+        const phoneStep = document.getElementById('phone-step');
+        const otpStep = document.getElementById('otp-step');
+        const editPhoneBtn = document.getElementById('edit-phone-btn');
+        const resendBtn = document.getElementById('resend-btn');
+        const otpInputs = document.querySelectorAll('.otp-input');
+        
+        let currentState = 'phone'; // 'phone' or 'otp'
+        let countdownInterval;
+
+        // Phone Input Logic
+        phoneInput.addEventListener('input', (e) => {
+            // Basic validation - check if it looks like a number and has length
+            const val = e.target.value.replace(/\D/g, '');
+            if (val.length >= 9) {
+                mainBtn.disabled = false;
+            } else {
+                mainBtn.disabled = true;
+            }
+        });
+
+        // Main Button Action
+        mainBtn.addEventListener('click', () => {
+            if (currentState === 'phone') {
+                // Transition to OTP step
+                currentState = 'otp';
+                
+                // Add loading state briefly for delight
+                mainBtn.innerHTML = '<span class="material-symbols-outlined animate-spin text-[18px]">progress_activity</span>';
+                
+                setTimeout(() => {
+                    phoneStep.classList.add('hidden', 'opacity-0');
+                    phoneStep.classList.remove('opacity-100');
+                    
+                    setTimeout(() => {
+                        otpStep.classList.remove('hidden');
+                        // Small delay to allow display block to apply before opacity transition
+                        setTimeout(() => {
+                            otpStep.classList.add('opacity-100');
+                            otpStep.classList.remove('opacity-0');
+                            mainBtn.innerHTML = '<span>Verify Code</span><span class="material-symbols-outlined text-[18px]">check_circle</span>';
+                            mainBtn.disabled = true; // Wait for OTP input
+                            otpInputs[0].focus();
+                            startCountdown();
+                        }, 50);
+                    }, 300); // Wait for phone step to fade out
+                }, 600); // Fake network delay
+            } else if (currentState === 'otp') {
+                 mainBtn.innerHTML = '<span class="material-symbols-outlined animate-spin text-[18px]">progress_activity</span><span>Verifying...</span>';
+                 setTimeout(() => {
+                    mainBtn.innerHTML = '<span>Success!</span>';
+                    mainBtn.classList.add('bg-on-primary-container'); // Success color feedback
+                 }, 1000);
+            }
+        });
+
+        // Edit Phone Action
+        editPhoneBtn.addEventListener('click', () => {
+            currentState = 'phone';
+            clearInterval(countdownInterval);
+            
+            otpStep.classList.add('opacity-0');
+            otpStep.classList.remove('opacity-100');
+            
+            setTimeout(() => {
+                otpStep.classList.add('hidden');
+                phoneStep.classList.remove('hidden');
+                setTimeout(() => {
+                    phoneStep.classList.add('opacity-100');
+                    phoneStep.classList.remove('opacity-0');
+                    mainBtn.innerHTML = '<span>Continue</span><span class="material-symbols-outlined text-[18px]">arrow_forward</span>';
+                    mainBtn.disabled = false; // We know it was valid to get here
+                    phoneInput.focus();
+                }, 50);
+            }, 300);
+            
+            // Clear OTP inputs
+            otpInputs.forEach(input => input.value = '');
+        });
+
+        // OTP Input Logic (Auto-advance)
+        otpInputs.forEach((input, index) => {
+            input.addEventListener('input', (e) => {
+                const val = e.target.value;
+                // Only allow numbers
+                if (!/^\d*$/.test(val)) {
+                    e.target.value = val.replace(/\D/g, '');
+                    return;
+                }
+
+                if (val.length === 1) {
+                    if (index < otpInputs.length - 1) {
+                        otpInputs[index + 1].focus();
+                    } else {
+                        input.blur();
+                        // Check if all filled
+                        checkOtpComplete();
+                    }
+                }
+            });
+
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Backspace' && input.value === '') {
+                    if (index > 0) {
+                        otpInputs[index - 1].focus();
+                    }
+                }
+            });
+        });
+        
+        function checkOtpComplete() {
+            const allFilled = Array.from(otpInputs).every(input => input.value.length === 1);
+            mainBtn.disabled = !allFilled;
+        }
+
+        // Resend Countdown
+        function startCountdown() {
+            let timeLeft = 30;
+            resendBtn.disabled = true;
+            
+            clearInterval(countdownInterval);
+            countdownInterval = setInterval(() => {
+                timeLeft--;
+                resendBtn.textContent = `Resend in ${timeLeft}s`;
+                
+                if (timeLeft <= 0) {
+                    clearInterval(countdownInterval);
+                    resendBtn.textContent = 'Resend Code';
+                    resendBtn.disabled = false;
+                }
+            }, 1000);
+        }
+        
+        resendBtn.addEventListener('click', () => {
+             resendBtn.innerHTML = '<span class="material-symbols-outlined animate-spin text-[14px]">refresh</span> Sending...';
+             setTimeout(() => {
+                 startCountdown();
+             }, 1000);
+        })
+    });
+</script></main>
+
+</body></html>

@@ -1,0 +1,90 @@
+<html lang="en"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport"/><link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config = { darkMode: "class", theme: { extend: { "colors": { "secondary-container": "#dfe0dd", "on-surface": "#1c1b1b", "on-secondary-container": "#616361", "on-surface-variant": "#41493e", "background": "#fcf8f8", "surface-container-low": "#f6f3f2", "error-container": "#ffdad6", "surface-container-highest": "#e5e2e1", "on-primary-fixed": "#002203", "surface-tint": "#276c28", "primary-container": "#0a5514", "tertiary-fixed": "#ffdad5", "inverse-surface": "#313030", "surface-dim": "#dcd9d9", "on-secondary": "#ffffff", "primary-fixed-dim": "#8fd887", "primary-fixed": "#aaf5a0", "primary": "#003c08", "surface-bright": "#fcf8f8", "tertiary": "#6c0002", "surface-container-high": "#ebe7e7", "inverse-primary": "#8fd887", "on-primary": "#ffffff", "on-secondary-fixed-variant": "#454745", "on-primary-fixed-variant": "#065312", "secondary-fixed": "#e2e3e0", "on-tertiary-container": "#ff9e91", "surface-container": "#f0edec", "on-tertiary-fixed": "#410001", "on-error": "#ffffff", "inverse-on-surface": "#f3f0ef", "secondary": "#5c5f5d", "secondary-fixed-dim": "#c5c7c4", "on-tertiary-fixed-variant": "#930004", "surface-variant": "#e5e2e1", "on-background": "#1c1b1b", "outline": "#717a6c", "surface": "#fcf8f8", "outline-variant": "#c0c9ba", "on-primary-container": "#81c97a", "surface-container-lowest": "#ffffff", "on-tertiary": "#ffffff", "on-secondary-fixed": "#191c1b", "on-error-container": "#93000a", "tertiary-fixed-dim": "#ffb4a9", "tertiary-container": "#970004", "error": "#ba1a1a" }, "borderRadius": { "DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px" }, "spacing": { "section-gap": "48px", "stack-md": "16px", "stack-lg": "32px", "gutter": "16px", "container-margin": "20px", "unit": "4px", "stack-sm": "8px" }, "fontFamily": { "body-md": ["Hanken Grotesk"], "label-sm": ["Hanken Grotesk"], "display-lg": ["Hanken Grotesk"], "headline-lg": ["Hanken Grotesk"], "body-lg": ["Hanken Grotesk"], "label-md": ["Hanken Grotesk"], "headline-sm": ["Hanken Grotesk"], "headline-md": ["Hanken Grotesk"] }, "fontSize": { "body-md": ["16px", { "lineHeight": "24px", "fontWeight": "400" }], "label-sm": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600" }], "display-lg": ["40px", { "lineHeight": "48px", "letterSpacing": "-0.02em", "fontWeight": "700" }], "headline-lg": ["32px", { "lineHeight": "40px", "fontWeight": "600" }], "body-lg": ["18px", { "lineHeight": "28px", "fontWeight": "400" }], "label-md": ["14px", { "lineHeight": "20px", "letterSpacing": "0.01em", "fontWeight": "500" }], "headline-sm": ["20px", { "lineHeight": "28px", "fontWeight": "600" }], "headline-md": ["24px", { "lineHeight": "32px", "fontWeight": "600" }] } } } }</script><style>@layer base { body { -webkit-tap-highlight-color: transparent; overscroll-behavior-y: contain; } .pt-safe { padding-top: env(safe-area-inset-top, 0px); } }</style><style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head><body class="bg-background font-body-md text-on-background"><header class="fixed top-0 w-full z-50 bg-surface/80 backdrop-blur-xl pt-safe"><div class="h-16 px-container-margin flex items-center gap-4"><button class="w-10 h-10 flex items-center justify-center rounded-full active:bg-surface-variant transition-colors" onclick="history.back()"><span class="material-symbols-outlined">arrow_back</span></button><span class="font-headline-sm text-headline-sm text-primary">Choose Account Type</span></div></header><main class="pt-16 min-h-screen"><div class="flex flex-col w-full px-container-margin">
+<!-- Instruction Header -->
+<div class="mt-stack-md mb-stack-lg">
+<h1 class="font-headline-lg text-headline-lg text-on-surface mb-unit">Tell us about yourself</h1>
+<p class="font-body-md text-body-md text-on-surface-variant">Choose the account type that best describes your role in the Ugandan real estate market.</p>
+</div>
+<!-- Selection Cards -->
+<div class="flex flex-col gap-stack-md" id="account-selection-container">
+<!-- Option 1: Property Owner -->
+<button class="account-card group relative flex items-start gap-4 p-stack-md bg-surface-container-lowest rounded-xl transition-all duration-300 text-left shadow-[0px_4px_20px_rgba(10,10,10,0.05)] active:scale-[0.98]" onclick="selectOption(this, 'owner')">
+<div class="flex-shrink-0 w-12 h-12 rounded-full bg-secondary-container flex items-center justify-center text-primary transition-colors group-[.selected]:bg-primary group-[.selected]:text-on-primary">
+<span class="material-symbols-outlined">home_pin</span>
+</div>
+<div class="flex-1 min-w-0">
+<h3 class="font-headline-sm text-headline-sm text-on-surface">Property Owner</h3>
+<p class="font-body-md text-body-md text-on-surface-variant mt-1">I own the residential property I want to list.</p>
+</div>
+<div class="absolute inset-0 rounded-xl pointer-events-none ring-2 ring-transparent transition-all duration-300 group-[.selected]:ring-primary/20 group-[.selected]:bg-primary/[0.02]"></div>
+</button>
+<!-- Option 2: Broker or Agent -->
+<button class="account-card group relative flex items-start gap-4 p-stack-md bg-surface-container-lowest rounded-xl transition-all duration-300 text-left shadow-[0px_4px_20px_rgba(10,10,10,0.05)] active:scale-[0.98]" onclick="selectOption(this, 'agent')">
+<div class="flex-shrink-0 w-12 h-12 rounded-full bg-secondary-container flex items-center justify-center text-primary transition-colors group-[.selected]:bg-primary group-[.selected]:text-on-primary">
+<span class="material-symbols-outlined">badge</span>
+</div>
+<div class="flex-1 min-w-0">
+<h3 class="font-headline-sm text-headline-sm text-on-surface">Broker or Agent</h3>
+<p class="font-body-md text-body-md text-on-surface-variant mt-1">I am authorized to list properties on behalf of owners.</p>
+</div>
+<div class="absolute inset-0 rounded-xl pointer-events-none ring-2 ring-transparent transition-all duration-300 group-[.selected]:ring-primary/20 group-[.selected]:bg-primary/[0.02]"></div>
+</button>
+<!-- Option 3: Management Company -->
+<button class="account-card group relative flex items-start gap-4 p-stack-md bg-surface-container-lowest rounded-xl transition-all duration-300 text-left shadow-[0px_4px_20px_rgba(10,10,10,0.05)] active:scale-[0.98]" onclick="selectOption(this, 'company')">
+<div class="flex-shrink-0 w-12 h-12 rounded-full bg-secondary-container flex items-center justify-center text-primary transition-colors group-[.selected]:bg-primary group-[.selected]:text-on-primary">
+<span class="material-symbols-outlined">apartment</span>
+</div>
+<div class="flex-1 min-w-0">
+<h3 class="font-headline-sm text-headline-sm text-on-surface">Management Company</h3>
+<p class="font-body-md text-body-md text-on-surface-variant mt-1">We manage a portfolio of residential properties.</p>
+</div>
+<div class="absolute inset-0 rounded-xl pointer-events-none ring-2 ring-transparent transition-all duration-300 group-[.selected]:ring-primary/20 group-[.selected]:bg-primary/[0.02]"></div>
+</button>
+</div>
+<!-- Trust Signal -->
+<div class="mt-stack-lg p-stack-md bg-primary-container/10 rounded-xl flex items-center gap-4">
+<div class="w-10 h-10 flex-shrink-0 bg-primary-container rounded-full flex items-center justify-center">
+<span class="material-symbols-outlined text-on-primary-container">verified_user</span>
+</div>
+<div class="flex-1">
+<p class="font-label-md text-label-md text-primary-container">Verification Required</p>
+<p class="font-label-sm text-label-sm text-on-primary-fixed-variant">All listers are manually verified to ensure platform safety.</p>
+</div>
+</div>
+<!-- Action Button Wrapper -->
+<div class="mt-section-gap mb-stack-lg">
+<button class="w-full h-14 bg-secondary-container text-on-secondary-container font-headline-sm rounded-full transition-all duration-300 flex items-center justify-center gap-2 opacity-60 cursor-not-allowed" disabled="" id="continue-btn">
+<span>Continue</span>
+<span class="material-symbols-outlined">arrow_forward</span>
+</button>
+</div>
+<!-- Client-side logic for micro-interactions -->
+<script>
+    function selectOption(element, type) {
+      // Remove selection from all cards
+      document.querySelectorAll('.account-card').forEach(card => {
+        card.classList.remove('selected');
+        card.querySelector('.absolute').classList.replace('ring-primary/20', 'ring-transparent');
+      });
+
+      // Add selection to clicked card
+      element.classList.add('selected');
+      element.querySelector('.absolute').classList.replace('ring-transparent', 'ring-primary/20');
+
+      // Enable and style the continue button
+      const btn = document.getElementById('continue-btn');
+      btn.disabled = false;
+      btn.classList.remove('bg-secondary-container', 'text-on-secondary-container', 'opacity-60', 'cursor-not-allowed');
+      btn.classList.add('bg-primary', 'text-on-primary', 'shadow-lg');
+      
+      // Visual feedback: Subtle haptic-like animation
+      btn.classList.add('scale-105');
+      setTimeout(() => btn.classList.remove('scale-105'), 150);
+    }
+  </script>
+</div></main></body></html>

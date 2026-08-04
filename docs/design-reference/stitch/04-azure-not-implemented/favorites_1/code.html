@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Favorites</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet"/>
+<style data-purpose="custom-fonts">
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    body {
+      font-family: 'Inter', sans-serif;
+    }
+  </style>
+<style data-purpose="hide-scrollbar">
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+  </style>
+</head>
+<body class="bg-gray-50 flex justify-center h-screen items-center overflow-hidden antialiased text-gray-800">
+<!-- BEGIN: Mobile App Container -->
+<div class="w-[390px] h-[844px] bg-white rounded-[40px] shadow-2xl relative overflow-hidden flex flex-col border-8 border-gray-900">
+<!-- BEGIN: Top Status Bar area (simulated) -->
+<div class="h-12 flex items-center justify-between px-6 pt-2 text-xs font-medium">
+<span>4:34</span>
+<div class="flex items-center space-x-2">
+<i class="fa-solid fa-signal"></i>
+<i class="fa-solid fa-wifi"></i>
+<i class="fa-solid fa-battery-full"></i>
+</div>
+</div>
+<!-- END: Top Status Bar area -->
+<!-- BEGIN: Header Section -->
+<header class="px-6 py-4 flex items-center relative">
+<button class="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-gray-700 hover:bg-gray-200 transition">
+<i class="fa-solid fa-arrow-left"></i>
+</button>
+<h1 class="text-lg font-semibold flex-1 text-center pr-10">Favorites</h1>
+</header>
+<!-- END: Header Section -->
+<!-- BEGIN: Filter Categories -->
+<nav class="px-6 py-2 overflow-x-auto no-scrollbar whitespace-nowrap">
+<div class="flex space-x-3">
+<button class="px-5 py-2 rounded-full bg-blue-500 text-white text-sm font-medium shadow-sm shadow-blue-200">
+          All
+        </button>
+<button class="px-5 py-2 rounded-full bg-gray-100 text-gray-600 text-sm font-medium hover:bg-gray-200 transition">
+          House
+        </button>
+<button class="px-5 py-2 rounded-full bg-gray-100 text-gray-600 text-sm font-medium hover:bg-gray-200 transition">
+          Villa
+        </button>
+<button class="px-5 py-2 rounded-full bg-gray-100 text-gray-600 text-sm font-medium hover:bg-gray-200 transition">
+          Apartments
+        </button>
+</div>
+</nav>
+<!-- END: Filter Categories -->
+<!-- BEGIN: Main Content - Favorites List -->
+<main class="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+<!-- BEGIN: Property Card 1 -->
+<article class="bg-white rounded-2xl p-3 flex shadow-sm border border-gray-100 relative group">
+<!-- Image Container with Rating -->
+<div class="relative w-24 h-24 rounded-xl overflow-hidden flex-shrink-0">
+<img alt="La Grand Maison" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCkhkuGWNR5xDF3a76UG9GEJE-vDbFou8Eo39QtDYQs8uz3ZXVBpdGSTwSvyBO6SGp3lMMbG6iNEeXedy6wco0AbCqgN8od3LA5h8IgqkLVg7IxbEmoIZOrt9YFzcFJru2xFj715z-7lZWmGtulZN53ZRKWobx6keKajgnzADrB_DKEVo-TH_Th84LpSTEj19vVVpU-b_rlv98m2mJyZ_uKPiSmrJV1aIYd1tOEO4TNhIIKbvsjohG9"/>
+<div class="absolute top-2 left-2 bg-white/90 backdrop-blur-sm px-1.5 py-0.5 rounded-md flex items-center text-[10px] font-bold text-gray-700 shadow-sm">
+<i class="fa-solid fa-star text-yellow-400 mr-1 text-[8px]"></i> 4.8
+          </div>
+</div>
+<!-- Property Details -->
+<div class="ml-4 flex flex-col justify-center flex-1">
+<h3 class="font-semibold text-gray-900 text-base">La Grand Maison</h3>
+<p class="text-xs text-gray-400 mt-1 mb-2">Tokyo, Japan</p>
+<p class="text-blue-500 font-bold text-base">$1224</p>
+</div>
+<!-- Favorite Button -->
+<button class="absolute top-4 right-4 text-red-500 text-lg">
+<i class="fa-solid fa-heart"></i>
+</button>
+</article>
+<!-- END: Property Card 1 -->
+<!-- BEGIN: Property Card 2 -->
+<article class="bg-white rounded-2xl p-3 flex shadow-sm border border-gray-100 relative group">
+<!-- Image Container with Rating -->
+<div class="relative w-24 h-24 rounded-xl overflow-hidden flex-shrink-0">
+<img alt="Business Office" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuB8N1hcSkMzU-hnrb2myXwgLxvt3GSt9Z5rpzpHTZwRZ4IVMqI1KruJz8mD7OLlCVMw4FG9pEVBQryp2w3P94jgRPdM4Yrx137rm7meO3lwDh0IjnXI-X3kjT4cZp5KD2MZwlEkUXzTYPnZJsvaxtgC2Ez2d8e557iBWDCa_oB8fNjc0ssGT86a1cWhXFDZpmjPFfinVnuD32EutaOpKVH0ELuKTMmI9Lo5XAmX29tBHGHRZU5_vqC8"/>
+<div class="absolute top-2 left-2 bg-white/90 backdrop-blur-sm px-1.5 py-0.5 rounded-md flex items-center text-[10px] font-bold text-gray-700 shadow-sm">
+<i class="fa-solid fa-star text-yellow-400 mr-1 text-[8px]"></i> 4.5
+          </div>
+</div>
+<!-- Property Details -->
+<div class="ml-4 flex flex-col justify-center flex-1">
+<h3 class="font-semibold text-gray-900 text-base">Business Office</h3>
+<p class="text-xs text-gray-400 mt-1 mb-2">Tokyo, Japan</p>
+<p class="text-blue-500 font-bold text-base">$21469</p>
+</div>
+<!-- Favorite Button -->
+<button class="absolute top-4 right-4 text-red-500 text-lg">
+<i class="fa-solid fa-heart"></i>
+</button>
+</article>
+<!-- END: Property Card 2 -->
+</main>
+<!-- END: Main Content -->
+<!-- BEGIN: Bottom Navigation -->
+<footer class="bg-white px-6 py-4 flex justify-between items-center rounded-t-3xl shadow-[0_-4px_20px_-10px_rgba(0,0,0,0.1)] z-10 relative pb-8">
+<button class="text-gray-400 hover:text-gray-600 transition p-2">
+<i class="fa-solid fa-house-chimney text-xl"></i>
+</button>
+<button class="text-gray-400 hover:text-gray-600 transition p-2">
+<i class="fa-solid fa-magnifying-glass text-xl"></i>
+</button>
+<button class="flex items-center space-x-2 bg-blue-50 px-4 py-2 rounded-full text-blue-500 transition">
+<i class="fa-regular fa-heart text-xl"></i>
+<span class="font-semibold text-sm">Favourite</span>
+</button>
+<button class="text-gray-400 hover:text-gray-600 transition p-2">
+<i class="fa-regular fa-user text-xl"></i>
+</button>
+</footer>
+<!-- END: Bottom Navigation -->
+<!-- Home Indicator -->
+<div class="absolute bottom-2 left-1/2 -translate-x-1/2 w-32 h-1.5 bg-gray-300 rounded-full z-20"></div>
+</div>
+<!-- END: Mobile App Container -->
+</body></html>

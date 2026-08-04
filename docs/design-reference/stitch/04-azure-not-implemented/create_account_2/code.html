@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Create an Account</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<style data-purpose="custom-styles">
+    body {
+      font-family: 'Hanken Grotesk', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+    .input-field:focus-within {
+      border-color: #0a5514;
+      box-shadow: 0 0 0 1px #0a5514;
+    }
+  </style>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen p-4">
+<!-- BEGIN: Mobile App Container -->
+<div class="relative w-full max-w-[390px] h-[844px] bg-white rounded-[40px] overflow-hidden shadow-2xl border-4 border-gray-800 ring-4 ring-gray-900" data-purpose="mobile-device-mockup">
+<!-- Background Image Area (Placeholder) -->
+<div class="absolute inset-0 bg-gray-200">
+<img alt="Background Grid Placeholder" class="w-full h-full object-cover opacity-50" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCgbMKLXonlc6LRiKFlebxrqOAO8GCuo2TkbdHTi2pF4yOgQcZsJ3x3RuQQMdnG2besz1GORcaddL6CDzUVh_GG8i1krW63BCvx_j95jvP7JNqbuORGCb9X9LogPRIu9xInG2UF12LXUuug92J_1ZZBYvviOjvIf3fgOSEFTUzJlqFgiHmvuPoLKAfSlNEv-mQvxrfG-TGqJ0YI0sB5OrHeikP15TLHpCYQ5hWdHhCuU5wlsQ6ZHGBg"/>
+</div>
+<!-- BEGIN: Signup Modal Overlay -->
+<div class="absolute bottom-0 w-full bg-white rounded-t-[32px] px-6 pt-2 pb-8 shadow-lg flex flex-col h-[75%]" data-purpose="signup-modal">
+<!-- Modal Drag Handle -->
+<div class="w-12 h-1.5 bg-gray-300 rounded-full mx-auto mb-6"></div>
+<!-- Header -->
+<div class="mb-6">
+<h1 class="text-[28px] font-bold text-gray-900 leading-tight">Create an Account</h1>
+<p class="text-sm text-gray-400 mt-1">Sign up to start your home search</p>
+</div>
+<!-- Form -->
+<form class="flex-1 flex flex-col gap-4 overflow-y-auto pb-4 no-scrollbar">
+<!-- Name Field -->
+<div class="flex flex-col gap-1.5">
+<label class="text-xs font-semibold text-gray-900 ml-1" for="name">Name</label>
+<div class="relative flex items-center bg-[#f8f9fa] rounded-lg border border-transparent input-field px-4 py-3.5 transition-all">
+<i class="fa-regular fa-user text-gray-400 text-lg mr-3"></i>
+<input class="w-full bg-transparent border-none p-0 focus:ring-0 text-sm text-gray-900 placeholder-gray-400 font-medium" id="name" placeholder="Enter your full name" type="text"/>
+</div>
+</div>
+<!-- Email Field -->
+<div class="flex flex-col gap-1.5">
+<label class="text-xs font-semibold text-gray-900 ml-1" for="email">Email</label>
+<div class="relative flex items-center bg-[#f8f9fa] rounded-lg border border-transparent input-field px-4 py-3.5 transition-all">
+<i class="fa-regular fa-envelope text-gray-400 text-lg mr-3"></i>
+<input class="w-full bg-transparent border-none p-0 focus:ring-0 text-sm text-gray-900 placeholder-gray-400 font-medium" id="email" placeholder="Enter your email" type="email"/>
+</div>
+</div>
+<!-- Password Field -->
+<div class="flex flex-col gap-1.5">
+<label class="text-xs font-semibold text-gray-900 ml-1" for="password">Password</label>
+<div class="relative flex items-center bg-[#f8f9fa] rounded-lg border border-transparent input-field px-4 py-3.5 transition-all">
+<i class="fa-solid fa-lock text-gray-400 text-lg mr-3"></i>
+<input class="w-full bg-transparent border-none p-0 focus:ring-0 text-sm text-gray-900 placeholder-gray-400 font-medium pr-8" id="password" placeholder="Enter your password" type="password"/>
+<button class="absolute right-4 text-gray-400 hover:text-gray-600 focus:outline-none" type="button">
+<i class="fa-regular fa-eye"></i>
+</button>
+</div>
+</div>
+<!-- Confirm Password Field -->
+<div class="flex flex-col gap-1.5 mb-2">
+<label class="text-xs font-semibold text-gray-900 ml-1" for="confirm-password">Confirm Password</label>
+<div class="relative flex items-center bg-[#f8f9fa] rounded-lg border border-transparent input-field px-4 py-3.5 transition-all">
+<i class="fa-solid fa-lock text-gray-400 text-lg mr-3"></i>
+<input class="w-full bg-transparent border-none p-0 focus:ring-0 text-sm text-gray-900 placeholder-gray-400 font-medium pr-8" id="confirm-password" placeholder="Re-enter your password" type="password"/>
+<button class="absolute right-4 text-gray-400 hover:text-gray-600 focus:outline-none" type="button">
+<i class="fa-regular fa-eye"></i>
+</button>
+</div>
+</div>
+</form>
+<!-- Bottom Actions -->
+<div class="mt-auto pt-4 bg-white">
+<button class="w-full bg-[#0a5514] hover:bg-[#073d0e] text-white font-semibold py-4 rounded-lg shadow-md transition-colors shadow-[#0a5514]/20" type="submit">
+          Sign Up
+        </button>
+<div class="text-center mt-5 text-sm">
+<span class="text-gray-500 font-medium">Already have an account? </span>
+<a class="text-[#0a5514] font-bold hover:underline" href="#">Login</a>
+</div>
+</div>
+</div>
+<!-- END: Signup Modal Overlay -->
+<!-- Status Bar (Mockup) -->
+<div class="absolute top-0 w-full h-12 flex justify-between items-center px-6 text-black z-10 pointer-events-none">
+<span class="text-sm font-medium">4:31</span>
+<div class="flex gap-2 items-center">
+<i class="fa-solid fa-signal text-xs"></i>
+<i class="fa-solid fa-wifi text-xs"></i>
+<i class="fa-solid fa-battery-full text-sm"></i>
+</div>
+</div>
+<!-- Home Indicator (Mockup) -->
+<div class="absolute bottom-1 w-full flex justify-center pb-2 z-20 pointer-events-none">
+<div class="w-1/3 h-1 bg-black rounded-full"></div>
+</div>
+</div>
+<!-- END: Mobile App Container -->
+</body></html>
