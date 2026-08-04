@@ -10,6 +10,7 @@ import {
   Empty,
   Title,
   TrustNote,
+  useTopInset,
 } from '@/components/ui';
 import { PropertyCard, PropertyCardSkeleton } from '@/components/property-card';
 import {
@@ -46,6 +47,7 @@ const TYPE_CHIPS: { value: TypeFilter; label: string }[] = [
 
 export default function TenantSearch() {
   const p = usePalette();
+  const topInset = useTopInset();
   const router = useRouter();
   const [type, setType] = useState<TypeFilter>('all');
   const [filters, setFilters] = useState<Filters>(NO_FILTERS);
@@ -91,24 +93,30 @@ export default function TenantSearch() {
           />
         }
         ListHeaderComponent={
-          <View style={{ paddingTop: space.md }}>
-            <Title>Find a home</Title>
-
+          <View style={{ paddingTop: topInset + space.md }}>
+            {/* The filter control sits beside the TITLE, not beside the
+                chips. Next to the chips it cropped the scrolling row at a
+                hard vertical edge mid-word, which reads as a broken layout
+                rather than as content that continues. Up here the row gets
+                the full width and can run off the screen edge, where a
+                clipped chip is obviously more-to-scroll. */}
             <View
               style={{
                 flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
                 gap: space.md,
-                marginTop: space.gutter,
-                marginBottom: space.gutter,
               }}
             >
-              <View style={{ flex: 1 }}>
-                <ChipRow options={TYPE_CHIPS} value={type} onChange={setType} />
-              </View>
+              <Title>Find a home</Title>
               <FilterButton
                 count={activeCount}
                 onPress={() => setSheetOpen(true)}
               />
+            </View>
+
+            <View style={{ marginTop: space.md, marginBottom: space.gutter }}>
+              <ChipRow options={TYPE_CHIPS} value={type} onChange={setType} />
             </View>
 
             {/* FR-9.2 — the tenant-facing surface states this structurally,

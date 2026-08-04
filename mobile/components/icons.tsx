@@ -112,6 +112,23 @@ export function PersonIcon(props: IconProps) {
 /* ── trust ───────────────────────────────────────────────────────────── */
 
 /**
+ * A bare checkmark, for use inside something that is already a badge.
+ *
+ * `VerifiedIcon` below draws a FILLED disc with a knocked-out tick, which is
+ * right when it sits on its own. Inside `VerifiedBadge` the disc is
+ * redundant — the pill is already the shape — and worse, the caller there
+ * passes the badge's ink colour, which painted the disc and the tick the
+ * same colour and produced a solid dot with no visible tick at all.
+ */
+export function CheckIcon(props: IconProps) {
+  return (
+    <Icon {...props} strokeWidth={2.5}>
+      <Path d="M4.5 12.5l5 5 10-11" />
+    </Icon>
+  );
+}
+
+/**
  * The verified badge mark. Filled, because it sits on photography.
  */
 export function VerifiedIcon({ size = 16, color, label }: IconProps) {
@@ -145,6 +162,22 @@ export function ShieldIcon(props: IconProps) {
     <Icon {...props}>
       <Path d="M12 3.25l7 2.6v5.4c0 4.35-2.85 7.6-7 9.5-4.15-1.9-7-5.15-7-9.5v-5.4z" />
       <Path d="M8.75 12.1l2.35 2.35 4.15-4.5" />
+    </Icon>
+  );
+}
+
+/**
+ * Cost — the "free for tenants" and commission lines.
+ *
+ * A price tag rather than a second shield. "Held in escrow" and "Free for
+ * tenants" briefly shared the shield glyph, which meant the icon column
+ * distinguished nothing and was pure decoration on two of three rows.
+ */
+export function TagIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <Path d="M11.4 3.5H20v8.6l-8.9 8.9a1.5 1.5 0 0 1-2.1 0l-6.5-6.5a1.5 1.5 0 0 1 0-2.1z" />
+      <Circle cx="16.25" cy="7.75" r="1.25" />
     </Icon>
   );
 }

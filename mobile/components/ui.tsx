@@ -12,6 +12,7 @@ import {
   type TextStyle,
   type ViewStyle,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   motion,
   radius,
@@ -22,7 +23,7 @@ import {
   usePalette,
   type Palette,
 } from '@/lib/theme';
-import { ImageIcon, VerifiedIcon } from '@/components/icons';
+import { CheckIcon, ImageIcon } from '@/components/icons';
 
 /**
  * The primitive set, built to the "Ugandan Rental Essence" reference.
@@ -37,6 +38,17 @@ import { ImageIcon, VerifiedIcon } from '@/components/icons';
  * (NFR-5), and a component library would add megabytes to render lists,
  * cards and forms.
  */
+
+/**
+ * The top inset a tab screen must leave for the status bar.
+ *
+ * The tab screens render their own title instead of a navigator header, so
+ * nothing above them is reserving that space any more — without this the
+ * headline sits underneath the clock and the battery icon.
+ */
+export function useTopInset(): number {
+  return useSafeAreaInsets().top;
+}
 
 /* ── surfaces ────────────────────────────────────────────────────────── */
 
@@ -120,6 +132,14 @@ export function Wordmark({
               backgroundColor: '#FFFFFF',
               borderRadius: radius.control,
               padding: space.md,
+              // Sized to its contents, not to the parent. Without an
+              // explicit width this View stretches to fill any container
+              // that is not centring its children, which turned the plate
+              // into a full-bleed white slab across the auth screens.
+              width: px + space.md * 2,
+              height: px + space.md * 2,
+              alignItems: 'center',
+              justifyContent: 'center',
             }
           : undefined
       }
@@ -415,7 +435,15 @@ export function ChipRow<T extends string>({
     <ScrollView
       horizontal
       showsHorizontalScrollIndicator={false}
-      contentContainerStyle={{ gap: space.sm, paddingVertical: space.xs }}
+      contentContainerStyle={{
+        gap: space.sm,
+        paddingVertical: space.xs,
+        // Trailing room so the last chip can scroll clear of whatever sits
+        // beside the row. Without it the final chip is sheared mid-word by
+        // the filter button and reads as a rendering fault rather than as
+        // content that scrolls.
+        paddingRight: space.gutter,
+      }}
     >
       {row}
     </ScrollView>
@@ -439,6 +467,10 @@ export function Chip({
       accessibilityRole="radio"
       accessibilityState={{ selected }}
       onPress={onPress}
+      // Android draws a rectangular ripple behind a Pressable by default,
+      // which on a pill leaves a visible square corner behind the round
+      // shape. Bounded to the pill's own radius instead.
+      android_ripple={{ color: p.surfaceAlt, radius: 0, borderless: false }}
       style={({ pressed }) => ({
         flex: grow ? 1 : undefined,
         minHeight: 44,
@@ -450,6 +482,7 @@ export function Chip({
         borderColor: selected ? p.brand : p.line,
         backgroundColor: selected ? p.brand : p.surface,
         opacity: pressed ? 0.8 : 1,
+        overflow: 'hidden',
       })}
     >
       <Text
@@ -524,7 +557,7 @@ export function VerifiedBadge({ label = 'Verified' }: { label?: string }) {
         alignSelf: 'flex-start',
       }}
     >
-      <VerifiedIcon size={14} color={p.verifiedInk} />
+      <CheckIcon size={13} color={p.verifiedInk} />
       <Text style={[t.labelSm, { color: p.verifiedInk }]}>{label}</Text>
     </View>
   );
@@ -628,7 +661,11 @@ export function Field({
 }) {
   const p = usePalette();
   return (
-    <View style={containerStyle}>
+    // Fields stack in forms, so the gap between them is the field's own
+    // business. Leaving it to each form produced exactly the inconsistency
+    // it sounds like: a field followed by a hint sat flush against the next
+    // field's label, while one without a hint looked correctly spaced.
+    <View style={[{ marginBottom: space.gutter }, containerStyle]}>
       {label ? (
         <Text style={[t.labelMd, { color: p.ink, marginBottom: space.sm }]}>
           {label}

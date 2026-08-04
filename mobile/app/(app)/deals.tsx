@@ -18,6 +18,7 @@ import {
   Pill,
   Price,
   Title,
+  useTopInset,
 } from '@/components/ui';
 import { CalendarIcon, ChevronRightIcon } from '@/components/icons';
 import { DealStatePill } from '@/components/deal-status';
@@ -56,6 +57,7 @@ const VIEWING_EXPLAIN = {
  */
 export default function Deals() {
   const p = usePalette();
+  const topInset = useTopInset();
   const router = useRouter();
   const { role } = useSession();
   const isLister = role === 'lister';
@@ -88,7 +90,7 @@ export default function Deals() {
         />
       }
       ListHeaderComponent={
-        <View style={{ paddingTop: space.md }}>
+        <View style={{ paddingTop: topInset + space.md }}>
           <Title>{isLister ? 'Your lettings' : 'Your rentals'}</Title>
           <BodySm style={{ marginTop: space.xs }}>
             {isLister

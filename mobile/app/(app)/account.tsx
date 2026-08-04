@@ -15,6 +15,7 @@ import {
   Pill,
   Row,
   Title,
+  useTopInset,
 } from '@/components/ui';
 import { space, usePalette } from '@/lib/theme';
 
@@ -33,6 +34,7 @@ import { space, usePalette } from '@/lib/theme';
  */
 export default function Account() {
   const p = usePalette();
+  const topInset = useTopInset();
   const router = useRouter();
   const { caller, signOut } = useSession();
   const [busy, setBusy] = useState(false);
@@ -42,7 +44,7 @@ export default function Account() {
   return (
     <ScrollView
       style={{ backgroundColor: p.bg }}
-      contentContainerStyle={{ padding: space.screen, paddingBottom: space.section }}
+      contentContainerStyle={{ padding: space.screen, paddingTop: topInset + space.md, paddingBottom: space.section }}
     >
       {/* The logo used to sit here in a card of its own. A user who has
           opened the account tab of an app they installed does not need to

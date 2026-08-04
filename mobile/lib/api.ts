@@ -25,11 +25,23 @@ import { Platform } from 'react-native';
 /**
  * Where the API lives.
  *
- * `10.0.2.2` is the Android emulator's alias for the host machine's
- * loopback — `localhost` inside the emulator is the emulator itself. A
- * physical device over USB needs `adb reverse tcp:3000 tcp:3000`, which
- * makes `localhost` work there too; hence the platform split rather than a
- * hardcoded address that only works in one of the two.
+ * `10.0.2.2` is the Android EMULATOR's alias for the host machine's
+ * loopback — `localhost` inside the emulator is the emulator itself.
+ *
+ * ── A physical device needs the override ──
+ * `Platform.OS === 'android'` is true on an emulator and on a handset
+ * alike, so the branch below cannot tell them apart, and `10.0.2.2` routes
+ * to nothing on a real phone. (`Constants.isDevice` would distinguish them
+ * but moved to `expo-device` in SDK 57, which is not a dependency here.)
+ *
+ * So for a USB-attached device, run:
+ *
+ *     adb reverse tcp:3000 tcp:3000
+ *     EXPO_PUBLIC_API_BASE_URL=http://localhost:3000 npx expo run:android
+ *
+ * `adb reverse` maps the handset's own `localhost:3000` back to the host,
+ * and the env var is what points this file at it. Without the var the app
+ * builds fine and then fails every request, which is a slow way to find out.
  */
 function resolveBaseUrl(): string {
   const configured = (Constants.expoConfig?.extra as { apiBaseUrl?: string })

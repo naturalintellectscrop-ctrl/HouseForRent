@@ -151,7 +151,10 @@ export default function ListingScreen() {
     <View style={{ flex: 1, backgroundColor: p.bg }}>
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={{ paddingBottom: space.section }}
+        // Room for the pinned action bar to sit over. Without it the last
+        // section of the page can never be scrolled out from under the
+        // button — the attribute row was permanently half-hidden behind it.
+        contentContainerStyle={{ paddingBottom: 160 }}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}

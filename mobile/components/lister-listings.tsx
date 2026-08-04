@@ -20,6 +20,7 @@ import {
   Price,
   Row,
   Title,
+  useTopInset,
 } from '@/components/ui';
 import { space, usePalette } from '@/lib/theme';
 
@@ -62,6 +63,7 @@ const BLOCKER_COPY: Record<string, string> = {
  */
 export default function ListerListings() {
   const p = usePalette();
+  const topInset = useTopInset();
   const { data, error, loading, refreshing, refresh, reload } =
     useAuthedRequest<MyListing[]>('/v1/listings/mine');
   const [agreementFor, setAgreementFor] = useState<string | null>(null);
@@ -70,7 +72,7 @@ export default function ListerListings() {
     <>
       <FlatList
         style={{ backgroundColor: p.bg }}
-        contentContainerStyle={{ padding: space.screen, paddingBottom: space.section }}
+        contentContainerStyle={{ padding: space.screen, paddingTop: topInset + space.md, paddingBottom: space.section }}
         data={data ?? []}
         keyExtractor={(item) => item.id}
         refreshControl={
