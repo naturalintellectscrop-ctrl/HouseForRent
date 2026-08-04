@@ -4,7 +4,7 @@ import { useColorScheme, type TextStyle } from 'react-native';
  * ── The design system: "Ugandan Rental Essence" ──
  *
  * Implemented from the Stitch design reference packs, whose own spec is at
- * `stitch_house_for_rent_stitch_pack/ugandan_rental_essence/DESIGN.md`.
+ * `docs/design-reference/stitch/01-tenant-discovery/ugandan_rental_essence/DESIGN.md`.
  * The reference shipped a second system alongside it ("Azure Property"),
  * built on a #0053ce blue with Plus Jakarta Sans, and it is deliberately
  * NOT implemented here: blue is not this company's colour, and the screens

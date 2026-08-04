@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Login Screen</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet"/>
+<style data-purpose="custom-utilities">
+    /* Custom utility for the modal drag handle */
+    .drag-handle {
+      width: 40px;
+      height: 4px;
+      background-color: #e5e7eb;
+      border-radius: 9999px;
+      margin: 0 auto;
+    }
+    
+    /* Custom utility for the background grid overlay */
+    .bg-overlay {
+      background: linear-gradient(to bottom, rgba(0,0,0,0.1), rgba(0,0,0,0.4));
+    }
+  </style>
+<script data-purpose="tailwind-config">
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: '#2563eb', // A vivid blue matching the design
+          }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="bg-gray-100 h-screen w-full flex items-center justify-center font-sans overflow-hidden">
+<!-- BEGIN: Main Container (Mobile Device Simulator) -->
+<div class="relative w-full h-full max-w-md bg-gray-900 overflow-hidden sm:h-[850px] sm:w-[400px] sm:rounded-[3rem] sm:border-[14px] sm:border-gray-900 shadow-2xl">
+<!-- BEGIN: Background Grid -->
+<div class="absolute inset-0 z-0 p-4 grid grid-cols-3 gap-2 bg-slate-200">
+<!-- Grid items (simulated real estate images) -->
+<div class="rounded-xl overflow-hidden h-24 bg-gray-300"><img alt="House" class="w-full h-full object-cover opacity-80" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDeGk_QgI3Y8EItL7F5HpOcKqMqCNOukJqr7F9I9SWD4tuJmSvhwHqUCWiPJNtNu_w6shFolWzGqq7FmJX9YutwNFcXeX9Hp9IjUSmc7pFtU2nMspvgT2GIk7RLuRXT8dI42hRhwleHjs6oMzmM6IjW-2Xcjem61itRQ8yZ-8JxE59PZNWbjCnyx2-aYDUhoUl9Kd-SgIdKK7gHRZrC8xbZ6KcTPe6NEEv3gcSIMsgAADxsKNuhpHcA"/></div>
+<div class="rounded-xl overflow-hidden h-24 bg-gray-300"><img alt="House" class="w-full h-full object-cover opacity-80" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC6p8OH51i7Hegn21HJLVfAMy0N_Ekj1nJrUc6x8Xn2FLKKFOwraJSPKmO--zxFBLVdPZ3pwQmeayCKv5EO_wPGaCDzx8PU909o7m0NimRpcW4ewgGJdhmYpxOOvqz61fuuFg6J2b3cUmrDzdXy98kBqFY-Z7L8pF_3MbGFzmui2PE3D6iEATBYkb5Iuli7Su-ytxnfGcQEb1YP95RLebWo4Xd-L5fKDDOt3rw50mIyhM5gLZF7Xbsi"/></div>
+<div class="rounded-xl overflow-hidden h-24 bg-gray-300"><img alt="House" class="w-full h-full object-cover opacity-80" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDQyRtnVU8RDgLcy14KwolKir0Y5g7-trxGyyTLdBeHiCUioPagCzbNdmh41gTaUu9fWMW8eyToubytkM5SBxOlTOISnUX_Qnf-QScLWYyCczs0mDzZNI_xe-217rMVvmJqQIlCsOiTInxvnIB5Mm0eXBgtgkmpV8ssMS69mavyLO35qjrOscrRfaHY3Hl4xn1Tw-3fImISoAuLvni7tdpOdK0D7eSAc_C23SAUVneUcUyEBMMXkZZE"/></div>
+<div class="rounded-xl overflow-hidden h-24 bg-gray-300"><img alt="House" class="w-full h-full object-cover opacity-80" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAwTMJF9tmTMo7gMXa0K0bU54a9lHaTS2XB2RTiClC_5jeZksYZuYxe-4BoL5Mu1YIB-h_bOGxk_Isfa2jqfnmjjGDeseoIH2PK9B3JQ8vtZuEhiKW1PX7H5TxjcnHqYs_8xqbrwZ2pXatBo7DJ1HvQS7jbYV5AtWrUSJ4ApXPVZcA6r26A4KUs4HGQ2DQDMpn3yINxGcD8RcWZUuDKMogiM1rOoBgUQUx5Y_i8G22nzN7m8tLD0ZQl"/></div>
+<div class="rounded-xl overflow-hidden h-24 bg-gray-300"><img alt="House" class="w-full h-full object-cover opacity-80" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBLwOtB7AUOcKeu5s5CkHlBuX3SnF8-CdRsbGj0In6gzt4Gid2iiE3m2avB9Ptrdn4dzOgmugcBf6GnFOwuEXYyeNsXTpgnzRPy2K8GpANhs4P7Oak-65cVAw-eYs4pHbuQIPP7FKcPGIqiWci8je3LR3fv6zB_--Oy-CippmHmAckdDnVU7k3NRE_hlxacNf9MklCKASZpvpwNOCxm0DyHa1S3x0vb1r6RpjUbd4HDSKzJpQMU2lQQ"/></div>
+<div class="rounded-xl overflow-hidden h-24 bg-gray-300"><img alt="House" class="w-full h-full object-cover opacity-80" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC4sI9EfioYoGk3lpaopppyWee83d13bHGO4Qw8l0HfeYe4WCGIeX7oUs_4cdRm1Iiy0nki862k4TBVhuobD2EVQZBRmWgymY5Uvnkmn5fk2Y69kr7p3Y8KOeMkFnARzjkq_YvFSfbPDpl5UqD2MBXXeKe0eXTQjnRZHhdRHnwrq78shN-4sPR2jZZNOxjSE3TXMEF9A6y5ZJtOC-BKzOYbHb5Iavz6kLpM05uBPTMVdjmo1DXzWVKv"/></div>
+<div class="rounded-xl overflow-hidden h-24 bg-gray-300"><img alt="House" class="w-full h-full object-cover opacity-80" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBpOtbu1dozSxXgx1DTfOgmytCjcC8PPbvNcuoWsl5QMPS7pB6jtoSW3l9lhorzeeZiHLEXHCmSZ0YAAo9zFSnic12lphzYvnIfAMYKEYH3uUyw0VCtvPQhWikTFF338r98xG3hpgd3lcFsnAGm5pLmbMy50v8ZaTI5qH41SflZvmabGHVfGcN4V638xjZaPaVMmVBn6sLrhxGuI2wMjUR5lqdGMyEVWt6Geqb3ur1LTIUz7_aTbBvW"/></div>
+<div class="rounded-xl overflow-hidden h-24 bg-gray-300"><img alt="House" class="w-full h-full object-cover opacity-80" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBV8TI6oisBUzvjfZITmWjG1ObiWA0ueWcxCs1gr5QMgcz8q-BXgd8bmbiV7DDij3DScpULJEOxQKNLfY6xo-KL3g2UYoWIllCnx4qK_G2o7JBqx9KqC-pSOuEuwoj7VL_z7G-s42Jkcgw9Q_FYPveFIvd8lkafvJiQhtBJEzan-gLhtYC3ENnXr9-UHDGYXWgJAe9IsHiE008SYp_U2OGuyY3sE7_lpYq153JPHB-k_82AP4oG1vlW"/></div>
+<div class="rounded-xl overflow-hidden h-24 bg-gray-300"><img alt="House" class="w-full h-full object-cover opacity-80" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBgGA74FZ27Sfoy6zWkM_N7JUs5y72FjpxK5Anpv8sDmMmK9q9E_Cv8jd7B29_ytfrIb21kLFB7t4DpqlpW17GlotaLwgFCzQuJG6EU_f2qDJFy9hDGGyCo4IfvB8FxE_6goZTypNZPVx5uQA-foQn4fsSsvaXMusCHako1KWzHWdgwqXKHN2gKu4EscZF6sXchinV9RPdzSf_-Gnq0g4OlW4YKi5-wBvVWA0k8rPATBLPj7-52BGsw"/></div>
+<div class="rounded-xl overflow-hidden h-24 bg-gray-300"><img alt="House" class="w-full h-full object-cover opacity-80" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBASzUs85Od31UEjGJ0SsHPf_sCGUhoneeF0JgO7ECnvdW4iSj_2kF_2_bS5U6woyTm3dOhNZ_1_9xFQbo06YtvMejHJXR024X2wxskxxnNZ5u8ueclqRphrbwaYE5JNJk3dNAKTL9UQal0LCDWdeWZytXlnPIRbmyJXLywJN5H5xmL91JbcAm0DiKpIj8ndPkPpKYrOMdK499q7IsF4am2pnrJVZrPA5GTftkabHk9ACkwpt85odZN"/></div>
+<div class="rounded-xl overflow-hidden h-24 bg-gray-300"><img alt="House" class="w-full h-full object-cover opacity-80" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCLZpAZrH0TcdhynY9TeI1XjjDGvwh6630WA1g4DBISNswMvKD1-6zuoUGIpkmvqqMh6y1JvgWzncMR89S_9g9nXjLbu6O8XuerLkwtuGuGmQw1tZr9_H_9RiY6T8xwMuwpHlVOpDZAVc_-Hr2YifGzWJtpUYXPU_Jdk2TdEugJkjwye_K3JiTGynCINThPIrV-iwQppaBrZxA_nYNW2lAs1RqRYh8qlEAEQfQcaptQ7MR4HcU077h-"/></div>
+<div class="rounded-xl overflow-hidden h-24 bg-gray-300"><img alt="House" class="w-full h-full object-cover opacity-80" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAAWyeFdJBBMrGl-mxxWHbvskbJvzjj-kd-8cLHiXqiEvYvSMXeVzkQcijRjpt2lRLIH8iOPxlKWWLP_onpIUzwoSi8eUjQQ1k8CEH1tZJJT7tn55jERTN_1yLo2mhIge9evD_pUm49SSHYbBsCUXaGXEH72UAOoe3aCwWM5ENFD9itUOEUDkGHsitNY55dueKMNAbQh-UT6TgW8NQ2RipKswJGqRM-8IHG7ZfKohUyh-cVhTjTYXkB"/></div>
+</div>
+<!-- END: Background Grid -->
+<!-- Overlay to dim background -->
+<div class="absolute inset-0 bg-overlay z-10 pointer-events-none"></div>
+<!-- BEGIN: Login Modal -->
+<div class="absolute bottom-0 left-0 right-0 bg-white rounded-t-[2rem] p-6 pt-4 z-20 shadow-[0_-10px_40px_rgba(0,0,0,0.1)] flex flex-col h-[65%]">
+<!-- Drag handle indicator -->
+<div class="drag-handle mb-6"></div>
+<!-- Header -->
+<div class="mb-8">
+<h2 class="text-2xl font-bold text-gray-900 mb-1">Welcome Back</h2>
+<p class="text-gray-400 text-sm">Login to continue your home search</p>
+</div>
+<!-- Form -->
+<form class="flex-1 flex flex-col">
+<!-- Email Field -->
+<div class="mb-5">
+<label class="block text-sm font-semibold text-gray-900 mb-2" for="email">Email</label>
+<div class="relative">
+<div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+<i class="fa-regular fa-envelope text-gray-400"></i>
+</div>
+<input class="bg-gray-50 border border-transparent text-gray-900 text-sm rounded-2xl focus:ring-primary focus:border-primary block w-full pl-10 p-3.5 placeholder-gray-400" id="email" placeholder="Enter your email" required="" type="email"/>
+</div>
+</div>
+<!-- Password Field -->
+<div class="mb-8">
+<label class="block text-sm font-semibold text-gray-900 mb-2" for="password">Password</label>
+<div class="relative">
+<div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+<i class="fa-solid fa-lock text-gray-400 text-sm"></i>
+</div>
+<input class="bg-gray-50 border border-transparent text-gray-900 text-sm rounded-2xl focus:ring-primary focus:border-primary block w-full pl-10 pr-10 p-3.5 placeholder-gray-400" id="password" placeholder="Enter your password" required="" type="password"/>
+<button class="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-400 hover:text-gray-600 focus:outline-none" type="button">
+<i class="fa-regular fa-eye"></i>
+</button>
+</div>
+</div>
+<div class="mt-auto">
+<!-- Login Button -->
+<button class="w-full text-white bg-primary hover:bg-blue-700 focus:ring-4 focus:outline-none focus:ring-blue-300 font-semibold rounded-2xl text-sm px-5 py-4 text-center transition duration-200" type="submit">
+            Login
+          </button>
+<!-- Sign Up Link -->
+<div class="text-center mt-6 mb-2">
+<p class="text-sm text-gray-500">
+              Don't have an account? <a class="text-primary font-semibold hover:underline" href="#">Sign Up</a>
+</p>
+</div>
+</div>
+</form>
+<!-- Simulated Home Indicator -->
+<div class="w-1/3 h-1 bg-gray-300 rounded-full mx-auto mt-4 absolute bottom-2 left-1/2 transform -translate-x-1/2"></div>
+</div>
+<!-- END: Login Modal -->
+</div>
+<!-- END: Main Container -->
+</body></html>

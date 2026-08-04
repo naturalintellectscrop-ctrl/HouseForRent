@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Favorites</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              DEFAULT: '#0a5514',
+              50: '#f0fdf4',
+              100: '#dcfce7',
+              200: '#bbf7d0',
+              300: '#86efac',
+              400: '#4ade80',
+              500: '#22c55e',
+              600: '#16a34a',
+              700: '#15803d',
+              800: '#166534',
+              900: '#0a5514',
+            }
+          }
+        }
+      }
+    }
+  </script>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet"/>
+<style data-purpose="custom-fonts">
+    @import url('https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&display=swap');
+    body {
+      font-family: 'Hanken Grotesk', sans-serif;
+    }
+  </style>
+<style data-purpose="hide-scrollbar">
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+  </style>
+</head>
+<body class="bg-gray-50 flex justify-center h-screen items-center overflow-hidden antialiased text-gray-800">
+<!-- BEGIN: Mobile App Container -->
+<div class="w-[390px] h-[844px] bg-[#fcf8f8] rounded-[40px] shadow-2xl relative overflow-hidden flex flex-col border-8 border-gray-900">
+<!-- BEGIN: Top Status Bar area (simulated) -->
+<div class="h-12 flex items-center justify-between px-6 pt-2 text-xs font-medium text-gray-800">
+<span>4:34</span>
+<div class="flex items-center space-x-2">
+<i class="fa-solid fa-signal"></i>
+<i class="fa-solid fa-wifi"></i>
+<i class="fa-solid fa-battery-full"></i>
+</div>
+</div>
+<!-- END: Top Status Bar area -->
+<!-- BEGIN: Header Section -->
+<header class="px-6 py-4 flex items-center relative">
+<button class="w-10 h-10 rounded-lg bg-white shadow-sm flex items-center justify-center text-gray-700 hover:bg-gray-50 transition border border-gray-100">
+<i class="fa-solid fa-arrow-left"></i>
+</button>
+<h1 class="text-lg font-semibold flex-1 text-center pr-10 text-gray-900">Favorites</h1>
+</header>
+<!-- END: Header Section -->
+<!-- BEGIN: Filter Categories -->
+<nav class="px-6 py-2 overflow-x-auto no-scrollbar whitespace-nowrap">
+<div class="flex space-x-3">
+<button class="px-5 py-2 rounded-lg bg-brand text-white text-sm font-medium shadow-sm">
+          All
+        </button>
+<button class="px-5 py-2 rounded-lg bg-white border border-gray-200 text-gray-600 text-sm font-medium hover:bg-gray-50 transition shadow-sm">
+          House
+        </button>
+<button class="px-5 py-2 rounded-lg bg-white border border-gray-200 text-gray-600 text-sm font-medium hover:bg-gray-50 transition shadow-sm">
+          Villa
+        </button>
+<button class="px-5 py-2 rounded-lg bg-white border border-gray-200 text-gray-600 text-sm font-medium hover:bg-gray-50 transition shadow-sm">
+          Apartments
+        </button>
+</div>
+</nav>
+<!-- END: Filter Categories -->
+<!-- BEGIN: Main Content - Favorites List -->
+<main class="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+<!-- BEGIN: Property Card 1 -->
+<article class="bg-white rounded-xl p-3 flex shadow-sm border border-gray-100 relative group">
+<!-- Image Container with Rating -->
+<div class="relative w-24 h-24 rounded-lg overflow-hidden flex-shrink-0">
+<img alt="Modern Kampala House" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCkhkuGWNR5xDF3a76UG9GEJE-vDbFou8Eo39QtDYQs8uz3ZXVBpdGSTwSvyBO6SGp3lMMbG6iNEeXedy6wco0AbCqgN8od3LA5h8IgqkLVg7IxbEmoIZOrt9YFzcFJru2xFj715z-7lZWmGtulZN53ZRKWobx6keKajgnzADrB_DKEVo-TH_Th84LpSTEj19vVVpU-b_rlv98m2mJyZ_uKPiSmrJV1aIYd1tOEO4TNhIIKbvsjohG9"/>
+<div class="absolute top-2 left-2 bg-white/90 backdrop-blur-sm px-1.5 py-0.5 rounded flex items-center text-[10px] font-bold text-gray-700 shadow-sm">
+<i class="fa-solid fa-star text-yellow-400 mr-1 text-[8px]"></i> 4.8
+          </div>
+</div>
+<!-- Property Details -->
+<div class="ml-4 flex flex-col justify-center flex-1">
+<h3 class="font-semibold text-gray-900 text-base">Modern Kampala House</h3>
+<p class="text-xs text-gray-500 mt-1 mb-2"><i class="fa-solid fa-location-dot mr-1"></i>Ntinda, Kampala</p>
+<p class="text-brand font-bold text-base">UGX 1.5M <span class="text-xs text-gray-400 font-normal">/mo</span></p>
+</div>
+<!-- Favorite Button -->
+<button class="absolute top-4 right-4 text-brand text-lg">
+<i class="fa-solid fa-heart"></i>
+</button>
+</article>
+<!-- END: Property Card 1 -->
+<!-- BEGIN: Property Card 2 -->
+<article class="bg-white rounded-xl p-3 flex shadow-sm border border-gray-100 relative group">
+<!-- Image Container with Rating -->
+<div class="relative w-24 h-24 rounded-lg overflow-hidden flex-shrink-0">
+<img alt="Entebbe Villa" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuB8N1hcSkMzU-hnrb2myXwgLxvt3GSt9Z5rpzpHTZwRZ4IVMqI1KruJz8mD7OLlCVMw4FG9pEVBQryp2w3P94jgRPdM4Yrx137rm7meO3lwDh0IjnXI-X3kjT4cZp5KD2MZwlEkUXzTYPnZJsvaxtgC2Ez2d8e557iBWDCa_oB8fNjc0ssGT86a1cWhXFDZpmjPFfinVnuD32EutaOpKVH0ELuKTMmI9Lo5XAmX29tBHGHRZU5_vqC8"/>
+<div class="absolute top-2 left-2 bg-white/90 backdrop-blur-sm px-1.5 py-0.5 rounded flex items-center text-[10px] font-bold text-gray-700 shadow-sm">
+<i class="fa-solid fa-star text-yellow-400 mr-1 text-[8px]"></i> 4.5
+          </div>
+</div>
+<!-- Property Details -->
+<div class="ml-4 flex flex-col justify-center flex-1">
+<h3 class="font-semibold text-gray-900 text-base">Entebbe Villa</h3>
+<p class="text-xs text-gray-500 mt-1 mb-2"><i class="fa-solid fa-location-dot mr-1"></i>Entebbe, Uganda</p>
+<p class="text-brand font-bold text-base">UGX 3.2M <span class="text-xs text-gray-400 font-normal">/mo</span></p>
+</div>
+<!-- Favorite Button -->
+<button class="absolute top-4 right-4 text-brand text-lg">
+<i class="fa-solid fa-heart"></i>
+</button>
+</article>
+<!-- END: Property Card 2 -->
+</main>
+<!-- END: Main Content -->
+<!-- BEGIN: Bottom Navigation -->
+<footer class="bg-white px-6 py-4 flex justify-between items-center border-t border-gray-100 z-10 relative pb-8">
+<button class="text-gray-400 hover:text-brand transition flex flex-col items-center">
+<i class="fa-solid fa-house-chimney text-xl mb-1"></i>
+<span class="text-[10px] font-medium">Home</span>
+</button>
+<button class="text-gray-400 hover:text-brand transition flex flex-col items-center">
+<i class="fa-solid fa-magnifying-glass text-xl mb-1"></i>
+<span class="text-[10px] font-medium">Search</span>
+</button>
+<button class="text-brand transition flex flex-col items-center">
+<i class="fa-solid fa-heart text-xl mb-1"></i>
+<span class="text-[10px] font-medium">Saved</span>
+</button>
+<button class="text-gray-400 hover:text-brand transition flex flex-col items-center">
+<i class="fa-regular fa-user text-xl mb-1"></i>
+<span class="text-[10px] font-medium">Profile</span>
+</button>
+</footer>
+<!-- END: Bottom Navigation -->
+<!-- Home Indicator -->
+<div class="absolute bottom-2 left-1/2 -translate-x-1/2 w-32 h-1.5 bg-gray-300 rounded-full z-20"></div>
+</div>
+<!-- END: Mobile App Container -->
+</body></html>

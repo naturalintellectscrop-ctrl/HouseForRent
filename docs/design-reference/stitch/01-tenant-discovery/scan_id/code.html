@@ -1,0 +1,77 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport"><link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"><style>@layer base { html, body { width: 100vw; margin: 0; padding: 0; background-color: #fcf8f8; } body { overscroll-behavior: none; } .pb-safe { padding-bottom: env(safe-area-inset-bottom, 0px); } .pt-safe { padding-top: env(safe-area-inset-top, 0px); } } ::-webkit-scrollbar { display: none; }</style><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config = { darkMode: 'class', theme: { extend: { colors: { 'on-background': '#1c1b1b', 'on-primary-fixed-variant': '#065312', 'on-secondary-fixed': '#191c1b', 'secondary-container': '#dfe0dd', 'tertiary': '#6c0002', 'on-primary-container': '#81c97a', 'surface-container': '#f0edec', 'secondary': '#5c5f5d', 'outline': '#717a6c', 'on-tertiary-fixed': '#410001', 'on-tertiary-fixed-variant': '#930004', 'primary-fixed-dim': '#8fd887', 'surface': '#fcf8f8', 'on-surface': '#1c1b1b', 'on-tertiary': '#ffffff', 'on-secondary': '#ffffff', 'outline-variant': '#c0c9ba', 'inverse-surface': '#313030', 'surface-tint': '#276c28', 'error': '#ba1a1a', 'background': '#fcf8f8', 'surface-dim': '#dcd9d9', 'on-error-container': '#93000a', 'surface-variant': '#e5e2e1', 'secondary-fixed': '#e2e3e0', 'tertiary-fixed-dim': '#ffb4a9', 'secondary-fixed-dim': '#c5c7c4', 'on-primary-fixed': '#002203', 'surface-container-low': '#f6f3f2', 'inverse-on-surface': '#f3f0ef', 'on-tertiary-container': '#ff9e91', 'surface-container-highest': '#e5e2e1', 'surface-container-lowest': '#ffffff', 'tertiary-fixed': '#ffdad5', 'on-primary': '#ffffff', 'primary-fixed': '#aaf5a0', 'on-error': '#ffffff', 'tertiary-container': '#970004', 'on-secondary-fixed-variant': '#454745', 'error-container': '#ffdad6', 'on-secondary-container': '#616361', 'primary': '#003c08', 'on-surface-variant': '#41493e', 'primary-container': '#0a5514', 'surface-container-high': '#ebe7e7', 'inverse-primary': '#8fd887', 'surface-bright': '#fcf8f8' }, borderRadius: { 'DEFAULT': '0.25rem', 'lg': '0.5rem', 'xl': '0.75rem', 'full': '9999px' }, spacing: { 'stack-md': '16px', 'container-margin': '20px', 'unit': '4px', 'section-gap': '48px', 'gutter': '16px', 'stack-sm': '8px', 'stack-lg': '32px' }, fontFamily: { 'body-lg': ['Hanken Grotesk'], 'headline-lg': ['Hanken Grotesk'], 'display-lg': ['Hanken Grotesk'], 'label-sm': ['Hanken Grotesk'], 'headline-sm': ['Hanken Grotesk'], 'headline-md': ['Hanken Grotesk'], 'label-md': ['Hanken Grotesk'], 'body-md': ['Hanken Grotesk'] } } } };</script></head><body class="bg-background pt-safe pb-safe flex flex-col min-h-screen"><main class="flex flex-col flex-1 relative w-full"><div class="flex flex-col w-full px-container-margin py-stack-lg gap-stack-lg min-h-[calc(100vh-100px)]">
+<div class="flex justify-center mb-4"><img src="https://lh3.googleusercontent.com/aida-public/AB6AXuCmkceBbYtZtsswTxs8EuUiwjU-m6D-x3L75pBlMQuSDvBVklWp-fV9Il6-HnvzrNoDYpU2xik86kDfvQiUcpmKJhy0haECn8aa42TVc1rvRCtaSOzgyRrhIg4j8I5EwCI8E7fNXrD_YarX19gB9CbTnNJfXsBN9t2P7wtHjG4PUybMwJzDfLC3jODG4noS3yGAcvH7amfEm9JgJ-P3ymKUd2ArPQN4JLui6Yv3F_le7bF1Z2wnutF702glz7iOb_Tz1Yk80-sp-OY" alt="House For Rent App Logo" class="h-20 w-auto object-contain"></div><div class="flex flex-col gap-unit">
+<h1 class="text-headline-lg font-headline-lg text-on-background tracking-tight">Scan your National ID</h1>
+<p class="text-body-md font-body-md text-on-surface-variant">Place your NIN card within the frame. Ensure all details are clear.</p>
+</div>
+<div class="relative w-full aspect-[1.586/1] bg-surface-container rounded-xl flex items-center justify-center overflow-hidden border border-outline-variant shadow-sm transition-all duration-300" id="camera-frame">
+<div class="absolute inset-0 pointer-events-none p-4 z-10 flex flex-col justify-between">
+<div class="flex justify-between w-full">
+<div class="w-8 h-8 border-t-4 border-l-4 border-primary rounded-tl-lg"></div>
+<div class="w-8 h-8 border-t-4 border-r-4 border-primary rounded-tr-lg"></div>
+</div>
+<div class="flex justify-between w-full">
+<div class="w-8 h-8 border-b-4 border-l-4 border-primary rounded-bl-lg"></div>
+<div class="w-8 h-8 border-b-4 border-r-4 border-primary rounded-br-lg"></div>
+</div>
+</div>
+<div class="absolute inset-0 bg-on-background/5 opacity-0 transition-opacity duration-200" id="scan-flash"></div>
+<div class="flex flex-col items-center gap-stack-sm text-on-surface-variant z-20">
+<span class="material-symbols-outlined text-[48px] opacity-50" id="scan-icon">id_card</span>
+<span class="text-label-md font-label-md opacity-70" id="scan-instruction">Front of card</span>
+</div>
+</div>
+<div class="flex gap-gutter items-center justify-center mt-auto">
+<button class="w-20 h-20 rounded-full bg-primary flex items-center justify-center shadow-lg active:scale-95 transition-transform duration-150 group outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background" id="capture-btn">
+<div class="w-16 h-16 rounded-full border-[3px] border-on-primary flex items-center justify-center group-hover:scale-90 transition-transform duration-200">
+<span class="material-symbols-outlined text-on-primary text-[32px]">photo_camera</span>
+</div>
+</button>
+</div>
+<div class="flex justify-center mt-4">
+<button class="text-label-md font-label-md text-primary bg-transparent py-3 px-6 rounded-lg active:bg-surface-variant transition-colors flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px]">help</span> Need help?
+        </button>
+</div>
+</div>
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const captureBtn = document.getElementById('capture-btn');
+        const scanFlash = document.getElementById('scan-flash');
+        const instruction = document.getElementById('scan-instruction');
+        const frame = document.getElementById('camera-frame');
+        
+        let isFrontCaptured = false;
+
+        captureBtn.addEventListener('click', () => {
+            // Simulate flash
+            scanFlash.classList.remove('opacity-0');
+            scanFlash.classList.add('opacity-100');
+            
+            // Haptic feedback if available
+            if (navigator.vibrate) navigator.vibrate(50);
+
+            setTimeout(() => {
+                scanFlash.classList.remove('opacity-100');
+                scanFlash.classList.add('opacity-0');
+                
+                if (!isFrontCaptured) {
+                    isFrontCaptured = true;
+                    // Transition to back scan
+                    frame.classList.add('scale-[0.98]', 'bg-surface-container-high');
+                    setTimeout(() => {
+                        instruction.textContent = "Back of card";
+                        frame.classList.remove('scale-[0.98]', 'bg-surface-container-high');
+                    }, 200);
+                } else {
+                     // Simulate completion
+                     instruction.textContent = "Processing...";
+                     instruction.classList.add('text-primary');
+                     captureBtn.classList.add('opacity-50', 'pointer-events-none');
+                }
+            }, 150);
+        });
+    });
+</script></main>
+
+</body></html>

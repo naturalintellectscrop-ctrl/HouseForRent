@@ -1,0 +1,113 @@
+<html lang="en"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport"/><link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config = { darkMode: "class", theme: { extend: { "colors": { "secondary-container": "#dfe0dd", "on-surface": "#1c1b1b", "on-secondary-container": "#616361", "on-surface-variant": "#41493e", "background": "#fcf8f8", "surface-container-low": "#f6f3f2", "error-container": "#ffdad6", "surface-container-highest": "#e5e2e1", "on-primary-fixed": "#002203", "surface-tint": "#276c28", "primary-container": "#0a5514", "tertiary-fixed": "#ffdad5", "inverse-surface": "#313030", "surface-dim": "#dcd9d9", "on-secondary": "#ffffff", "primary-fixed-dim": "#8fd887", "primary-fixed": "#aaf5a0", "primary": "#003c08", "surface-bright": "#fcf8f8", "tertiary": "#6c0002", "surface-container-high": "#ebe7e7", "inverse-primary": "#8fd887", "on-primary": "#ffffff", "on-secondary-fixed-variant": "#454745", "on-primary-fixed-variant": "#065312", "secondary-fixed": "#e2e3e0", "on-tertiary-container": "#ff9e91", "surface-container": "#f0edec", "on-tertiary-fixed": "#410001", "on-error": "#ffffff", "inverse-on-surface": "#f3f0ef", "secondary": "#5c5f5d", "secondary-fixed-dim": "#c5c7c4", "on-tertiary-fixed-variant": "#930004", "surface-variant": "#e5e2e1", "on-background": "#1c1b1b", "outline": "#717a6c", "surface": "#fcf8f8", "outline-variant": "#c0c9ba", "on-primary-container": "#81c97a", "surface-container-lowest": "#ffffff", "on-tertiary": "#ffffff", "on-secondary-fixed": "#191c1b", "on-error-container": "#93000a", "tertiary-fixed-dim": "#ffb4a9", "tertiary-container": "#970004", "error": "#ba1a1a" }, "borderRadius": { "DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px" }, "spacing": { "section-gap": "48px", "stack-md": "16px", "stack-lg": "32px", "gutter": "16px", "container-margin": "20px", "unit": "4px", "stack-sm": "8px" }, "fontFamily": { "body-md": ["Hanken Grotesk"], "label-sm": ["Hanken Grotesk"], "display-lg": ["Hanken Grotesk"], "headline-lg": ["Hanken Grotesk"], "body-lg": ["Hanken Grotesk"], "label-md": ["Hanken Grotesk"], "headline-sm": ["Hanken Grotesk"], "headline-md": ["Hanken Grotesk"] }, "fontSize": { "body-md": ["16px", { "lineHeight": "24px", "fontWeight": "400" }], "label-sm": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600" }], "display-lg": ["40px", { "lineHeight": "48px", "letterSpacing": "-0.02em", "fontWeight": "700" }], "headline-lg": ["32px", { "lineHeight": "40px", "fontWeight": "600" }], "body-lg": ["18px", { "lineHeight": "28px", "fontWeight": "400" }], "label-md": ["14px", { "lineHeight": "20px", "letterSpacing": "0.01em", "fontWeight": "500" }], "headline-sm": ["20px", { "lineHeight": "28px", "fontWeight": "600" }], "headline-md": ["24px", { "lineHeight": "32px", "fontWeight": "600" }] } } } }</script><style>@layer base { body { -webkit-tap-highlight-color: transparent; overscroll-behavior-y: contain; } .pt-safe { padding-top: env(safe-area-inset-top, 0px); } }</style><style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head><body class="bg-background font-body-md text-on-background"><header class="fixed top-0 w-full z-50 bg-surface/80 backdrop-blur-xl pt-safe"><div class="h-16 px-container-margin flex items-center gap-4"><button class="w-10 h-10 flex items-center justify-center rounded-full active:bg-surface-variant transition-colors" onclick="history.back()"><span class="material-symbols-outlined">arrow_back</span></button><span class="font-headline-sm text-headline-sm text-primary">Verification Status</span></div></header><main class="pt-16 min-h-screen"><div class="flex flex-col w-full">
+<!-- Progress Visualization Header -->
+<section class="px-container-margin py-stack-lg">
+<div class="relative flex flex-col items-center justify-center p-stack-lg bg-surface-container-lowest rounded-xl shadow-sm overflow-hidden">
+<!-- Decorative Background Element -->
+<div class="absolute top-0 right-0 -mr-8 -mt-8 w-32 h-32 bg-primary/5 rounded-full blur-3xl"></div>
+<div class="relative z-10 flex flex-col items-center text-center">
+<div class="w-16 h-16 rounded-full bg-secondary-container flex items-center justify-center mb-stack-md">
+<span class="material-symbols-outlined text-primary text-[32px]">assignment_ind</span>
+</div>
+<h2 class="font-headline-md text-headline-md text-on-surface mb-unit">Checking Credentials</h2>
+<p class="font-label-md text-label-md text-on-surface-variant max-w-[240px]">We're making sure everything is in order for a safe marketplace.</p>
+</div>
+<!-- Simple Progress Sparkline -->
+<div class="w-full mt-stack-lg flex items-center gap-2">
+<div class="h-1.5 flex-1 bg-primary rounded-full"></div>
+<div class="h-1.5 flex-1 bg-secondary-container rounded-full relative overflow-hidden">
+<div class="absolute inset-0 bg-primary/30 animate-[shimmer_2s_infinite]" style="width: 50%;"></div>
+</div>
+</div>
+</div>
+</section>
+<!-- Verification Checklist -->
+<section class="px-container-margin space-y-stack-md">
+<!-- Identity Verification -->
+<div class="flex items-center p-stack-md bg-surface-container-low rounded-xl">
+<div class="w-12 h-12 rounded-full bg-primary-fixed flex items-center justify-center mr-stack-md">
+<span class="material-symbols-outlined text-on-primary-fixed-variant" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+</div>
+<div class="flex-1 min-w-0">
+<h3 class="font-headline-sm text-headline-sm text-on-surface truncate">Identity Verification</h3>
+<p class="font-label-md text-label-md text-primary font-bold uppercase tracking-wider">Verified</p>
+</div>
+<span class="material-symbols-outlined text-outline-variant">chevron_right</span>
+</div>
+<!-- Authority to Market -->
+<div class="flex items-center p-stack-md bg-surface-container-low rounded-xl">
+<div class="w-12 h-12 rounded-full bg-tertiary-fixed flex items-center justify-center mr-stack-md">
+<span class="material-symbols-outlined text-on-tertiary-fixed-variant animate-pulse">schedule</span>
+</div>
+<div class="flex-1 min-w-0">
+<h3 class="font-headline-sm text-headline-sm text-on-surface truncate">Authority to Market</h3>
+<p class="font-label-md text-label-md text-on-tertiary-fixed-variant font-medium">Pending Review</p>
+</div>
+<span class="material-symbols-outlined text-outline-variant">chevron_right</span>
+</div>
+</section>
+<!-- Contextual Guidance Card -->
+<section class="px-container-margin py-section-gap">
+<div class="p-stack-lg bg-primary-container rounded-xl text-on-primary-container relative overflow-hidden">
+<div class="relative z-10">
+<div class="flex items-start gap-stack-md mb-stack-md">
+<span class="material-symbols-outlined mt-1">support_agent</span>
+<p class="font-body-md text-body-md opacity-90 leading-relaxed">
+                        Our <span class="font-bold">Field Operations Officer</span> will review your documents within 24 hours. You can start creating your listing draft in the meantime.
+                    </p>
+</div>
+<div class="flex items-center gap-2 px-stack-md py-stack-sm bg-white/10 rounded-full w-fit">
+<span class="w-2 h-2 rounded-full bg-primary-fixed animate-ping"></span>
+<span class="font-label-sm text-label-sm">Free for all tenants</span>
+</div>
+</div>
+<!-- Subtle Mesh Pattern -->
+<div class="absolute inset-0 opacity-10 pointer-events-none">
+<svg height="100%" width="100%" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<pattern height="20" id="grid" patternunits="userSpaceOnUse" width="20">
+<circle cx="2" cy="2" fill="currentColor" r="1"></circle>
+</pattern>
+</defs>
+<rect fill="url(#grid)" height="100%" width="100%"></rect>
+</svg>
+</div>
+</div>
+</section>
+<!-- Sticky Bottom Action Area -->
+<div class="mt-auto px-container-margin pb-stack-lg pt-stack-md">
+<button class="w-full h-14 bg-primary text-on-primary rounded-xl font-headline-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-transform shadow-md">
+<span>Create my first listing</span>
+<span class="material-symbols-outlined">add_home</span>
+</button>
+<p class="text-center mt-stack-md font-label-md text-on-surface-variant">
+            Need help? <a class="text-primary font-bold underline" href="#">Contact Support</a>
+</p>
+</div>
+<script>
+        // Micro-interaction for the checklist items
+        document.querySelectorAll('.bg-surface-container-low').forEach(item => {
+            item.addEventListener('touchstart', () => {
+                item.classList.add('bg-surface-container-high');
+            });
+            item.addEventListener('touchend', () => {
+                item.classList.remove('bg-surface-container-high');
+            });
+        });
+
+        // Simple shimmer animation keyframe injection
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes shimmer {
+                0% { transform: translateX(-100%); }
+                100% { transform: translateX(200%); }
+            }
+        `;
+        document.head.appendChild(style);
+    </script>
+</div></main></body></html>
