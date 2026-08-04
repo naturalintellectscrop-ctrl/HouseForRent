@@ -914,3 +914,96 @@ model AuditEvent {
 
   @@map("audit_event")
 }
+
+// ============================================================================
+// Better Auth (Technical Architecture — auth provider evaluation)
+// ============================================================================
+//
+// Better Auth's own four tables, namespaced `ba_`.
+//
+// ── Why they sit BESIDE the existing auth, not on top of it ──
+// Better Auth's defaults collide head-on with this schema: it wants a model
+// `Session` on a table `session`, and §2.3 above already defines one — the
+// live refresh-token store, with an entirely different shape. Adopting the
+// default names would drop the table every signed-in user depends on, in
+// order to install an auth system that is not yet load-bearing.
+//
+// So both exist. `JwtAuthGuard` still resolves the session in §2.3; nothing
+// below is on a request path yet. The cutover is a data migration between
+// two live schemas — see `src/auth/better-auth/auth.ts` for what it needs.
+//
+// These are NOT in the 🔒 immutable set: Better Auth updates sessions and
+// deletes expired ones as a matter of course.
+
+model BetterAuthUser {
+  id            String   @id
+  name          String
+  email         String
+  emailVerified Boolean  @default(false) @map("email_verified")
+  image         String?
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+  /// Carried so a Better Auth session can produce the same
+  /// `AuthenticatedCaller` ({ userAccountId, partyId, role }) every guard in
+  /// this codebase destructures.
+  partyId       String?  @map("party_id")
+  role          String?
+
+  betterauthsessions BetterAuthSession[]
+  betterauthaccounts BetterAuthAccount[]
+
+  @@unique([email])
+  @@map("ba_user")
+}
+
+model BetterAuthSession {
+  id        String   @id
+  expiresAt DateTime @map("expires_at")
+  token     String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  ipAddress String?  @map("ip_address")
+  userAgent String?  @map("user_agent")
+  userId    String   @map("user_id")
+
+  betterauthuser BetterAuthUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([token])
+  @@index([userId])
+  @@map("ba_session")
+}
+
+model BetterAuthAccount {
+  id                    String    @id
+  accountId             String    @map("account_id")
+  providerId            String    @map("provider_id")
+  userId                String    @map("user_id")
+  accessToken           String?   @map("access_token")
+  refreshToken          String?   @map("refresh_token")
+  idToken               String?   @map("id_token")
+  accessTokenExpiresAt  DateTime? @map("access_token_expires_at")
+  refreshTokenExpiresAt DateTime? @map("refresh_token_expires_at")
+  scope                 String?
+  /// Better Auth's own credential column. The existing bcrypt hashes live
+  /// in `user_credential` and are NOT copied here — see the cutover notes.
+  password              String?
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+
+  betterauthuser BetterAuthUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("ba_account")
+}
+
+model BetterAuthVerification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime @map("expires_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@index([identifier])
+  @@map("ba_verification")
+}
