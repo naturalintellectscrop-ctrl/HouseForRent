@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import { api, ApiError, type Reconciliation } from '@/lib/api';
-import { AdminOnly, shillings, StatusDot, when } from '../../../ui';
+import { AdminOnly, Empty, shillings, StatusDot, when } from '../../../ui';
 
 /**
  * FR-10.4 — ledger ↔ custodian reconciliation.
@@ -91,9 +91,11 @@ export default async function ReconciliationPage() {
 
       <h2>Recent checks</h2>
       {history.length === 0 ? (
-        <div className="empty">
-          <p className="muted">No prior checks recorded.</p>
-        </div>
+        <Empty title="No prior checks recorded.">
+          A row is written each time reconciliation runs. Until the first run
+          completes there is no history to compare the current figures
+          against.
+        </Empty>
       ) : (
         <div className="table-scroll">
           <table>

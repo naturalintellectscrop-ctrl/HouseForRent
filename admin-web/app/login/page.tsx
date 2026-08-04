@@ -1,4 +1,5 @@
 import { LoginForm } from './login-form';
+import { Topbar } from '../ui';
 
 export default async function LoginPage(props: {
   searchParams: Promise<{ reason?: string }>;
@@ -7,21 +8,7 @@ export default async function LoginPage(props: {
 
   return (
     <>
-      <header className="topbar">
-        <div className="topbar-inner">
-          <span className="brand">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/logo.png"
-              alt=""
-              width={28}
-              height={28}
-              className="brand-mark"
-            />
-            House For Rent <span>· Field Console</span>
-          </span>
-        </div>
-      </header>
+      <Topbar />
 
       <main className="shell">
         <h1>Sign in</h1>

@@ -6,16 +6,17 @@ import { API_BASE } from '@/lib/api';
 import {
   Alert,
   Body,
+  BodySm,
   Button,
   Card,
   Divider,
   Heading,
+  Label,
   Pill,
   Row,
   Title,
-  Wordmark,
 } from '@/components/ui';
-import { radius, space, usePalette } from '@/lib/theme';
+import { space, usePalette } from '@/lib/theme';
 
 /**
  * The account tab.
@@ -41,32 +42,23 @@ export default function Account() {
   return (
     <ScrollView
       style={{ backgroundColor: p.bg }}
-      contentContainerStyle={{ padding: space.lg, paddingBottom: space.xxxl }}
+      contentContainerStyle={{ padding: space.screen, paddingBottom: space.section }}
     >
-      <View
-        style={{
-          alignItems: 'center',
-          paddingVertical: space.xl,
-          marginBottom: space.lg,
-          backgroundColor: p.surface,
-          borderRadius: radius.md,
-        }}
-      >
-        <Wordmark size="sm" />
-        <View style={{ marginTop: space.md }}>
-          <Pill tone="brand">{isLister ? 'Landlord' : 'Tenant'}</Pill>
-        </View>
-      </View>
-
-      <Title>Your account</Title>
-      <Body muted style={{ marginBottom: space.lg }}>
+      {/* The logo used to sit here in a card of its own. A user who has
+          opened the account tab of an app they installed does not need to
+          be told which app it is; what they came for is what follows. */}
+      <Title>Account</Title>
+      <BodySm style={{ marginBottom: space.lg }}>
         {isLister
           ? 'You are listing property with House For Rent.'
           : 'You are looking for a home. We charge you nothing.'}
-      </Body>
+      </BodySm>
 
       <Card>
-        <Row label="Account type" value={isLister ? 'Landlord' : 'Tenant'} />
+        <Row
+          label="Account type"
+          value={<Pill tone="brand">{isLister ? 'Landlord' : 'Tenant'}</Pill>}
+        />
         <Divider />
         <Row label="Reference" value={caller?.partyId.slice(0, 8) ?? '—'} />
       </Card>
@@ -75,14 +67,14 @@ export default function Account() {
         <>
           <Heading>What you pay us</Heading>
           <Card>
-            <Body style={{ fontWeight: '800' }}>
+            <Label>
               Nothing — not to search, not to view, not to move in.
-            </Body>
-            <Body muted style={{ marginTop: space.sm }}>
+            </Label>
+            <BodySm style={{ marginTop: space.sm }}>
               Our commission is paid by the landlord, and only when a let
               actually succeeds. That is why our officer meets you at the
               property at our own cost.
-            </Body>
+            </BodySm>
           </Card>
 
           <Heading>Your money</Heading>
@@ -92,11 +84,11 @@ export default function Account() {
               payment provider — never by us — until you confirm you have
               moved in.
             </Body>
-            <Body muted style={{ marginTop: space.sm }}>
+            <BodySm style={{ marginTop: space.sm }}>
               If you cannot move in, it comes back to you in full. There is
               no path in our system that releases it to a landlord before you
               confirm.
-            </Body>
+            </BodySm>
           </Card>
         </>
       )}
@@ -105,41 +97,49 @@ export default function Account() {
         <>
           <Heading>Our commission</Heading>
           <Card>
-            <Body style={{ fontWeight: '800' }}>
+            <Label>
               Charged only on a successful let.
-            </Body>
-            <Body muted style={{ marginTop: space.sm }}>
+            </Label>
+            <BodySm style={{ marginTop: space.sm }}>
               Calculated from one month of the rent agreed at signing. The
               rate is fixed for each let at the moment you sign its
               agreement — a later change to our standard rate cannot re-price
               a let already signed.
-            </Body>
+            </BodySm>
           </Card>
         </>
       )}
 
       <Heading>Identity</Heading>
       <Card>
-        <Body muted>
+        <BodySm>
           {isLister
             ? 'Verification is handled with our team when your property is inspected.'
             : 'Identity verification is required before you can request a viewing — our officer meets you at a stranger’s home, so we confirm who you are first. Our team completes this with you.'}
-        </Body>
+        </BodySm>
       </Card>
 
-      <Heading>Connection</Heading>
-      <Alert tone="note" message={`Talking to ${API_BASE}`} />
+      <View style={{ marginTop: space.xl }}>
+        <Button
+          label="Sign out"
+          variant="outline"
+          busy={busy}
+          onPress={async () => {
+            setBusy(true);
+            await signOut();
+            router.replace('/(auth)/welcome');
+          }}
+        />
+      </View>
 
-      <Button
-        label="Sign out"
-        variant="outline"
-        busy={busy}
-        onPress={async () => {
-          setBusy(true);
-          await signOut();
-          router.replace('/(auth)/welcome');
-        }}
-      />
+      {/* Which API this build points at is a question for whoever is
+          testing the build, not for a tenant. It stays reachable in
+          development and ships to nobody. */}
+      {__DEV__ && (
+        <View style={{ marginTop: space.lg }}>
+          <Alert tone="note" message={`Development build — API ${API_BASE}`} />
+        </View>
+      )}
     </ScrollView>
   );
 }

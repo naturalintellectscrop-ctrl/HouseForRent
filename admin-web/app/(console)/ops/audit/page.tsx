@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import { api, ApiError, type AuditEvent } from '@/lib/api';
-import { AdminOnly, when } from '../../../ui';
+import { AdminOnly, Empty, when } from '../../../ui';
 
 /**
  * NFR-2 — the audit trail for one subject.
@@ -67,15 +67,12 @@ export default async function AuditPage(props: {
       </form>
 
       {events === null ? null : events.length === 0 ? (
-        <div className="empty">
-          <p>
-            <strong>No events recorded for that subject.</strong>
-          </p>
-          <p className="muted">
-            Check the reference — an unknown subject and one with no events
-            look the same here.
-          </p>
-        </div>
+        <Empty title="No events recorded for that subject.">
+          Check the reference is complete and correct: a subject that does not
+          exist and one that exists but has never been touched are
+          indistinguishable from here, and the more common of the two is a
+          mistyped ID.
+        </Empty>
       ) : (
         events.map((event) => (
           <div key={event.id} className="card">

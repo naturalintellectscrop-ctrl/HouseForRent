@@ -12,19 +12,33 @@ import {
 import { formatShillings, suggestedUpfront } from '@/lib/money';
 import {
   Alert,
+  Attribute,
   Body,
+  BodySm,
   Button,
   Card,
   Divider,
   Heading,
   Loading,
-  PhotoPlaceholder,
   Pill,
   Price,
+  PropertyImage,
   Row,
   Screen,
+  Subtitle,
   Title,
+  TrustNote,
+  useCardSurface,
+  VerifiedBadge,
 } from '@/components/ui';
+import {
+  BathIcon,
+  BedIcon,
+  ClockIcon,
+  HomeIcon,
+  ShieldIcon,
+  VerifiedIcon,
+} from '@/components/icons';
 import { radius, space, usePalette } from '@/lib/theme';
 
 interface ListingDetail extends SearchResult {
@@ -36,15 +50,32 @@ interface ListingDetail extends SearchResult {
 }
 
 const CONDITION_LABEL: Record<string, string> = {
-  excellent: 'Excellent condition',
-  good: 'Good condition',
-  fair: 'Fair condition',
-  poor: 'Poor condition',
+  excellent: 'Excellent',
+  good: 'Good',
+  fair: 'Fair',
+  poor: 'Poor',
 };
 
+/**
+ * One property.
+ *
+ * ── The reference's structure, kept ──
+ * A full-bleed photograph, then a card that overlaps its lower edge
+ * carrying location and price, then attributes, description, the officer's
+ * report, the money, and a pinned action. The overlap is the one piece of
+ * visual flourish in the design and it earns its place: it binds the
+ * photograph to the facts about it, so the page reads as one object rather
+ * than an image with a list underneath.
+ *
+ * ── What the officer confirmed is projected, never written ──
+ * FR-4.3: the panel below is built from the STRUCTURED field report. There
+ * is no free-text path into it, and an unvisited home renders the absence
+ * plainly rather than an empty template that looks inspected.
+ */
 export default function ListingScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const p = usePalette();
+  const surface = useCardSurface();
   const { caller, authed } = useSession();
   const router = useRouter();
 
@@ -86,8 +117,6 @@ export default function ListingScreen() {
       } else if (err instanceof ApiError) {
         setOutcome({
           tone: 'error',
-          // The server's own reason: TENANT_NOT_VERIFIED and
-          // LISTING_NOT_VIEWABLE need different actions from the tenant.
           message:
             err.code === 'TENANT_NOT_VERIFIED'
               ? 'Finish verifying your identity before requesting a viewing. Our officer meets you at a stranger’s home, so we confirm who you are first.'
@@ -119,158 +148,237 @@ export default function ListingScreen() {
   const upfront = suggestedUpfront(data);
 
   return (
-    <ScrollView
-      style={{ backgroundColor: p.bg }}
-      contentContainerStyle={{ padding: space.lg, paddingBottom: space.xxxl }}
-      refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={refresh}
-          tintColor={p.brand}
-        />
-      }
-    >
-      {/* Hero. Real photography arrives when the media provider is swapped
-          from the V1 mock; until then this is honest about being absent. */}
-      <View
-        style={{
-          height: 190,
-          borderRadius: radius.md,
-          backgroundColor: p.brandSoft,
-          alignItems: 'center',
-          justifyContent: 'center',
-          marginBottom: space.lg,
-        }}
+    <View style={{ flex: 1, backgroundColor: p.bg }}>
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ paddingBottom: space.section }}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={refresh}
+            tintColor={p.brand}
+          />
+        }
       >
-        <PhotoPlaceholder size={80} radius={radius.md} />
-        <Body faint style={{ marginTop: space.sm }}>
-          Officer photos coming soon
-        </Body>
-      </View>
+        {/* Full-bleed, square-cornered: the photograph runs to the screen
+            edge, so the rounded card below it is what reads as "on top". */}
+        <PropertyImage uri={null} aspectRatio={4 / 3} radius={0}>
+          {data.isVerified && (
+            <View
+              style={{
+                position: 'absolute',
+                top: space.gutter,
+                left: space.gutter,
+              }}
+            >
+              <VerifiedBadge label="Verified by our team" />
+            </View>
+          )}
+        </PropertyImage>
 
-      <View
-        style={{
-          flexDirection: 'row',
-          justifyContent: 'space-between',
-          alignItems: 'flex-start',
-          gap: space.md,
-        }}
-      >
-        <View style={{ flex: 1 }}>
-          <Title>
-            {data.bedrooms} bed {data.propertyType}
-          </Title>
-          <Body muted>
-            {data.neighbourhoodName} · {data.landmarkText}
-          </Body>
+        <View style={{ paddingHorizontal: space.screen }}>
+          {/* Overlapping the image by 24px. */}
+          <View
+            style={[surface, { padding: space.gutter, marginTop: -space.lg }]}
+          >
+            <Freshness
+              daysSinceConfirmed={data.daysSinceConfirmed}
+              isStale={data.isStale}
+            />
+            <View style={{ marginTop: space.sm }}>
+              <Title>{data.neighbourhoodName}</Title>
+              {data.landmarkText ? (
+                <BodySm>{data.landmarkText}</BodySm>
+              ) : null}
+            </View>
+
+            <View style={{ marginVertical: space.md }}>
+              <Divider />
+            </View>
+
+            <Price
+              amount={formatShillings(data.monthlyRent)}
+              per="/ month"
+              size="lg"
+            />
+          </View>
+
+          {/* Attributes, as the reference's three-up row. */}
+          <View
+            style={{
+              flexDirection: 'row',
+              backgroundColor: p.surfaceAlt,
+              borderRadius: radius.control,
+              paddingVertical: space.gutter,
+              marginTop: space.gutter,
+            }}
+          >
+            <Attribute
+              icon={<BedIcon size={22} color={p.ink} />}
+              label={`${data.bedrooms} BED`}
+            />
+            <Attribute
+              icon={<BathIcon size={22} color={p.ink} />}
+              label={`${data.bathrooms} BATH`}
+            />
+            <Attribute
+              icon={<HomeIcon size={22} color={p.ink} />}
+              label={data.furnished.replace(/_/g, ' ').toUpperCase()}
+            />
+          </View>
+
+          {data.descriptionText ? (
+            <>
+              <Heading>About this property</Heading>
+              <Body tone="muted">{data.descriptionText}</Body>
+            </>
+          ) : null}
+
+          {/* ── FR-4.3 ── */}
+          <Heading>What our officer confirmed</Heading>
+          {data.fieldConfirmed ? (
+            <Card>
+              <View
+                style={{
+                  flexDirection: 'row',
+                  gap: space.md,
+                  marginBottom: space.sm,
+                }}
+              >
+                <VerifiedIcon size={22} />
+                <BodySm style={{ flex: 1 }}>
+                  One of our field officers visited this property and filed the
+                  report below. You are seeing what they recorded, not what the
+                  landlord wrote.
+                </BodySm>
+              </View>
+              <Divider />
+              <Row
+                label="Condition"
+                value={
+                  CONDITION_LABEL[data.fieldConfirmed.conditionRating] ??
+                  data.fieldConfirmed.conditionRating
+                }
+              />
+              <Divider />
+              <Row
+                label="Matches the listing"
+                value={data.fieldConfirmed.matchesListing ? 'Yes' : 'No'}
+              />
+              <Divider />
+              <Row
+                label="Available"
+                value={data.fieldConfirmed.isAvailable ? 'Yes' : 'No'}
+              />
+              <Divider />
+              <Row
+                label="Visited"
+                value={new Date(
+                  data.fieldConfirmed.reportedAt,
+                ).toLocaleDateString()}
+              />
+            </Card>
+          ) : (
+            // Never a fabricated placeholder — an unvisited home must not
+            // look inspected (FR-4.3).
+            <Card>
+              <BodySm>
+                No officer report is on file for this home yet. It cannot be
+                shown as verified until one is.
+              </BodySm>
+            </Card>
+          )}
+
+          <Heading>What you would pay</Heading>
+          <Card>
+            <Row label="Monthly rent" value={formatShillings(data.monthlyRent)} />
+            <Divider />
+            <Row label="Deposit" value={formatShillings(data.depositAmount)} />
+            <Divider />
+            <Row
+              label="Months upfront"
+              value={String(data.requiredMonthsUpfront)}
+            />
+            <Divider />
+            <Row label="Total upfront" value={formatShillings(upfront)} strong />
+          </Card>
+
+          <View style={{ marginTop: space.md }}>
+            <TrustNote
+              title="Safe Rent Guarantee"
+              icon={<ShieldIcon size={20} color={p.brand} />}
+            >
+              Your upfront payment is held in escrow by a licensed payment
+              provider — never by us — and released only once you confirm you
+              have moved in. House For Rent charges tenants nothing; the
+              landlord pays our commission.
+            </TrustNote>
+          </View>
+
+          {outcome && (
+            <View style={{ marginTop: space.gutter }}>
+              <Alert
+                tone={outcome.tone}
+                message={outcome.message}
+                code={outcome.code}
+              />
+            </View>
+          )}
         </View>
-        {data.isVerified && <Pill tone="ok">verified</Pill>}
-      </View>
+      </ScrollView>
 
-      <View style={{ marginTop: space.md, marginBottom: space.lg }}>
-        <Price
-          amount={formatShillings(data.monthlyRent)}
-          per="/month"
-          size="lg"
-        />
-      </View>
-
+      {/* Pinned, as in the reference: on a long page the action should not
+          require scrolling back to find it. */}
       <View
         style={{
-          flexDirection: 'row',
-          gap: space.sm,
-          flexWrap: 'wrap',
-          marginBottom: space.lg,
+          paddingHorizontal: space.screen,
+          paddingTop: space.md,
+          paddingBottom: space.lg,
+          backgroundColor: p.surface,
+          borderTopWidth: 1,
+          borderTopColor: p.line,
         }}
       >
-        <Pill tone="brand">free for tenants</Pill>
-        <Pill>{data.furnished.replace(/_/g, ' ')}</Pill>
-        <Pill>
-          {data.bathrooms} bath{data.bathrooms === 1 ? '' : 's'}
-        </Pill>
-        {data.isStale && <Pill tone="warn">availability not recent</Pill>}
+        <Button
+          label={caller ? 'Request a viewing' : 'Sign in to request a viewing'}
+          onPress={requestViewing}
+          busy={requesting}
+        />
+        <BodySm
+          tone="faint"
+          style={{ textAlign: 'center', marginTop: space.sm }}
+        >
+          A House For Rent officer meets you at the property — not the
+          landlord, and not a broker.
+        </BodySm>
       </View>
+    </View>
+  );
+}
 
-      {data.descriptionText ? (
-        <Card>
-          <Body>{data.descriptionText}</Body>
-        </Card>
-      ) : null}
+function Freshness({
+  daysSinceConfirmed,
+  isStale,
+}: {
+  daysSinceConfirmed: number | null;
+  isStale: boolean;
+}) {
+  const p = usePalette();
+  const stale = isStale || daysSinceConfirmed === null;
+  const colour = stale ? p.warn : p.inkSoft;
+  const text =
+    daysSinceConfirmed === null
+      ? 'Availability not yet confirmed'
+      : daysSinceConfirmed === 0
+        ? 'Available — confirmed today'
+        : `Available — confirmed ${daysSinceConfirmed} ${
+            daysSinceConfirmed === 1 ? 'day' : 'days'
+          } ago`;
 
-      {/* FR-4.3 — projected from the STRUCTURED field report, never free text. */}
-      <Heading>What our officer confirmed</Heading>
-      <Card>
-        {data.fieldConfirmed ? (
-          <>
-            <Row
-              label="Condition"
-              value={
-                CONDITION_LABEL[data.fieldConfirmed.conditionRating] ??
-                data.fieldConfirmed.conditionRating
-              }
-            />
-            <Divider />
-            <Row
-              label="Matches listing"
-              value={data.fieldConfirmed.matchesListing ? 'Yes' : 'No'}
-            />
-            <Divider />
-            <Row
-              label="Available"
-              value={data.fieldConfirmed.isAvailable ? 'Yes' : 'No'}
-            />
-            <Divider />
-            <Row
-              label="Visited"
-              value={new Date(
-                data.fieldConfirmed.reportedAt,
-              ).toLocaleDateString()}
-            />
-          </>
-        ) : (
-          // Never a fabricated placeholder — an unvisited home must not
-          // look inspected (FR-4.3).
-          <Body muted>No officer report on file for this home yet.</Body>
-        )}
-      </Card>
-
-      <Heading>What you would pay</Heading>
-      <Card>
-        <Row label="Monthly rent" value={formatShillings(data.monthlyRent)} />
-        <Divider />
-        <Row label="Deposit" value={formatShillings(data.depositAmount)} />
-        <Divider />
-        <Row
-          label="Months upfront"
-          value={String(data.requiredMonthsUpfront)}
-        />
-        <Divider />
-        <Row label="Total upfront" value={formatShillings(upfront)} strong />
-        <Body muted style={{ marginTop: space.md }}>
-          Paid into escrow and held until you confirm you have moved in.
-          House For Rent charges you nothing — the landlord pays our
-          commission.
-        </Body>
-      </Card>
-
-      {outcome && (
-        <Alert
-          tone={outcome.tone}
-          message={outcome.message}
-          code={outcome.code}
-        />
-      )}
-
-      <Heading>See it in person</Heading>
-      <Body muted style={{ marginBottom: space.md }}>
-        A House For Rent field officer will meet you at the property — not
-        the landlord, and not a broker.
-      </Body>
-      <Button
-        label={caller ? 'Request a viewing' : 'Sign in to request a viewing'}
-        onPress={requestViewing}
-        busy={requesting}
-      />
-    </ScrollView>
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+      <ClockIcon size={14} color={colour} />
+      <BodySm style={{ color: colour }}>{text}</BodySm>
+    </View>
   );
 }

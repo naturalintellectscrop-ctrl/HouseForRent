@@ -1,16 +1,14 @@
 import { useState } from 'react';
-import { Pressable, Text } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSession } from '@/lib/session';
 import { ApiError, OfflineError } from '@/lib/api';
-import { AuthSheet } from '@/components/auth-sheet';
-import { Alert, Button, Field } from '@/components/ui';
-import { usePalette } from '@/lib/theme';
+import { AuthScreen } from '@/components/auth-screen';
+import { Alert, Button, Field, RevealToggle } from '@/components/ui';
+import { space } from '@/lib/theme';
 
 export default function SignIn() {
   const { signIn } = useSession();
   const router = useRouter();
-  const p = usePalette();
 
   const [primaryPhone, setPhone] = useState('');
   const [password, setPassword] = useState('');
@@ -40,7 +38,7 @@ export default function SignIn() {
         setError({
           message:
             err.status === 401
-              ? 'Those details were not accepted.'
+              ? 'That phone number and password did not match an account.'
               : err.message,
           code: err.status === 401 ? undefined : err.code,
         });
@@ -53,21 +51,20 @@ export default function SignIn() {
   }
 
   return (
-    <AuthSheet
-      title="Welcome Back"
-      subtitle="Login to continue your home search"
-      footerPrompt="Don't have an account?"
-      footerAction="Sign Up"
+    <AuthScreen
+      title="Sign in"
+      subtitle="Use the phone number you registered with."
+      footerPrompt="No account yet?"
+      footerAction="Create one"
       footerHref="/(auth)/register"
     >
       {error && <Alert tone="error" message={error.message} code={error.code} />}
 
       <Field
         label="Phone number"
-        glyph="☏"
         value={primaryPhone}
         onChangeText={setPhone}
-        placeholder="Enter your phone number"
+        placeholder="07XX XXX XXX"
         keyboardType="phone-pad"
         autoCapitalize="none"
         autoComplete="tel"
@@ -77,10 +74,9 @@ export default function SignIn() {
 
       <Field
         label="Password"
-        glyph="🔒"
         value={password}
         onChangeText={setPassword}
-        placeholder="Enter your password"
+        placeholder="Your password"
         secureTextEntry={!reveal}
         autoCapitalize="none"
         autoComplete="current-password"
@@ -89,20 +85,19 @@ export default function SignIn() {
         onSubmitEditing={submit}
         returnKeyType="go"
         trailing={
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={reveal ? 'Hide password' : 'Show password'}
-            onPress={() => setReveal((v) => !v)}
-            hitSlop={12}
-          >
-            <Text style={{ color: p.inkFaint, fontSize: 16 }}>
-              {reveal ? '◎' : '👁'}
-            </Text>
-          </Pressable>
+          <RevealToggle
+            revealed={reveal}
+            onToggle={() => setReveal((v) => !v)}
+          />
         }
       />
 
-      <Button label="Login" onPress={submit} busy={busy} />
-    </AuthSheet>
+      <Button
+        label="Sign in"
+        onPress={submit}
+        busy={busy}
+        style={{ marginTop: space.sm }}
+      />
+    </AuthScreen>
   );
 }

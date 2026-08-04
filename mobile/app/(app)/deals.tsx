@@ -1,4 +1,5 @@
-import { FlatList, RefreshControl, View } from 'react-native';
+import { FlatList, View } from 'react-native';
+import { RefreshControl } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuthedRequest } from '@/lib/use-request';
 import { useSession } from '@/lib/session';
@@ -7,15 +8,18 @@ import { formatShillingsCompact } from '@/lib/money';
 import {
   Alert,
   Body,
+  BodySm,
+  Button,
   Card,
+  Divider,
   Empty,
   Heading,
   Loading,
-  PhotoPlaceholder,
   Pill,
   Price,
   Title,
 } from '@/components/ui';
+import { CalendarIcon, ChevronRightIcon } from '@/components/icons';
 import { DealStatePill } from '@/components/deal-status';
 import { space, usePalette } from '@/lib/theme';
 
@@ -66,9 +70,13 @@ export default function Deals() {
   return (
     <FlatList
       style={{ backgroundColor: p.bg }}
-      contentContainerStyle={{ padding: space.lg, paddingBottom: space.xxxl }}
+      contentContainerStyle={{
+        paddingHorizontal: space.screen,
+        paddingBottom: space.section,
+      }}
       data={deals.data ?? []}
       keyExtractor={(item) => item.id}
+      ItemSeparatorComponent={() => <View style={{ height: space.md }} />}
       refreshControl={
         <RefreshControl
           refreshing={refreshing}
@@ -80,61 +88,63 @@ export default function Deals() {
         />
       }
       ListHeaderComponent={
-        <View>
+        <View style={{ paddingTop: space.md }}>
           <Title>{isLister ? 'Your lettings' : 'Your rentals'}</Title>
-          <Body muted style={{ marginBottom: space.lg }}>
+          <BodySm style={{ marginTop: space.xs }}>
             {isLister
               ? 'Every let in progress, and where each one has reached.'
               : 'Money you place with us is held in escrow until you confirm you have moved in.'}
-          </Body>
+          </BodySm>
 
           {deals.error && (
-            <Alert
-              tone="error"
-              message={deals.error.message}
-              code={deals.error.code}
-            />
+            <View style={{ marginTop: space.gutter }}>
+              <Alert
+                tone="error"
+                message={deals.error.message}
+                code={deals.error.code}
+              />
+            </View>
           )}
           {deals.loading && <Loading />}
 
           {!isLister && (viewings.data?.length ?? 0) > 0 && (
             <>
               <Heading>Your viewings</Heading>
-              {viewings.data!.map((viewing) => (
-                <Card key={viewing.id} style={{ padding: space.md }}>
-                  <View style={{ flexDirection: 'row', gap: space.md }}>
-                    <PhotoPlaceholder size={64} glyph="⌕" />
-                    <View style={{ flex: 1 }}>
-                      <View
-                        style={{
-                          flexDirection: 'row',
-                          justifyContent: 'space-between',
-                          alignItems: 'flex-start',
-                          gap: space.sm,
-                          marginBottom: space.xs,
-                        }}
-                      >
-                        <Body style={{ fontWeight: '800', flex: 1 }}>
-                          {new Date(viewing.scheduledFor).toLocaleString(
-                            undefined,
-                            {
-                              weekday: 'short',
-                              day: 'numeric',
-                              month: 'short',
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            },
-                          )}
-                        </Body>
-                        <Pill tone={VIEWING_TONE[viewing.status]}>
-                          {VIEWING_LABEL[viewing.status]}
-                        </Pill>
-                      </View>
-                      <Body muted>{VIEWING_EXPLAIN[viewing.status]}</Body>
+              <View style={{ gap: space.md, marginBottom: space.md }}>
+                {viewings.data!.map((viewing) => (
+                  <Card key={viewing.id}>
+                    {/* No thumbnail: a viewing is an appointment, and the
+                        only things that matter about it are when it is and
+                        what happens next. */}
+                    <View
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: space.md,
+                        marginBottom: space.sm,
+                      }}
+                    >
+                      <CalendarIcon size={20} color={p.inkSoft} />
+                      <Body style={{ flex: 1 }}>
+                        {new Date(viewing.scheduledFor).toLocaleString(
+                          undefined,
+                          {
+                            weekday: 'short',
+                            day: 'numeric',
+                            month: 'short',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          },
+                        )}
+                      </Body>
+                      <Pill tone={VIEWING_TONE[viewing.status]}>
+                        {VIEWING_LABEL[viewing.status]}
+                      </Pill>
                     </View>
-                  </View>
-                </Card>
-              ))}
+                    <BodySm>{VIEWING_EXPLAIN[viewing.status]}</BodySm>
+                  </Card>
+                ))}
+              </View>
               <Heading>Rentals</Heading>
             </>
           )}
@@ -143,50 +153,49 @@ export default function Deals() {
       ListEmptyComponent={
         deals.loading || deals.error ? null : (
           <Empty
-            title={isLister ? 'No lets yet' : 'No rentals yet'}
-            glyph="♡"
+            title={isLister ? 'No lets in progress' : 'No rentals yet'}
             message={
               isLister
-                ? 'A let opens once one of our officers introduces a tenant to your property.'
-                : 'Find a home and request a viewing. A rental opens after you have seen the place with one of our officers.'
+                ? 'A let opens here once one of our officers has introduced a tenant to one of your properties. Nothing is owed until one completes.'
+                : 'A rental opens after you have seen a home with one of our officers. Start by finding one and requesting a viewing.'
+            }
+            action={
+              isLister ? null : (
+                <Button
+                  label="Find a home"
+                  onPress={() => router.push('/(app)/home')}
+                />
+              )
             }
           />
         )
       }
       renderItem={({ item }) => (
-        <Card
-          onPress={() => router.push(`/(app)/deal/${item.id}`)}
-          style={{ padding: space.md }}
-        >
-          <View style={{ flexDirection: 'row', gap: space.md }}>
-            <PhotoPlaceholder size={64} />
-            <View style={{ flex: 1, justifyContent: 'center' }}>
-              <View
-                style={{
-                  flexDirection: 'row',
-                  justifyContent: 'space-between',
-                  alignItems: 'flex-start',
-                  gap: space.sm,
-                }}
-              >
-                <View style={{ flex: 1 }}>
-                  {item.monthlyRentSnapshot ? (
-                    <Price
-                      amount={formatShillingsCompact(item.monthlyRentSnapshot)}
-                      per="/month"
-                    />
-                  ) : (
-                    <Body style={{ fontWeight: '800' }}>
-                      Rent not yet fixed
-                    </Body>
-                  )}
-                </View>
-                <DealStatePill status={item.status} />
-              </View>
-              <Body faint style={{ marginTop: space.xs }}>
+        <Card onPress={() => router.push(`/(app)/deal/${item.id}`)}>
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: space.md,
+            }}
+          >
+            <View style={{ flex: 1, gap: space.xs }}>
+              {item.monthlyRentSnapshot ? (
+                <Price
+                  amount={formatShillingsCompact(item.monthlyRentSnapshot)}
+                  per="/ month"
+                />
+              ) : (
+                <Body>Rent not yet fixed</Body>
+              )}
+              <BodySm tone="faint">
                 Opened {new Date(item.createdAt).toLocaleDateString()}
-              </Body>
+              </BodySm>
             </View>
+            <View style={{ alignItems: 'flex-end', gap: space.sm }}>
+              <DealStatePill status={item.status} />
+            </View>
+            <ChevronRightIcon size={20} color={p.inkFaint} />
           </View>
         </Card>
       )}

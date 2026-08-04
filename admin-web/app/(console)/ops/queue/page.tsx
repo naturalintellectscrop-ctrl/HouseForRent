@@ -1,6 +1,7 @@
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { api, ApiError, type VerificationQueue } from '@/lib/api';
-import { when } from '../../../ui';
+import { Empty, when } from '../../../ui';
 
 /**
  * FR-10.2 — the verification queue.
@@ -39,14 +40,19 @@ export default async function QueuePage() {
       </p>
 
       {queue.rows.length === 0 ? (
-        <div className="empty">
-          <p>
-            <strong>Nothing waiting.</strong>
-          </p>
-          <p className="muted">
-            Every listing is either live or withdrawn.
-          </p>
-        </div>
+        <Empty
+          title="Nothing waiting."
+          action={
+            <Link href="/ops" className="btn btn-secondary">
+              Check the launch gate
+            </Link>
+          }
+        >
+          Every listing is either live or withdrawn, so no property is
+          currently held up on a field visit, a mandate or an agreement. An
+          empty queue with the launch gate unmet means the constraint is
+          supply, not verification.
+        </Empty>
       ) : (
         <div className="table-scroll">
           <table>

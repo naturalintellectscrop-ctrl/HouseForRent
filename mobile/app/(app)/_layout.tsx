@@ -1,8 +1,13 @@
 import { Redirect, Tabs } from 'expo-router';
-import { Text, View, type ColorValue } from 'react-native';
 import { useSession } from '@/lib/session';
 import { Loading } from '@/components/ui';
-import { font, radius, space, usePalette } from '@/lib/theme';
+import {
+  CalendarIcon,
+  HomeIcon,
+  PersonIcon,
+  SearchIcon,
+} from '@/components/icons';
+import { fontFamily, space, type as t, usePalette } from '@/lib/theme';
 
 /**
  * The signed-in shell.
@@ -32,21 +37,32 @@ export default function AppLayout() {
 
   const isLister = caller.role === 'lister';
 
+  /**
+   * ── Icon and label, both ──
+   * The tabs once rendered `⌂`, `♡` and `◑` — obscure code points that fall
+   * back to an empty box on many Android builds, with the label appearing
+   * only on the tab already selected, which is the one tab whose identity
+   * nobody needed explained. They are now drawn paths from the app's own
+   * icon set, and every tab carries its name at all times.
+   */
   return (
     <Tabs
       screenOptions={{
         headerStyle: { backgroundColor: p.bg },
         headerShadowVisible: false,
         headerTintColor: p.ink,
-        headerTitleStyle: { fontWeight: '800', fontSize: font.heading },
+        headerTitleStyle: { fontFamily: fontFamily.semibold, fontSize: 18 },
         tabBarActiveTintColor: p.brand,
         tabBarInactiveTintColor: p.inkFaint,
-        tabBarShowLabel: false,
+        tabBarLabelStyle: {
+          fontFamily: fontFamily.semibold,
+          fontSize: t.labelSm.fontSize,
+        },
         tabBarStyle: {
           backgroundColor: p.surface,
           borderTopWidth: 1,
           borderTopColor: p.line,
-          height: 68,
+          height: 64,
           paddingTop: space.sm,
         },
         sceneStyle: { backgroundColor: p.bg },
@@ -55,46 +71,30 @@ export default function AppLayout() {
       <Tabs.Screen
         name="home"
         options={{
-          title: isLister ? 'My listings' : 'Find a home',
-          tabBarAccessibilityLabel: isLister ? 'My listings' : 'Search',
-          tabBarIcon: ({ color, focused }) => (
-            <TabGlyph
-              glyph={isLister ? '⌂' : '⌕'}
-              label={isLister ? 'Listings' : 'Search'}
-              color={color}
-              focused={focused}
-            />
-          ),
+          title: isLister ? 'Your listings' : 'Find a home',
+          tabBarLabel: isLister ? 'Listings' : 'Search',
+          tabBarIcon: ({ color }) =>
+            isLister ? (
+              <HomeIcon size={24} color={color} />
+            ) : (
+              <SearchIcon size={24} color={color} />
+            ),
         }}
       />
       <Tabs.Screen
         name="deals"
         options={{
-          title: isLister ? 'Lettings' : 'My rentals',
-          tabBarAccessibilityLabel: isLister ? 'Lettings' : 'My rentals',
-          tabBarIcon: ({ color, focused }) => (
-            <TabGlyph
-              glyph="♡"
-              label={isLister ? 'Lettings' : 'Rentals'}
-              color={color}
-              focused={focused}
-            />
-          ),
+          title: isLister ? 'Your lettings' : 'Your rentals',
+          tabBarLabel: isLister ? 'Lettings' : 'Rentals',
+          tabBarIcon: ({ color }) => <CalendarIcon size={24} color={color} />,
         }}
       />
       <Tabs.Screen
         name="account"
         options={{
           title: 'Account',
-          tabBarAccessibilityLabel: 'Account',
-          tabBarIcon: ({ color, focused }) => (
-            <TabGlyph
-              glyph="◑"
-              label="Account"
-              color={color}
-              focused={focused}
-            />
-          ),
+          tabBarLabel: 'Account',
+          tabBarIcon: ({ color }) => <PersonIcon size={24} color={color} />,
         }}
       />
       {/* Detail routes live in the tab tree but are not themselves tabs. */}
@@ -102,58 +102,7 @@ export default function AppLayout() {
         name="listing/[id]"
         options={{ href: null, title: 'Home details' }}
       />
-      <Tabs.Screen
-        name="deal/[id]"
-        options={{ href: null, title: 'Rental' }}
-      />
+      <Tabs.Screen name="deal/[id]" options={{ href: null, title: 'Rental' }} />
     </Tabs>
-  );
-}
-
-/**
- * The active tab fills into a brand-tinted pill with its label beside the
- * glyph, as in the reference; inactive tabs show the glyph alone.
- *
- * Text glyphs rather than an icon font: a typeface download for five
- * symbols is a real cost on a slow connection (NFR-5). The label is what
- * carries meaning for a screen reader — `tabBarAccessibilityLabel` above
- * names every tab regardless of which is focused.
- */
-function TabGlyph({
-  glyph,
-  label,
-  color,
-  focused,
-}: {
-  glyph: string;
-  label: string;
-  // `ColorValue`, not `string`: React Navigation passes the platform's own
-  // colour representation, which on Android can be an opaque handle.
-  color: ColorValue;
-  focused: boolean;
-}) {
-  const p = usePalette();
-
-  return (
-    <View
-      style={{
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: space.xs,
-        paddingHorizontal: focused ? space.md : space.sm,
-        paddingVertical: space.sm,
-        borderRadius: radius.pill,
-        backgroundColor: focused ? p.brandSoft : 'transparent',
-        minWidth: 44,
-        justifyContent: 'center',
-      }}
-    >
-      <Text style={{ color, fontSize: 18, lineHeight: 22 }}>{glyph}</Text>
-      {focused ? (
-        <Text style={{ color, fontSize: font.tiny, fontWeight: '800' }}>
-          {label}
-        </Text>
-      ) : null}
-    </View>
   );
 }

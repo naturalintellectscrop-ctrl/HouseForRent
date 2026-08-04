@@ -50,8 +50,8 @@ export function CloseVisit({
         <form action={conduct}>
           <button
             type="submit"
+            className="btn-block"
             disabled={!canConduct || conducting}
-            style={{ width: '100%' }}
           >
             {conducting ? 'Closing…' : 'Close visit'}
           </button>
@@ -60,9 +60,8 @@ export function CloseVisit({
         <form action={noShow}>
           <button
             type="submit"
-            className="btn-danger"
+            className="btn-danger btn-block"
             disabled={marking}
-            style={{ width: '100%' }}
           >
             {marking ? 'Recording…' : 'Tenant did not show'}
           </button>
