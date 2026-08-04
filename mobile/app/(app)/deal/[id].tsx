@@ -7,7 +7,7 @@ import type { DealDetail } from '@/lib/api';
 import { formatShillings, isValidAmount, parseShillings } from '@/lib/money';
 import {
   Alert,
-  Body,
+  BodySm,
   Button,
   Card,
   Divider,
@@ -17,8 +17,10 @@ import {
   Row,
   Screen,
   Title,
+  TrustNote,
 } from '@/components/ui';
 import { DealStatePill, explainState } from '@/components/deal-status';
+import { ShieldIcon } from '@/components/icons';
 import { radius, space, usePalette } from '@/lib/theme';
 
 /**
@@ -91,7 +93,7 @@ export default function DealScreen() {
   return (
     <ScrollView
       style={{ backgroundColor: p.bg }}
-      contentContainerStyle={{ padding: space.lg, paddingBottom: space.xxxl }}
+      contentContainerStyle={{ padding: space.screen, paddingBottom: space.section }}
       refreshControl={
         <RefreshControl
           refreshing={refreshing}
@@ -113,27 +115,20 @@ export default function DealScreen() {
         <DealStatePill status={deal.status} />
       </View>
 
-      <Body muted style={{ marginBottom: space.lg }}>
+      <BodySm style={{ marginBottom: space.lg }}>
         {explainState(deal.status, audience)}
-      </Body>
+      </BodySm>
 
       {/* The guarantee, made visible while it is actually holding. */}
       {protectedNow && isTenant && (
-        <View
-          style={{
-            backgroundColor: p.brandSoft,
-            borderRadius: radius.md,
-            padding: space.lg,
-            marginBottom: space.lg,
-          }}
-        >
-          <Body style={{ color: p.brand, fontWeight: '800' }}>
-            Your money is protected
-          </Body>
-          <Body muted style={{ marginTop: space.xs }}>
+        <View style={{ marginBottom: space.lg }}>
+          <TrustNote
+            title="Your money is protected"
+            icon={<ShieldIcon size={20} color={p.brand} />}
+          >
             Held in escrow by a licensed provider — never by us — until you
             confirm you have moved in.
-          </Body>
+          </TrustNote>
         </View>
       )}
 
@@ -185,13 +180,12 @@ export default function DealScreen() {
       {isTenant && deal.status === 'agreement_signed' && (
         <>
           <Heading>Pay into escrow</Heading>
-          <Body muted style={{ marginBottom: space.md }}>
+          <BodySm style={{ marginBottom: space.md }}>
             We hold this until you confirm you have moved in. If you cannot
             move in, it comes back to you in full.
-          </Body>
+          </BodySm>
           <Field
-            label="Amount"
-            glyph="₴"
+            label="Amount in shillings"
             value={amount}
             onChangeText={setAmount}
             placeholder="e.g. 4000000"
@@ -217,11 +211,11 @@ export default function DealScreen() {
       {isTenant && deal.status === 'escrow_funded' && (
         <>
           <Heading>Have you moved in?</Heading>
-          <Body muted style={{ marginBottom: space.md }}>
+          <BodySm style={{ marginBottom: space.md }}>
             Only confirm once you are actually in the property. This is what
             releases your money to the landlord — until you do, it stays
             protected.
-          </Body>
+          </BodySm>
           <Button
             label="I have moved in"
             onPress={() => act('confirm-move-in')}
@@ -233,11 +227,11 @@ export default function DealScreen() {
       {!isTenant && deal.status === 'tenant_matched' && (
         <>
           <Heading>Sign the agreement</Heading>
-          <Body muted style={{ marginBottom: space.md }}>
+          <BodySm style={{ marginBottom: space.md }}>
             Signing fixes the commission rate and the monthly rent for this
             let. Neither can change afterwards, whatever our standard rate
             does.
-          </Body>
+          </BodySm>
           <Alert
             tone="note"
             message="Signing is done from the agreement you accepted when listing. Contact us if the terms need to change before you sign."
@@ -248,7 +242,7 @@ export default function DealScreen() {
       <Heading>History</Heading>
       <Card>
         {transitions.length === 0 ? (
-          <Body muted>No changes recorded yet.</Body>
+          <BodySm>No changes recorded yet.</BodySm>
         ) : (
           transitions.map((t, i) => (
             <View key={t.id}>

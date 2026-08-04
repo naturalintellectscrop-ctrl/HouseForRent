@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { requireStaff } from '@/lib/session';
 import { logoutAction } from '../actions/auth';
+import { Topbar } from '../ui';
 
 /**
  * The console shell. `requireStaff()` here is a convenience gate, not the
@@ -16,20 +17,9 @@ export default async function ConsoleLayout({
 
   return (
     <>
-      <header className="topbar">
-        <div className="topbar-inner">
-          <Link href="/" className="brand">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/logo.png"
-              alt=""
-              width={28}
-              height={28}
-              className="brand-mark"
-            />
-            House For Rent <span>· Field Console</span>
-          </Link>
-          <nav>
+      <Topbar
+        nav={
+          <>
             <Link href="/">Today</Link>
             <Link href="/introductions">Evidence</Link>
             {/* Ops is FOO-reachable for the launch gate and the queue; the
@@ -42,9 +32,9 @@ export default async function ConsoleLayout({
             <form action={logoutAction}>
               <button type="submit">Sign out</button>
             </form>
-          </nav>
-        </div>
-      </header>
+          </>
+        }
+      />
       <main className="shell">{children}</main>
     </>
   );

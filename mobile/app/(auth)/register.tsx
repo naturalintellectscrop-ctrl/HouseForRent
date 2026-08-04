@@ -1,11 +1,19 @@
 import { useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSession } from '@/lib/session';
 import { ApiError, OfflineError } from '@/lib/api';
-import { AuthSheet } from '@/components/auth-sheet';
-import { Alert, Body, Button, ChipRow, Field } from '@/components/ui';
-import { space, usePalette } from '@/lib/theme';
+import { AuthScreen } from '@/components/auth-screen';
+import {
+  Alert,
+  Body,
+  BodySm,
+  Button,
+  ChipRow,
+  Field,
+  RevealToggle,
+} from '@/components/ui';
+import { space, type as t, usePalette } from '@/lib/theme';
 
 /**
  * Self-service registration.
@@ -15,10 +23,11 @@ import { space, usePalette } from '@/lib/theme';
  * decide mandates and change configuration, so allowing signup to mint one
  * would make every downstream control decorative.
  *
- * The reference collects Name / Email / Password / Confirm. Ours collects
- * Name / PHONE / Password, because accounts here are keyed to a phone
- * number — verification runs against a Ugandan NIN and MSISDN, and the
- * escrow rails are mobile money. There is no email field to add.
+ * Three fields and a role, which is every field the platform actually
+ * needs. Accounts are keyed to a phone number because verification runs
+ * against a Ugandan NIN and MSISDN and the escrow rails are mobile money —
+ * an email box would be a field we collect, store under the DPA, and never
+ * read.
  */
 export default function Register() {
   const { register } = useSession();
@@ -35,6 +44,8 @@ export default function Register() {
     null,
   );
   const [busy, setBusy] = useState(false);
+
+  const mismatch = confirm.length > 0 && confirm !== password;
 
   async function submit() {
     if (!displayName.trim() || !primaryPhone.trim() || !password) {
@@ -60,38 +71,22 @@ export default function Register() {
     }
   }
 
-  const eye = (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={reveal ? 'Hide password' : 'Show password'}
-      onPress={() => setReveal((v) => !v)}
-      hitSlop={12}
-    >
-      <Text style={{ color: p.inkFaint, fontSize: 16 }}>
-        {reveal ? '◎' : '👁'}
-      </Text>
-    </Pressable>
+  const reveals = (
+    <RevealToggle revealed={reveal} onToggle={() => setReveal((v) => !v)} />
   );
 
   return (
-    <AuthSheet
-      title="Create an Account"
-      subtitle="Sign up to start your home search"
-      footerPrompt="Already have an account?"
-      footerAction="Login"
+    <AuthScreen
+      title="Create your account"
+      subtitle="You will need a Ugandan phone number. We verify it, and it is how money reaches you."
+      footerPrompt="Already registered?"
+      footerAction="Sign in"
       footerHref="/(auth)/sign-in"
     >
       {error && <Alert tone="error" message={error.message} code={error.code} />}
 
       <View style={{ marginBottom: space.lg }}>
-        <Text
-          style={{
-            fontSize: 13,
-            fontWeight: '700',
-            color: p.ink,
-            marginBottom: space.sm,
-          }}
-        >
+        <Text style={[t.labelMd, { color: p.ink, marginBottom: space.sm }]}>
           I am
         </Text>
         <ChipRow
@@ -102,17 +97,16 @@ export default function Register() {
             { value: 'lister', label: 'Renting out property' },
           ]}
         />
-        <Body faint style={{ marginTop: space.sm }}>
+        <BodySm tone="faint" style={{ marginTop: space.sm }}>
           You can be both later — this only sets where you start.
-        </Body>
+        </BodySm>
       </View>
 
       <Field
-        label="Name"
-        glyph="◑"
+        label="Full name"
         value={displayName}
         onChangeText={setDisplayName}
-        placeholder="Enter your full name"
+        placeholder="As it appears on your ID"
         autoCapitalize="words"
         autoComplete="name"
         editable={!busy}
@@ -120,44 +114,46 @@ export default function Register() {
 
       <Field
         label="Phone number"
-        glyph="☏"
         value={primaryPhone}
         onChangeText={setPhone}
-        placeholder="Enter your phone number"
+        placeholder="07XX XXX XXX"
         keyboardType="phone-pad"
         autoCapitalize="none"
         autoComplete="tel"
         editable={!busy}
-        hint="Used to verify you and to move money. Not shared with landlords."
+        hint="Used to verify you and to move money. Never shared with landlords."
       />
 
       <Field
         label="Password"
-        glyph="🔒"
         value={password}
         onChangeText={setPassword}
-        placeholder="Enter your password"
+        placeholder="At least 8 characters"
         secureTextEntry={!reveal}
         autoCapitalize="none"
         autoComplete="new-password"
         editable={!busy}
-        trailing={eye}
+        trailing={reveals}
       />
 
       <Field
-        label="Confirm Password"
-        glyph="🔒"
+        label="Confirm password"
         value={confirm}
         onChangeText={setConfirm}
-        placeholder="Re-enter your password"
+        placeholder="Type it again"
         secureTextEntry={!reveal}
         autoCapitalize="none"
         editable={!busy}
-        error={confirm.length > 0 && confirm !== password}
-        trailing={eye}
+        error={mismatch ? 'This does not match the password above.' : null}
+        trailing={reveals}
       />
 
-      <Button label="Sign Up" onPress={submit} busy={busy} />
-    </AuthSheet>
+      <Button
+        label="Create account"
+        onPress={submit}
+        busy={busy}
+        style={{ marginTop: space.sm }}
+      />
+    </AuthScreen>
   );
 }

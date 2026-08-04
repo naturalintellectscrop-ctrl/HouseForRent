@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { api, ApiError, type Viewing } from '@/lib/api';
-import { StatusPill, when } from '../ui';
+import { Empty, StatusPill, when } from '../ui';
 
 /**
  * The dispatch board (FR-5.2).
@@ -33,15 +33,12 @@ export default async function DispatchBoard() {
       </p>
 
       {viewings.length === 0 ? (
-        <div className="empty">
-          <p>
-            <strong>Nothing assigned to you right now.</strong>
-          </p>
-          <p className="muted">
-            Dispatch assigns visits within the service corridor. New ones will
-            appear here.
-          </p>
-        </div>
+        <Empty title="Nothing assigned to you right now.">
+          Dispatch assigns visits within the service corridor, and new ones
+          appear here without you needing to refresh a queue. If you were
+          expecting one, an admin can confirm whether it has been assigned
+          yet.
+        </Empty>
       ) : (
         viewings.map((viewing) => (
           <Link
@@ -53,7 +50,7 @@ export default async function DispatchBoard() {
               <span className="card-title">{when(viewing.scheduledFor)}</span>
               <StatusPill status={viewing.status} />
             </div>
-            <p className="muted" style={{ margin: 0 }}>
+            <p className="muted">
               Listing {viewing.listingId.slice(0, 8)} · tenant{' '}
               {viewing.tenantPartyId.slice(0, 8)}
             </p>

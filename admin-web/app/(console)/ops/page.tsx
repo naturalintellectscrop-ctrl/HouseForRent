@@ -8,7 +8,7 @@ import {
   type Reconciliation,
 } from '@/lib/api';
 import { currentRole } from '@/lib/session';
-import { BarList, StatusDot, when } from '../../ui';
+import { BarList, Empty, StatusDot, when } from '../../ui';
 
 /**
  * FR-10.3 / FR-10.4 — the operations overview.
@@ -126,7 +126,7 @@ export default async function OpsPage() {
           <div className="kpis">
             <div className="kpi">
               <p className="kpi-label">Ledger vs custodian</p>
-              <p className="kpi-value" style={{ fontSize: '1.05rem' }}>
+              <p className="kpi-value kpi-state">
                 {reconciliation.latest.isReconciled ? (
                   <StatusDot tone="good" label="Agrees" />
                 ) : (
@@ -136,7 +136,7 @@ export default async function OpsPage() {
             </div>
             <div className="kpi">
               <p className="kpi-label">Ledger internally</p>
-              <p className="kpi-value" style={{ fontSize: '1.05rem' }}>
+              <p className="kpi-value kpi-state">
                 {reconciliation.internallyConsistent ? (
                   <StatusDot tone="good" label="Balances" />
                 ) : (
@@ -146,7 +146,7 @@ export default async function OpsPage() {
             </div>
             <div className="kpi">
               <p className="kpi-label">Last checked</p>
-              <p className="kpi-value" style={{ fontSize: '1.05rem' }}>
+              <p className="kpi-value kpi-state">
                 {when(reconciliation.latest.runAt)}
               </p>
             </div>
@@ -168,11 +168,10 @@ export default async function OpsPage() {
         <>
           <h2>Deals by state</h2>
           {deals.total === 0 ? (
-            <div className="empty">
-              <p>
-                <strong>No deals yet.</strong>
-              </p>
-            </div>
+            <Empty title="No deals yet.">
+              A deal opens when an officer records an introduction, so this
+              stays empty until visits start closing as conducted.
+            </Empty>
           ) : (
             <>
               <BarList

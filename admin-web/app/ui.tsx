@@ -3,6 +3,80 @@
  * `use client` here, so none of this reaches the browser as JavaScript.
  */
 
+import Link from 'next/link';
+
+/**
+ * The brand lockup and the bar it sits in.
+ *
+ * Written once. The login page and the console shell each had their own
+ * copy of this markup — same image, same width, same trailing "· Field
+ * Console" — which is two places for one lockup to drift and the reason a
+ * signed-out officer could end up looking at a slightly different header
+ * from the one they see after signing in.
+ *
+ * `nav` is a slot rather than a prop list because the two callers genuinely
+ * differ: signed out there is nothing to navigate to.
+ */
+export function Topbar({ nav }: { nav?: React.ReactNode }) {
+  const lockup = (
+    <>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src="/logo.png"
+        alt=""
+        width={28}
+        height={28}
+        className="brand-mark"
+      />
+      House For Rent <span>· Field Console</span>
+    </>
+  );
+
+  return (
+    <header className="topbar">
+      <div className="topbar-inner">
+        {/* Signed out there is nowhere for the mark to link to, so it is not
+            a link — a control that navigates nowhere is worse than plain
+            text for anyone driving this by keyboard. */}
+        {nav ? (
+          <Link href="/" className="brand">
+            {lockup}
+          </Link>
+        ) : (
+          <span className="brand">{lockup}</span>
+        )}
+        {nav ? <nav>{nav}</nav> : null}
+      </div>
+    </header>
+  );
+}
+
+/**
+ * An empty state: what is not here, and what to do about it.
+ *
+ * The `action` slot is the point. "Nothing waiting" tells an ops officer the
+ * query returned zero rows; it does not tell them whether that is the system
+ * working or the system broken, nor where to go next. Every call site is
+ * required to at least think about that second sentence.
+ */
+export function Empty({
+  title,
+  children,
+  action,
+}: {
+  title: string;
+  children?: React.ReactNode;
+  action?: React.ReactNode;
+}) {
+  return (
+    <div className="empty">
+      <p className="empty-title">{title}</p>
+      {children ? <p>{children}</p> : null}
+      {action}
+    </div>
+  );
+}
+
 const STATUS_TONE: Record<string, string> = {
   requested: 'pill',
   scheduled: 'pill pill-warn',
@@ -65,9 +139,9 @@ export function AdminOnly({ what }: { what: string }) {
         officer, so the server declined the request.
       </p>
       <p>
-        <a href="/" className="btn btn-secondary">
+        <Link href="/" className="btn btn-secondary">
           Back to your visits
-        </a>
+        </Link>
       </p>
     </>
   );

@@ -1,7 +1,7 @@
 import { View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSession } from '@/lib/session';
-import { Body, Button, Screen, Title, Wordmark } from '@/components/ui';
+import { BodySm, Button, Screen, Title, Wordmark } from '@/components/ui';
 import { space } from '@/lib/theme';
 
 /**
@@ -24,12 +24,12 @@ export default function StaffRedirect() {
       </View>
 
       <Title>Use the field console</Title>
-      <Body muted style={{ marginBottom: space.xl }}>
+      <BodySm style={{ marginBottom: space.xl }}>
         This app is for tenants and landlords. Your account is{' '}
         {caller?.role === 'admin' ? 'an admin' : 'a field officer'}, and the
         officer and admin tools live in the web console — built for form
         density, and it works on a phone browser.
-      </Body>
+      </BodySm>
 
       <Button
         label="Sign out"

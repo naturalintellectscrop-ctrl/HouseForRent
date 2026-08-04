@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import { api, ApiError, type ConfigVersion } from '@/lib/api';
-import { AdminOnly, when } from '../../../ui';
+import { AdminOnly, Empty, when } from '../../../ui';
 import { ConfigVersionForm, RateVersionForm } from './version-forms';
 
 /**
@@ -63,14 +63,9 @@ export default async function ConfigPage(props: {
       <ConfigVersionForm keys={CONFIG_KEYS} />
 
       <h2>History — {selected}</h2>
-      <form method="get" className="field">
+      <form method="get" className="filter-form">
         <label htmlFor="history-key">Show history for</label>
-        <select
-          id="history-key"
-          name="key"
-          defaultValue={selected}
-          style={{ marginBottom: '0.6rem' }}
-        >
+        <select id="history-key" name="key" defaultValue={selected}>
           {CONFIG_KEYS.map((k) => (
             <option key={k} value={k}>
               {k}
@@ -83,16 +78,13 @@ export default async function ConfigPage(props: {
       </form>
 
       {versions.length === 0 ? (
-        <div className="empty">
-          <p>
-            <strong>No versions recorded for {selected}.</strong>
-          </p>
-          <p className="muted">
-            Reading an unset parameter throws rather than defaulting — a
-            silent fallback is how an unvalidated business value becomes
-            permanent without anyone deciding it.
-          </p>
-        </div>
+        <Empty title={`No versions recorded for ${selected}.`}>
+          Nothing reads this parameter successfully until a first version
+          exists: reading an unset parameter throws rather than defaulting,
+          because a silent fallback is how an unvalidated business value
+          becomes permanent without anyone deciding it. Set the first version
+          under <strong>Parameters</strong> above.
+        </Empty>
       ) : (
         <div className="table-scroll">
           <table>

@@ -62,12 +62,12 @@ export default async function ViewingPage(props: {
 
   return (
     <>
-      <p className="muted" style={{ marginBottom: '0.75rem' }}>
+      <p className="muted backlink">
         <Link href="/">← Your visits</Link>
       </p>
 
       <div className="card-head">
-        <h1 style={{ margin: 0 }}>{when(viewing.scheduledFor)}</h1>
+        <h1>{when(viewing.scheduledFor)}</h1>
         <StatusPill status={viewing.status} />
       </div>
       <p className="lede">
@@ -135,7 +135,7 @@ export default async function ViewingPage(props: {
       <h2>Close the visit</h2>
       {introduction ? (
         <div className="card">
-          <p style={{ marginTop: 0 }}>
+          <p>
             <span className="pill pill-ok">introduction recorded</span>
           </p>
           <dl className="dl">
@@ -148,7 +148,7 @@ export default async function ViewingPage(props: {
             <dt>Officer</dt>
             <dd className="mono">{introduction.fooPartyId}</dd>
           </dl>
-          <p className="muted" style={{ marginBottom: 0 }}>
+          <p className="muted">
             This record is immutable and persists independently of any deal.
           </p>
         </div>

@@ -1,6 +1,7 @@
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { api, ApiError, type IntroductionRecord } from '@/lib/api';
-import { when } from '../../ui';
+import { Empty, when } from '../../ui';
 
 /**
  * FR-5.3 / FR-8.3 — introduction records as queryable circumvention
@@ -75,14 +76,24 @@ export default async function IntroductionsPage(props: {
       </form>
 
       {records.length === 0 ? (
-        <div className="empty">
-          <p>
-            <strong>No introduction records match.</strong>
-          </p>
-          <p className="muted">
-            Records appear here as officers close visits.
-          </p>
-        </div>
+        <Empty
+          title={
+            query
+              ? 'No introduction records match those filters.'
+              : 'No introduction records yet.'
+          }
+          action={
+            query ? (
+              <Link href="/introductions" className="btn btn-secondary">
+                Clear filters
+              </Link>
+            ) : undefined
+          }
+        >
+          {query
+            ? 'Party IDs must match in full. A record is only created when an officer closes a visit as conducted, so a viewing that was cancelled or missed leaves none.'
+            : 'A record is written each time an officer closes a visit as conducted. They will appear here as visits are completed.'}
+        </Empty>
       ) : (
         records.map((record) => (
           <div key={record.id} className="card">

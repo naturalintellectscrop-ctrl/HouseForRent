@@ -7,13 +7,15 @@ import { formatShillings, formatShillingsCompact } from '@/lib/money';
 import {
   Alert,
   Body,
+  BodySm,
   Button,
   Card,
   Divider,
   Empty,
   Heading,
   Loading,
-  PhotoPlaceholder,
+  PropertyImage,
+  VerifiedBadge,
   Pill,
   Price,
   Row,
@@ -68,7 +70,7 @@ export default function ListerListings() {
     <>
       <FlatList
         style={{ backgroundColor: p.bg }}
-        contentContainerStyle={{ padding: space.lg, paddingBottom: space.xxxl }}
+        contentContainerStyle={{ padding: space.screen, paddingBottom: space.section }}
         data={data ?? []}
         keyExtractor={(item) => item.id}
         refreshControl={
@@ -81,10 +83,10 @@ export default function ListerListings() {
         ListHeaderComponent={
           <View>
             <Title>Your listings</Title>
-            <Body muted style={{ marginBottom: space.lg }}>
+            <BodySm style={{ marginBottom: space.lg }}>
               A listing goes live once our officer has verified it in person
               and you have accepted the agreement.
-            </Body>
+            </BodySm>
             {error && (
               <Alert tone="error" message={error.message} code={error.code} />
             )}
@@ -94,78 +96,94 @@ export default function ListerListings() {
         ListEmptyComponent={
           loading || error ? null : (
             <Empty
-              title="No listings yet"
-              glyph="⌂"
-              message="Listings are created with our team while we verify the property. Get in touch to add one."
+              title="No properties listed yet"
+              message="Listings are created with our team during the inspection visit, so that what goes live is what an officer actually saw. Contact us to arrange one."
             />
           )
         }
+        ItemSeparatorComponent={() => <View style={{ height: space.gutter }} />}
         renderItem={({ item }) => (
-          <Card style={{ padding: space.md }}>
-            <View style={{ flexDirection: 'row', gap: space.md }}>
-              <PhotoPlaceholder size={88} />
-
-              <View style={{ flex: 1 }}>
-                <View
-                  style={{
-                    flexDirection: 'row',
-                    justifyContent: 'space-between',
-                    alignItems: 'flex-start',
-                    gap: space.sm,
-                  }}
-                >
-                  <Body style={{ fontWeight: '800', flex: 1 }}>
-                    {item.bedrooms} bed · {item.neighbourhoodName}
-                  </Body>
-                  <Pill tone={item.publicationState === 'live' ? 'ok' : 'warn'}>
-                    {item.publicationState.replace(/_/g, ' ')}
+          <Card padded={false} style={{ overflow: 'hidden' }}>
+            {/* The reference puts the listing's state on the photograph, and
+                it is right: a landlord scanning their inventory is looking
+                for the one that needs them, not reading each row. */}
+            <PropertyImage uri={null} aspectRatio={16 / 9} radius={0}>
+              <View
+                style={{
+                  position: 'absolute',
+                  top: space.md,
+                  left: space.md,
+                }}
+              >
+                {item.publicationState === 'live' ? (
+                  <VerifiedBadge label="Live" />
+                ) : (
+                  <Pill tone={item.blockedBy.length > 0 ? 'warn' : 'ok'}>
+                    {item.blockedBy.length > 0
+                      ? 'Action needed'
+                      : 'Ready to publish'}
                   </Pill>
-                </View>
-
-                <Body faint style={{ marginTop: 2 }}>
-                  {item.landmarkText}
-                </Body>
-
-                <View style={{ marginTop: space.sm }}>
-                  <Price
-                    amount={formatShillingsCompact(item.monthlyRent)}
-                    per="/month"
-                  />
-                </View>
+                )}
               </View>
-            </View>
+            </PropertyImage>
 
-            {item.blockedBy.length > 0 ? (
+            <View style={{ padding: space.gutter }}>
               <View
                 style={{
                   flexDirection: 'row',
-                  gap: space.sm,
-                  flexWrap: 'wrap',
-                  marginTop: space.md,
+                  alignItems: 'baseline',
+                  justifyContent: 'space-between',
+                  gap: space.md,
                 }}
               >
-                {item.blockedBy.map((blocker) => (
-                  <Pill key={blocker} tone="warn">
-                    {BLOCKER_COPY[blocker] ?? blocker}
-                  </Pill>
-                ))}
-              </View>
-            ) : item.publicationState !== 'live' ? (
-              <View style={{ marginTop: space.md }}>
-                <Pill tone="ok">ready to publish</Pill>
-              </View>
-            ) : null}
-
-            {!item.hasAcceptedAgreement && (
-              <View style={{ marginTop: space.md }}>
-                <Button
-                  label="Review the agreement"
-                  variant="outline"
-                  onPress={() => setAgreementFor(item.id)}
-                  style={{ marginBottom: 0 }}
+                <Body style={{ flex: 1 }} numberOfLines={1}>
+                  {item.bedrooms} bed · {item.neighbourhoodName}
+                </Body>
+                <Price
+                  amount={formatShillingsCompact(item.monthlyRent)}
+                  per="/ month"
                 />
               </View>
-            )}
+
+              {item.landmarkText ? (
+                <BodySm tone="faint" style={{ marginTop: 2 }}>
+                  {item.landmarkText}
+                </BodySm>
+              ) : null}
+
+              {/* What it is waiting on, named. A bare "pending" tells a
+                  landlord nothing they can act on; `blockedBy` comes from
+                  the server's own publish gate, so this list is always the
+                  same four preconditions the backend enforces. */}
+              {item.blockedBy.length > 0 && (
+                <View style={{ marginTop: space.md, gap: space.sm }}>
+                  <BodySm>Waiting on:</BodySm>
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      gap: space.sm,
+                      flexWrap: 'wrap',
+                    }}
+                  >
+                    {item.blockedBy.map((blocker) => (
+                      <Pill key={blocker} tone="warn">
+                        {BLOCKER_COPY[blocker] ?? blocker}
+                      </Pill>
+                    ))}
+                  </View>
+                </View>
+              )}
+
+              {!item.hasAcceptedAgreement && (
+                <View style={{ marginTop: space.gutter }}>
+                  <Button
+                    label="Review the agreement"
+                    variant="outline"
+                    onPress={() => setAgreementFor(item.id)}
+                  />
+                </View>
+              )}
+            </View>
           </Card>
         )}
       />
@@ -239,7 +257,7 @@ function AgreementSheet({
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: p.bg }}
-      contentContainerStyle={{ padding: space.lg, paddingBottom: space.xxxl }}
+      contentContainerStyle={{ padding: space.screen, paddingBottom: space.section }}
     >
       <Title>Listing agreement</Title>
 
