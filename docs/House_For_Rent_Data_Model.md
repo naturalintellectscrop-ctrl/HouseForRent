@@ -359,7 +359,7 @@ path out, and the Move-In Guarantee broken. The only two exits from
 
 **Status.** Raised at Stage 3 (Checkpoint 3), implemented as the strict
 reading pending a ruling, ruled and ratified at Stage 4 review. The
-implementation (`backend/src/deals/deal-state-machine.ts`) already matched
+implementation (`apps/api/src/deals/deal-state-machine.ts`) already matched
 this and is asserted by test; no code change accompanied the amendment.
 
 ---

@@ -4,9 +4,9 @@ Three surfaces, three different targets. Only one of them belongs on Vercel.
 
 | Surface | What it is | Where it goes |
 |---|---|---|
-| `admin-web` | Next.js 16 field console | **Vercel** |
-| `backend` | NestJS + Prisma, long-lived server | **Not Vercel** — see §3 |
-| `mobile` | Expo / React Native | **EAS Build** → Play Store |
+| `apps/console` | Next.js 16 field console | **Vercel** |
+| `apps/api` | NestJS + Prisma, long-lived server | **Not Vercel** — see §3 |
+| `apps/mobile` | Expo / React Native | **EAS Build** → Play Store |
 
 ---
 
@@ -14,7 +14,7 @@ Three surfaces, three different targets. Only one of them belongs on Vercel.
 
 Two facts decide the whole shape of the deployment.
 
-**The database is already hosted.** `backend/.env` points at Supabase
+**The database is already hosted.** `apps/api/.env` points at Supabase
 (`aws-0-eu-central-1.pooler.supabase.com`, session pooler, port 5432). There
 is nothing to provision — but note the region: eu-central-1 from Kampala is
 roughly 150–200ms per round trip, and registration already takes >15s
@@ -22,20 +22,20 @@ because bcrypt runs on top of that latency. If you have not load-tested
 signup, do it before launch.
 
 **The console never calls the API from the browser.** Every page in
-`admin-web` is a server component using `lib/api.ts` server-side. That is
+`apps/console` is a server component using `lib/api.ts` server-side. That is
 why `CORS_ORIGINS` can stay unset and why the API does not need to be
 public — only reachable from Vercel's servers.
 
 ---
 
-## 2. `admin-web` → Vercel
+## 2. `apps/console` → Vercel
 
 ### 2.1 Import
 
 Vercel → **Add New → Project** → import the GitHub repo. Because the repo is
 a monorepo, set:
 
-- **Root Directory**: `admin-web`
+- **Root Directory**: `apps/console`
 - **Framework Preset**: Next.js (auto-detected)
 - Build command, output dir, install command: leave as detected
 
@@ -48,7 +48,7 @@ Preview both:
 API_BASE_URL=https://<your-api-host>
 ```
 
-Check `admin-web/lib/api.ts` for the exact variable name it reads and add
+Check `apps/console/lib/api.ts` for the exact variable name it reads and add
 any others it requires. Anything the browser must see has to be prefixed
 `NEXT_PUBLIC_` — and deliberately, **the API base URL should not be**. It is
 read server-side only; making it public would advertise the API origin to
@@ -76,7 +76,7 @@ throws instead of redirecting, `API_BASE_URL` is wrong or unreachable.
 
 ---
 
-## 3. `backend` — why not Vercel
+## 3. `apps/api` — why not Vercel
 
 You can force NestJS onto Vercel functions, but this app should not go
 there:
@@ -130,7 +130,7 @@ Run it as a release step, before the new version starts serving.
 
 ---
 
-## 4. `mobile` → EAS
+## 4. `apps/mobile` → EAS
 
 Not Vercel. Expo builds through EAS:
 
@@ -158,9 +158,9 @@ rebuilt; an over-the-air update alone will not pick it up.
 
 ## 5. Order of operations
 
-1. Deploy `backend` to the container host; confirm `/v1/listings` answers.
+1. Deploy `apps/api` to the container host; confirm `/v1/listings` answers.
 2. Run `prisma migrate deploy` against Supabase.
-3. Deploy `admin-web` to Vercel with `API_BASE_URL` pointed at step 1.
+3. Deploy `apps/console` to Vercel with `API_BASE_URL` pointed at step 1.
 4. Turn on Deployment Protection.
 5. `eas build` the mobile app with `EXPO_PUBLIC_API_BASE_URL` pointed at
    step 1.
@@ -173,7 +173,7 @@ signs in.
 
 ## 6. Known issues to resolve first
 
-- **`npm install` is broken in `mobile/`.** `react-dom@19.2.8` (transitive,
+- **`npm install` is broken in `apps/mobile/`.** `react-dom@19.2.8` (transitive,
   via expo-router) requires `react@^19.2.8` against a pinned `19.2.3`.
   Everything needs `--legacy-peer-deps`. A CI install will fail without it.
 - **The backend test suite has no `DATABASE_URL` wiring.** Bare `jest` has no

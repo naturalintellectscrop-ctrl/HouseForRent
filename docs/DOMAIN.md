@@ -1,6 +1,6 @@
 # House For Rent — Domain Model (Stage 0)
 
-Maps every table in `backend/prisma/schema.prisma` to the SSOT decision(s) and
+Maps every table in `apps/api/prisma/schema.prisma` to the SSOT decision(s) and
 Data Model section it implements. This is Stage 0 output only: schema and
 migrations, no business logic, no APIs, no screens.
 
@@ -13,7 +13,7 @@ database is `npx prisma dev`'s bundled local Postgres server (a real
 PostgreSQL 17.5, compiled to WASM), started once per session:
 
 ```
-cd backend
+cd apps/api
 npx prisma dev          # prints DATABASE_URL / SHADOW_DATABASE_URL, keep running
 ```
 
@@ -188,7 +188,7 @@ migration of existing rows — matching the constraint Data_Model.md §11 sets.
    (a manual fix, a future bug, an ad-hoc script) must still be rejected for
    the financial source of truth to actually be one. Corrections remain new
    rows (e.g. a reversing `ledger_entry` posting), never edits. Proven in
-   `backend/src/schema/immutability.spec.ts` — one test per immutable table,
+   `apps/api/src/schema/immutability.spec.ts` — one test per immutable table,
    each writing a real row then asserting both an UPDATE and a DELETE against
    it are rejected; plus one control-case test on `session` (not immutable),
    asserting update/delete on it *succeed*, so the test methodology itself is
@@ -226,7 +226,7 @@ the Implementation Prompt Pack's sequencing.
 
 ## Stage 1 — Identity & Verification service
 
-Built as `backend/src/identity/`, a NestJS module wired into `AppModule`:
+Built as `apps/api/src/identity/`, a NestJS module wired into `AppModule`:
 
 - **`IdentityProvider` interface** (`interfaces/identity-provider.interface.ts`)
   — `verifyNin`/`verifyPhone`/`verifySelfieMatch`, each returning only
@@ -285,7 +285,7 @@ No SSOT conflict encountered in Stage 1.
 
 ## Stage 2 — The double-entry ledger
 
-Built as `backend/src/ledger/`:
+Built as `apps/api/src/ledger/`:
 
 - **`LedgerService`** — `post()` is the single choke point through which
   every ledger write passes. It calls `validate()` first, which rejects
@@ -368,7 +368,7 @@ No SSOT conflict encountered in Stage 2.
 
 ## Stage 3 — Deal state machine & commission engine
 
-Built as `backend/src/deals/`:
+Built as `apps/api/src/deals/`:
 
 - **`deal-state-machine.ts`** — `ALLOWED_TRANSITIONS` is a direct,
   line-by-line encoding of the Data_Model.md §7.3 table, `Object.freeze`d so
@@ -458,7 +458,7 @@ provider. No HTTP routes.
 
 ## Stage 4 — Payments abstraction & escrow orchestration
 
-Built as `backend/src/payments/`, plus orchestration changes in
+Built as `apps/api/src/payments/`, plus orchestration changes in
 `DealsService`:
 
 - **`PaymentProvider` interface** — `collectToEscrow` / `releaseTo` /
@@ -559,8 +559,8 @@ Amendment A1 in `Data_Model.md` — the strict reading, confirmed.
 
 ## Stage 5 — Listings, search, availability
 
-Three modules: `backend/src/config/`, `backend/src/listings/`,
-`backend/src/search/`.
+Three modules: `apps/api/src/config/`, `apps/api/src/listings/`,
+`apps/api/src/search/`.
 
 ### Config module (built here because Stage 5 is the first consumer)
 
@@ -645,7 +645,7 @@ No SSOT conflict encountered in Stage 5.
 
 ## Stage 6 — Modular screening pipeline & tenant onboarding
 
-Built as `backend/src/screening/`.
+Built as `apps/api/src/screening/`.
 
 ### The pipeline (FR-6.1, FR-6.2)
 
@@ -825,7 +825,7 @@ retries are safe today, but the `Idempotency-Key` header is not yet read).
 
 ## Stage 7 — Field Operations Officer workflow
 
-Two modules: `backend/src/viewings/` and `backend/src/media/`.
+Two modules: `apps/api/src/viewings/` and `apps/api/src/media/`.
 
 ### THE invariant, and where it actually lives
 
@@ -1007,8 +1007,8 @@ an amendment; one API-spec gap was closed as Amendment A2.
 
 ## Stage 8 — Full flow integration, agreements, audit, observability
 
-Three new modules — `backend/src/audit/`, `backend/src/agreements/`,
-`backend/src/admin/` — plus `src/integration/full-journey.spec.ts`.
+Three new modules — `apps/api/src/audit/`, `apps/api/src/agreements/`,
+`apps/api/src/admin/` — plus `src/integration/full-journey.spec.ts`.
 
 ### The gap Stage 8 opened with
 
@@ -1179,7 +1179,7 @@ see below.
 The Implementation Prompt Pack heads Stage 5 *"Listings, search, availability
 **(tenant/landlord app begins)**"*. It did not begin there, correctly: no
 HTTP API existed until the API layer was built between Stages 6 and 7. The
-FOO/admin console (Stage 7b, `admin-web/`) is the first surface built. The
+FOO/admin console (Stage 7b, `apps/console/`) is the first surface built. The
 **tenant/landlord app is therefore the one piece genuinely behind the pack's
 own schedule**, and is the natural next body of work — it is not part of
 Stage 8, whose acceptance criteria are all server-side or admin-facing.
@@ -1189,7 +1189,7 @@ Amendment A3.
 
 ---
 
-## Stage 7b — the FOO console (`admin-web/`)
+## Stage 7b — the FOO console (`apps/console/`)
 
 Next.js 16 App Router. Technical Architecture §7 calls for *"web, not mobile,
 for V1 — it's an internal ops tool where clarity, form density, and speed
@@ -1201,7 +1201,7 @@ browser with low bandwidth"*.
 §7 again: *"all money, state, verification, and commission logic is
 server-side … It renders server state and issues intent."*
 
-Nothing in `admin-web/` decides whether a viewing may be conducted. The
+Nothing in `apps/console/` decides whether a viewing may be conducted. The
 disabled **Close visit** button renders `canConduct` **as the server
 reported it** — which is why `GET /v1/viewings/{id}` returns `canConduct`
 and `whatIsMissing` rather than the client deriving them. A rule
