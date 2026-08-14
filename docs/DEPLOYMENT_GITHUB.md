@@ -59,7 +59,7 @@ branch is the same category of mistake one layer up.
 
 There is no workflow yet, and two things must be fixed before one will work:
 
-**a. `mobile/` cannot `npm install` cleanly.** `react-dom@19.2.8`
+**a. `apps/mobile/` cannot `npm install` cleanly.** `react-dom@19.2.8`
 (transitive, via expo-router) requires `react@^19.2.8` against a pinned
 `19.2.3`. CI needs `--legacy-peer-deps`, or the conflict resolved properly.
 
@@ -83,7 +83,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with: { node-version: 20, cache: npm, cache-dependency-path: admin-web/package-lock.json }
+        with: { node-version: 20, cache: npm, cache-dependency-path: apps/console/package-lock.json }
       - run: npm ci
       - run: npx tsc --noEmit
       - run: npx eslint .
@@ -119,7 +119,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with: { node-version: 20, cache: npm, cache-dependency-path: backend/package-lock.json }
+        with: { node-version: 20, cache: npm, cache-dependency-path: apps/api/package-lock.json }
       - run: npm ci
       - run: npx prisma generate
       - run: node test-infra/apply-migrations.mjs
@@ -148,7 +148,7 @@ Vercel deploys from the repo, so this is a GitHub concern too.
 
 1. Vercel → **Add New → Project** → **Import Git Repository** → authorise
    the GitHub App on this repo.
-2. **Root Directory: `admin-web`** (monorepo — without this it builds the
+2. **Root Directory: `apps/console`** (monorepo — without this it builds the
    repo root and fails).
 3. Environment variables per `docs/DEPLOYMENT_VERCEL.md`.
 
@@ -162,18 +162,18 @@ Once connected:
 Vercel Authentication → Standard). Preview URLs are public by default, and
 a preview of a staff console for a system that moves money should not be.
 
-Vercel only ever builds `admin-web`. The backend and the mobile app are
+Vercel only ever builds `apps/console`. The backend and the mobile app are
 deployed separately — see `docs/DEPLOYMENT_VERCEL.md` §3 and §4.
 
 ---
 
 ## 6. Secrets — check before making the repo public
 
-`backend/.env` is gitignored and is **not** in the repository; verify before
+`apps/api/.env` is gitignored and is **not** in the repository; verify before
 any visibility change:
 
 ```bash
-git log --all --full-history -- backend/.env      # expect: no output
+git log --all --full-history -- apps/api/.env      # expect: no output
 ```
 
 It contains a live Supabase password and the JWT secret. If it ever appears
@@ -187,7 +187,7 @@ value was already published.
 1. Branch from `main`.
 2. Push; open a PR. CI runs; Vercel posts a preview.
 3. Review, merge.
-4. Vercel deploys `admin-web` to production automatically.
+4. Vercel deploys `apps/console` to production automatically.
 5. Deploy the backend to its container host, running
    `npx prisma migrate deploy` as a release step **before** the new version
    serves traffic.

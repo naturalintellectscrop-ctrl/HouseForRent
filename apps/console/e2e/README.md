@@ -13,10 +13,10 @@ file cannot export a plain object (`IDLE`), a defect that passed both
 
 ## Running them
 
-1. Start the database (from `backend/`): `npx prisma dev`
-2. Start the API (from `backend/`):
+1. Start the database (from `apps/api/`): `npx prisma dev`
+2. Start the API (from `apps/api/`):
    `DATABASE_URL=... npx ts-node -r tsconfig-paths/register src/main.ts`
-3. Build and start the console (from `admin-web/`):
+3. Build and start the console (from `apps/console/`):
    `npm run build && npx next start -p 3100`
 4. Seed a scenario — a FOO account with assigned viewings — and export:
 

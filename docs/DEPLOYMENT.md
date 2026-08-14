@@ -6,9 +6,9 @@ useless without the database.
 
 | Surface | Goes to | Why |
 |---|---|---|
-| `backend/` (NestJS) | **Render / Railway / Fly** — a persistent Node process | The ledger runs multi-statement transactions and Prisma holds a connection pool. Serverless is the worst fit for exactly that workload: a cold start on every money endpoint, and a new connection per invocation. |
-| `admin-web/` (Next.js 16) | **Vercel** | It is what Vercel runs. Server components, server actions, no special config. |
-| `mobile/` (Expo) | **EAS Build → Play Store** | An APK, not a website. |
+| `apps/api/` (NestJS) | **Render / Railway / Fly** — a persistent Node process | The ledger runs multi-statement transactions and Prisma holds a connection pool. Serverless is the worst fit for exactly that workload: a cold start on every money endpoint, and a new connection per invocation. |
+| `apps/console/` (Next.js 16) | **Vercel** | It is what Vercel runs. Server components, server actions, no special config. |
+| `apps/mobile/` (Expo) | **EAS Build → Play Store** | An APK, not a website. |
 | PostgreSQL | **Neon / Supabase / provider-managed** | Never on Vercel. |
 
 ---
@@ -26,7 +26,7 @@ problem**, so the first hosted database is where the standard path gets
 proven. Do it before wiring up any hosting, not during a deploy.
 
 ```bash
-cd backend
+cd apps/api
 
 # The DIRECT connection string, not the pooled one — Prisma Migrate takes
 # advisory locks that a transaction-mode pooler silently drops.
@@ -79,7 +79,7 @@ Any host that runs a persistent Node process. Render is the shortest path.
 **Start:** `npm run start:prod`
 **Health check path:** `/`
 
-Environment variables — see `backend/.env.example` for the full annotated
+Environment variables — see `apps/api/.env.example` for the full annotated
 list:
 
 | Variable | Value |
@@ -101,7 +101,7 @@ list:
 ### Provision the first admin
 
 Staff accounts are never self-served (API Spec §3), so the first `admin`
-has to be created directly against the database. `backend/seed-console-admin.mjs`
+has to be created directly against the database. `apps/api/seed-console-admin.mjs`
 does this; run it once with `DATABASE_URL` pointed at production, then
 **change that password immediately** — it is a known value in a committed
 file.
@@ -117,7 +117,7 @@ The console is a standard Next.js 16 app. It needs **no `vercel.json`** —
 the defaults are correct.
 
 1. **Import the repository** at vercel.com/new.
-2. **Set the Root Directory to `admin-web`.** This is the one setting that
+2. **Set the Root Directory to `apps/console`.** This is the one setting that
    matters: the repository is a monorepo, and without it Vercel builds the
    wrong thing. Vercel will then auto-detect Next.js, `npm run build`, and
    `.next`.
@@ -152,7 +152,7 @@ the defaults are correct.
 Not deployed here. `npx expo run:android` builds a dev client onto a
 connected device; `eas build` produces a store artefact when you are ready.
 
-The one thing to change for a real build: `mobile/lib/api.ts` resolves the
+The one thing to change for a real build: `apps/mobile/lib/api.ts` resolves the
 API base from `EXPO_PUBLIC_API_BASE_URL`, falling back to the Android
 emulator's host alias. Point it at the deployed API.
 

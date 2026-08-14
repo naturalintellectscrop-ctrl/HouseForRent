@@ -847,3 +847,26 @@ td:has(> .tags) {
     scroll-behavior: auto !important;
   }
 }
+
+/* ── download page ──────────────────────────────────────── */
+
+.steps {
+  padding-left: 1.25rem;
+  margin: 0 0 1rem;
+  color: var(--ink);
+  font-size: 0.9375rem;
+}
+
+.steps li {
+  margin-bottom: 0.5rem;
+  line-height: 1.55;
+}
+
+.steps code,
+.empty code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.8125rem;
+  background: var(--bg-soft);
+  padding: 0.1rem 0.3rem;
+  border-radius: 3px;
+}
