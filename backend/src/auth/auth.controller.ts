@@ -5,10 +5,14 @@ import { Roles } from './roles.decorator';
 import { Caller } from './caller.decorator';
 import type { AuthenticatedCaller } from './auth.service';
 import {
+  ChangePasswordDto,
+  EmptyBodyDto,
   LoginDto,
   ProvisionStaffDto,
   RefreshDto,
   RegisterDto,
+  RequestPasswordResetDto,
+  ResetPasswordDto,
 } from './dto/auth.dto';
 
 @Controller('v1/auth')
@@ -62,6 +66,85 @@ export class AuthController {
       role: caller.role,
       userAccountId: caller.userAccountId,
     };
+  }
+
+  /* ── Password reset ───────────────────────────────────────────────── */
+
+  /**
+   * Requests a reset token. Public, and ALWAYS reports success.
+   *
+   * An unknown phone number gets the same response as a known one —
+   * reporting "no such account" would turn this into a free membership
+   * oracle, the same enumeration leak the login timing defence closes.
+   *
+   * V1 returns the token in the response because no SMS provider is
+   * contracted yet (SSOT §8). That is a deliberate, temporary shape, not a
+   * design: `deliveryPending` names it so, and it must be removed the day a
+   * provider exists — a reset token in an HTTP response is a reset token
+   * anyone who can see the response can use.
+   */
+  @Public()
+  @Post('password-reset/request')
+  @HttpCode(202)
+  async requestPasswordReset(@Body() dto: RequestPasswordResetDto) {
+    const { token } = await this.auth.requestPasswordReset(dto.primaryPhone);
+    return {
+      accepted: true,
+      message:
+        'If that number has an account, a reset code has been issued for it.',
+      deliveryPending: true,
+      devToken: process.env.NODE_ENV === 'production' ? undefined : token,
+    };
+  }
+
+  /** Consumes a reset token. Revokes every session on success. */
+  @Public()
+  @Post('password-reset/confirm')
+  @HttpCode(204)
+  async resetPassword(@Body() dto: ResetPasswordDto) {
+    await this.auth.resetPassword({
+      token: dto.token,
+      newPassword: dto.newPassword,
+    });
+  }
+
+  /** Changing a known password. Requires the current one. */
+  @Post('password')
+  @HttpCode(204)
+  async changePassword(
+    @Caller() caller: AuthenticatedCaller,
+    @Body() dto: ChangePasswordDto,
+  ) {
+    await this.auth.changePassword({
+      userAccountId: caller.userAccountId,
+      currentPassword: dto.currentPassword,
+      newPassword: dto.newPassword,
+    });
+  }
+
+  /* ── Devices ──────────────────────────────────────────────────────── */
+
+  /** The caller's own live sessions — one per signed-in device. */
+  @Get('sessions')
+  async sessions(@Caller() caller: AuthenticatedCaller) {
+    return this.auth.activeSessions(caller.userAccountId);
+  }
+
+  /**
+   * Signs out everywhere. Scoped to the CALLER's own account from the
+   * session — an endpoint taking an account id would let any authenticated
+   * user sign out anyone else.
+   */
+  @Post('logout-all')
+  @HttpCode(200)
+  async logoutEverywhere(
+    @Caller() caller: AuthenticatedCaller,
+    // Declared, and required to be empty: a body naming another account
+    // must be REFUSED rather than silently ignored, or a caller could
+    // reasonably believe they had signed that person out.
+    @Body() _body: EmptyBodyDto,
+  ) {
+    return this.auth.logoutEverywhere(caller.userAccountId);
   }
 
   /** Staff accounts are provisioned by an existing admin, never self-served. */
