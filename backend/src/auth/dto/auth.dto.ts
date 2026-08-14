@@ -38,6 +38,49 @@ export class RefreshDto {
   refreshToken!: string;
 }
 
+/**
+ * A body that must be empty.
+ *
+ * `logout-all` and `sessions` derive their subject from the SESSION and
+ * read nothing from the body. Without a DTO, Nest ignores the body
+ * entirely — so a client sending `{ userAccountId: <someone else> }` would
+ * get a cheerful 200 and reasonably believe it had signed that person out.
+ *
+ * The endpoint is safe either way (it never reads the field), but silently
+ * accepting a request whose evident intent was not honoured is precisely
+ * what `forbidNonWhitelisted` exists to prevent everywhere else in this
+ * API. Declaring an empty DTO makes the refusal explicit and consistent.
+ */
+export class EmptyBodyDto {}
+
+export class RequestPasswordResetDto {
+  @IsString()
+  primaryPhone!: string;
+}
+
+export class ResetPasswordDto {
+  @IsString()
+  token!: string;
+
+  /**
+   * The same 8-character floor as registration. Stated here rather than
+   * inherited, because a reset that accepted a weaker password than signup
+   * would make the signup rule pointless — an attacker would simply reset.
+   */
+  @IsString()
+  @MinLength(8)
+  newPassword!: string;
+}
+
+export class ChangePasswordDto {
+  @IsString()
+  currentPassword!: string;
+
+  @IsString()
+  @MinLength(8)
+  newPassword!: string;
+}
+
 export class ProvisionStaffDto {
   @IsString()
   @MinLength(2)
