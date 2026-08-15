@@ -75,9 +75,20 @@ for staging; Supabase bundles more you will not use here.
 
 Any host that runs a persistent Node process. Render is the shortest path.
 
-**Build:** `npm ci && npm run build`
-**Start:** `npm run start:prod`
+Because this is an npm workspace, build and start from the **repository
+root** and name the workspace — do not set a root directory of `apps/api`,
+or the shared `node_modules` at the top will not be installed.
+
+**Build:** `npm ci && npm run build --workspace @hfr/api`
+**Start:** `npm run start:prod --workspace @hfr/api`
 **Health check path:** `/`
+
+> **Run migrations as a release step, not at boot.** Several instances
+> starting at once would each try to migrate, and Prisma's advisory lock
+> turns that into a stall rather than a race — but a failed migration would
+> then also be a failed deploy with no clear cause. On Render this is the
+> "Pre-Deploy Command":
+> `npm run migrate --workspace @hfr/api`
 
 Environment variables — see `apps/api/.env.example` for the full annotated
 list:
@@ -111,28 +122,55 @@ Every subsequent staff account is created through
 
 ---
 
-## 3. Console (Vercel)
+## 3. Console (Vercel) — ONE project, no per-app setup
 
-The console is a standard Next.js 16 app. It needs **no `vercel.json`** —
-the defaults are correct.
+`vercel.json` at the repository root does the work: it builds only the
+`@hfr/console` workspace and points `outputDirectory` at
+`apps/console/.next`. **Do not set a Root Directory** — the root is correct,
+and overriding it makes the workspace resolution fail.
 
 1. **Import the repository** at vercel.com/new.
-2. **Set the Root Directory to `apps/console`.** This is the one setting that
-   matters: the repository is a monorepo, and without it Vercel builds the
-   wrong thing. Vercel will then auto-detect Next.js, `npm run build`, and
-   `.next`.
+2. Leave the framework and directory settings alone. Vercel reads
+   `vercel.json`.
 3. **Environment variables** (Settings → Environment Variables):
 
    | Variable | Value | Environments |
    |---|---|---|
-   | `API_BASE_URL` | your backend's public URL, e.g. `https://houseforrent-api.onrender.com` | Production, Preview |
+   | `API_BASE_URL` | your API's public URL, e.g. `https://houseforrent-api.onrender.com` | Production, Preview |
+   | `NEXT_PUBLIC_APK_URL` | GitHub release asset URL for the Android build (optional) | Production |
+   | `NEXT_PUBLIC_APK_VERSION` | e.g. `v1.0.0` (optional, cosmetic) | Production |
 
-   > **Do not rename this to `NEXT_PUBLIC_API_BASE_URL`.** It is read
-   > server-side only (`lib/api.ts`), which is what keeps the API base and
-   > the bearer token out of the client bundle. The `NEXT_PUBLIC_` prefix
-   > publishes a variable to every browser.
+   > **Do not rename `API_BASE_URL` to `NEXT_PUBLIC_API_BASE_URL`.** It is
+   > read server-side only (`lib/api.ts`), which is what keeps the API base
+   > and the bearer token out of the client bundle. The `NEXT_PUBLIC_`
+   > prefix publishes a variable to every browser.
+   >
+   > The two APK variables ARE `NEXT_PUBLIC_` on purpose: a download link is
+   > meant to be public, and nothing secret is in it.
 
 4. **Deploy.**
+
+### One deployment, two surfaces
+
+| Path | Serves |
+|---|---|
+| `/` | The FOO/admin console (auth-gated) |
+| `/download` | The Android APK download page |
+
+**The APK is not committed to the repository.** A debug build is ~79MB, git
+keeps every version of it forever, and Vercel would redeploy the binary on
+every unrelated push. Attach it to a GitHub release and point
+`NEXT_PUBLIC_APK_URL` at the asset. Until that variable is set, `/download`
+shows an honest empty state rather than a dead button.
+
+### Why the API is still a separate host
+
+It is one *Vercel project*, not one server. The API wants a persistent Node
+process: the ledger opens multi-statement transactions and Prisma holds a
+pool, which is the workload serverless handles worst — a cold start on
+every money endpoint and a new connection per invocation. Vercel runs the
+console; Render (or Railway/Fly) runs the API. Both deploy from this same
+repository.
 
 ### After the first deploy
 
