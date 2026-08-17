@@ -27,6 +27,25 @@ export class TransitionDto {
   reason?: string;
 }
 
+/**
+ * Creating a deal. ONE field, and it names no person.
+ *
+ * `introductionRecordId` already resolves, server-side, to the tenant, the
+ * landlord, the listing and the officer. There is deliberately no
+ * `tenantPartyId`, `landlordPartyId` or `listingId` here: a body that cannot
+ * express a party cannot be tampered with to name a different one, so the
+ * safety is structural rather than a validation rule someone must remember
+ * to keep.
+ *
+ * `forbidNonWhitelisted` means adding one to the request is a 400, not a
+ * silently ignored field — asserted by test.
+ */
+export class CreateDealDto {
+  @IsString()
+  @IsNotEmpty()
+  introductionRecordId!: string;
+}
+
 export class SignAgreementDto extends TransitionDto {
   @IsString()
   @IsNotEmpty()

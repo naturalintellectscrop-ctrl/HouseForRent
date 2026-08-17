@@ -23,6 +23,55 @@ function toState(err: unknown): ActionState {
   };
 }
 
+/**
+ * FR-5.2 — dispatch. Sends an officer to a requested viewing.
+ *
+ * [F-002] This is the action that had no caller. `POST /assign` was built
+ * and tested at Stage 7 and nothing in either client invoked it, so every
+ * requested viewing stayed requested and the tenant journey ended one step
+ * after "request a viewing".
+ *
+ * Note what is NOT checked here: whether the officer holds a `foo` account,
+ * and whether the listing sits inside the service corridor. Both are
+ * server-side guards on `assign()` (422 NOT_A_FIELD_OFFICER /
+ * OUTSIDE_SERVICE_AREA). Re-checking them in this console would be a second
+ * copy of a dispatch rule, free to drift from the one that actually binds.
+ */
+export async function assignViewingAction(
+  viewingId: string,
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const fooPartyId = String(formData.get('fooPartyId') ?? '').trim();
+  if (!fooPartyId) {
+    return { error: 'Choose a field officer to send.' };
+  }
+
+  // Optional: dispatch may move the time the tenant proposed. Absent means
+  // "keep it", which the backend treats as such — it does not default to now.
+  const scheduledFor = String(formData.get('scheduledFor') ?? '').trim();
+
+  try {
+    await api(`/v1/viewings/${viewingId}/assign`, {
+      method: 'POST',
+      body: {
+        fooPartyId,
+        ...(scheduledFor
+          ? { scheduledFor: new Date(scheduledFor).toISOString() }
+          : {}),
+      },
+    });
+  } catch (err) {
+    return toState(err);
+  }
+
+  refresh();
+  return {
+    error: null,
+    ok: 'Assigned. It now appears on that officer’s board and the tenant sees it as scheduled.',
+  };
+}
+
 /** FR-5.4 — file the structured field report. */
 export async function submitFieldReportAction(
   viewingId: string,

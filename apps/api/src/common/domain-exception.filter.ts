@@ -8,10 +8,14 @@ import {
 import { Response } from 'express';
 import { IllegalTransitionError } from '../deals/deal-state-machine';
 import {
+  DealAlreadyExistsError,
   DealNotFoundError,
+  IntroductionRecordNotFoundError,
   MissingIntroductionRecordError,
+  NotTheIntroducingOfficerError,
   SettlementReleaseFailedError,
   SnapshotImmutableError,
+  ViewingNotConductedError,
 } from '../deals/deals.service';
 import {
   ListingNotFoundError,
@@ -118,16 +122,26 @@ export class DomainExceptionFilter implements ExceptionFilter {
     if (error instanceof AgreementAlreadyAcceptedError) {
       return { status: 409, code: 'AGREEMENT_ALREADY_ACCEPTED' };
     }
+    if (error instanceof DealAlreadyExistsError) {
+      return { status: 409, code: 'DEAL_ALREADY_EXISTS' };
+    }
 
     // 403 — the caller is the wrong party, and saying so is safe here
     // because they already hold the role and know the listing exists.
     if (error instanceof NotTheListerError) {
       return { status: 403, code: 'NOT_THE_LISTER' };
     }
+    // Staff only, and they were told the record exists by the visit they
+    // were dispatched to — so naming the constraint discloses nothing they
+    // did not already hold.
+    if (error instanceof NotTheIntroducingOfficerError) {
+      return { status: 403, code: 'NOT_THE_INTRODUCING_OFFICER' };
+    }
 
     // 404 — absent, or not disclosable to this caller
     if (
       error instanceof DealNotFoundError ||
+      error instanceof IntroductionRecordNotFoundError ||
       error instanceof ListingNotFoundError ||
       error instanceof ViewingNotFoundError ||
       error instanceof MediaAssetNotFoundError ||
@@ -171,6 +185,9 @@ export class DomainExceptionFilter implements ExceptionFilter {
     }
     if (error instanceof FieldReportRequiredError) {
       return { status: 422, code: 'FIELD_REPORT_REQUIRED' };
+    }
+    if (error instanceof ViewingNotConductedError) {
+      return { status: 422, code: 'VIEWING_NOT_CONDUCTED' };
     }
     if (error instanceof TenantNotVerifiedError) {
       return { status: 422, code: 'TENANT_NOT_VERIFIED' };

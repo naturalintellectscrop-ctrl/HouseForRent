@@ -116,6 +116,12 @@ export default async function OpsPage() {
       <p>
         <Link href="/ops/queue" className="btn btn-secondary">
           Verification queue
+        </Link>{' '}
+        {/* Dispatch is admin-only server-side; the link is shown to staff
+            because hiding it is presentation, and the page itself renders
+            the backend's 403 as an explanation rather than a stack trace. */}
+        <Link href="/ops/dispatch" className="btn btn-secondary">
+          Dispatch queue
         </Link>
       </p>
 

@@ -116,10 +116,7 @@ export class ViewingsController {
   @Roles('foo', 'admin')
   @RequiresAssignedFoo()
   @Post(':viewingId/no-show')
-  async noShow(
-    @Param('viewingId') viewingId: string,
-    @Body() _dto: NoShowDto,
-  ) {
+  async noShow(@Param('viewingId') viewingId: string, @Body() _dto: NoShowDto) {
     return this.viewings.markNoShow({ viewingId });
   }
 
@@ -154,6 +151,35 @@ export class ViewingsController {
   @Get('assigned/me')
   async assignedToMe(@Caller() caller: AuthenticatedCaller) {
     return this.viewings.findAssignedTo(caller.partyId);
+  }
+
+  /**
+   * The DISPATCHER's queue — requested viewings nobody has been sent to
+   * (FR-5.2).
+   *
+   * [F-002] `POST :viewingId/assign` existed and was tested, but no route
+   * could tell an admin WHICH viewings were waiting: `assigned/me` is scoped
+   * to the caller, so a dispatcher could not see the queue they exist to
+   * dispatch from. A requested viewing therefore stayed requested forever
+   * and the tenant journey ended there.
+   *
+   * Admin-only, matching `assign` itself: seeing the queue and acting on it
+   * are the same job, and a queue readable by an officer would be a roster
+   * of tenants' pending visits across the whole corridor.
+   *
+   * Declared before `:viewingId` — Nest matches in declaration order.
+   */
+  @Roles('admin')
+  @Get('dispatch-queue')
+  async dispatchQueue() {
+    const [queue, officers] = await Promise.all([
+      this.viewings.findDispatchQueue(),
+      this.viewings.findAssignableOfficers(),
+    ]);
+    // Returned together because a queue without the roster is not actionable
+    // — the dispatcher would have the viewing and no legal value for
+    // `fooPartyId`.
+    return { total: queue.length, rows: queue, officers };
   }
 
   /**
@@ -217,9 +243,7 @@ export class ViewingsController {
       introduction,
       canConduct: viewing.status === 'scheduled' && fieldReport !== null,
       whatIsMissing:
-        viewing.status === 'scheduled' && !fieldReport
-          ? ['field_report']
-          : [],
+        viewing.status === 'scheduled' && !fieldReport ? ['field_report'] : [],
     };
   }
 }

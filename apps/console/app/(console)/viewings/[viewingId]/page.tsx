@@ -11,6 +11,7 @@ import { ApiAlert, StatusPill, when } from '../../../ui';
 import { FieldReportForm } from './field-report-form';
 import { MediaCapture } from './media-capture';
 import { CloseVisit } from './close-visit';
+import { OpenDeal } from './open-deal';
 
 interface ViewingDetail {
   viewing: Viewing;
@@ -159,6 +160,16 @@ export default async function ViewingPage(props: {
         </p>
       ) : (
         <CloseVisit viewingId={viewing.id} canConduct={canConduct} />
+      )}
+
+      {/* ── Step 3: the deal (FR-8.3) ──
+          Only reachable once the introduction exists, which is the whole
+          point: a deal cannot precede the meeting that evidences it. */}
+      {introduction && (
+        <>
+          <h2>Open the deal</h2>
+          <OpenDeal introductionRecordId={introduction.id} />
+        </>
       )}
     </>
   );
