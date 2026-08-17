@@ -124,6 +124,37 @@ export interface Viewing {
   conductedByRole: 'foo';
   scheduledFor: string;
   status: 'requested' | 'scheduled' | 'conducted' | 'no_show' | 'cancelled';
+  /** When the tenant asked — distinct from the slot they asked for. */
+  createdAt: string;
+}
+
+/**
+ * The dispatcher's queue (F-002).
+ *
+ * `inServiceArea` and `blockedBy` arrive SERVER-COMPUTED, from the same
+ * neighbourhood flag `assign()` reads. The console renders that judgement
+ * rather than deriving its own — a second copy would be the wrong one the
+ * moment the two disagreed.
+ */
+export interface DispatchRow {
+  viewing: Viewing;
+  listingId: string;
+  neighbourhood: string;
+  inServiceArea: boolean;
+  blockedBy: string[];
+}
+
+export interface AssignableOfficer {
+  partyId: string;
+  displayName: string;
+  /** Visits already on their board — dispatch should not be blind to load. */
+  assignedCount: number;
+}
+
+export interface DispatchQueue {
+  total: number;
+  rows: DispatchRow[];
+  officers: AssignableOfficer[];
 }
 
 export interface FieldReport {

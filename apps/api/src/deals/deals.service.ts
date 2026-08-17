@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Deal, DealStatus, Prisma } from '@prisma/client';
+import { AuthRole, Deal, DealStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { EscrowService } from '../ledger/escrow.service';
 import { PaymentsService } from '../payments/payments.service';
@@ -67,6 +67,50 @@ export class MissingIntroductionRecordError extends Error {
   }
 }
 
+export class IntroductionRecordNotFoundError extends Error {
+  constructor(introductionRecordId: string) {
+    super(`introduction record ${introductionRecordId} not found`);
+    this.name = 'IntroductionRecordNotFoundError';
+  }
+}
+
+export class NotTheIntroducingOfficerError extends Error {
+  constructor(introductionRecordId: string) {
+    super(
+      `introduction record ${introductionRecordId} was produced by a different ` +
+        'field officer. An officer opens deals off the introductions they ' +
+        'themselves made — the same constraint the assigned-FOO guard places ' +
+        'on the viewing that produced it (FR-5.6).',
+    );
+    this.name = 'NotTheIntroducingOfficerError';
+  }
+}
+
+export class ViewingNotConductedError extends Error {
+  constructor(viewingId: string) {
+    super(
+      `viewing ${viewingId} is not conducted, so no deal may be opened from ` +
+        'its introduction record',
+    );
+    this.name = 'ViewingNotConductedError';
+  }
+}
+
+export class DealAlreadyExistsError extends Error {
+  constructor(
+    introductionRecordId: string,
+    readonly existingDealId: string,
+  ) {
+    super(
+      `introduction record ${introductionRecordId} already has an active deal ` +
+        `(${existingDealId}). One introduction is one tenant meeting one ` +
+        'property once; a second concurrent deal off the same meeting would ' +
+        'let the same escrow be funded twice.',
+    );
+    this.name = 'DealAlreadyExistsError';
+  }
+}
+
 /**
  * The deal lifecycle (Data_Model.md §7) — the spine that composes Identity,
  * Agreements and Payments into the core business flow.
@@ -103,6 +147,102 @@ export class DealsService {
         landlordPartyId: params.landlordPartyId,
         introductionRecordId: params.introductionRecordId,
       },
+    });
+  }
+
+  /**
+   * THE way a deal comes into existence (FR-8.3).
+   *
+   * ── Why the caller supplies only an introduction record id ──
+   * `introduction_record` already names the tenant, the listing, the
+   * landlord and the officer, all written server-side by `conduct()` from
+   * the viewing and the property. So every party on the deal is DERIVED from
+   * that row, and the request body has no field that could name a person.
+   *
+   * That is not defence-in-depth, it is the absence of an attack surface: a
+   * body carrying `tenantPartyId` could be tampered with, and would need a
+   * check to catch it. A body that cannot express a party needs no such
+   * check, and a future edit cannot forget one that does not exist.
+   *
+   * The introduction record is also the only artefact that proves the
+   * meeting happened. Requiring it here means a deal cannot exist without
+   * the evidence that makes the circumvention clause enforceable — the same
+   * guard `matchTenant()` applies one transition later, moved to the moment
+   * of creation so the deal is never in a state that lacks it.
+   *
+   * ── What this deliberately does NOT check ──
+   * The listing's publication state. A landlord who has agreed to let to
+   * this tenant may reasonably withdraw the listing first; refusing the deal
+   * then would strand a real let over a display flag. The introduction
+   * record is the authority for "this tenant saw this property with our
+   * officer", and that fact does not expire when the advert comes down.
+   *
+   * No audit row is written here. `AuditEventType` covers money,
+   * verification, consent and configuration events (NFR-2); a deal at
+   * `created` has moved no money. Its first transition writes an immutable
+   * `deal_transition` row, and the introduction record it points at is
+   * itself immutable — the trail exists without widening the audit
+   * vocabulary for a non-event.
+   */
+  async createFromIntroduction(params: {
+    introductionRecordId: string;
+    actorPartyId: string;
+    actorRole: AuthRole;
+  }): Promise<Deal> {
+    return this.prisma.$transaction(async (tx) => {
+      const introduction = await tx.introductionRecord.findUnique({
+        where: { id: params.introductionRecordId },
+        include: { viewing: true },
+      });
+      if (!introduction) {
+        throw new IntroductionRecordNotFoundError(params.introductionRecordId);
+      }
+
+      // An officer acts on their own introductions; an admin acts on any.
+      if (
+        params.actorRole === 'foo' &&
+        introduction.fooPartyId !== params.actorPartyId
+      ) {
+        throw new NotTheIntroducingOfficerError(params.introductionRecordId);
+      }
+
+      // Belt to `conduct()`'s braces: the record can only be minted in the
+      // same transaction that sets `conducted`, so this cannot currently
+      // fail — which is exactly why it is cheap to assert, and why a future
+      // second path to creating introductions would be caught here.
+      if (introduction.viewing.status !== 'conducted') {
+        throw new ViewingNotConductedError(introduction.viewingId);
+      }
+
+      /*
+       * One live deal per introduction.
+       *
+       * Terminal deals do not block: a deal that was cancelled before
+       * funding, or refunded, must not permanently bar the same tenant and
+       * landlord from trying again off the meeting that already happened.
+       * Anything non-terminal does block — two open deals on one
+       * introduction could each be funded, putting the tenant's money into
+       * two escrows for one room.
+       */
+      const active = await tx.deal.findFirst({
+        where: {
+          introductionRecordId: introduction.id,
+          status: { notIn: [...TERMINAL_STATUSES] },
+        },
+      });
+      if (active) {
+        throw new DealAlreadyExistsError(introduction.id, active.id);
+      }
+
+      return tx.deal.create({
+        data: {
+          // every one of these comes from the record, none from the client
+          listingId: introduction.listingId,
+          tenantPartyId: introduction.tenantPartyId,
+          landlordPartyId: introduction.landlordPartyId,
+          introductionRecordId: introduction.id,
+        },
+      });
     });
   }
 
@@ -673,8 +813,7 @@ export class DealsService {
             commissionAmount: updated.commissionAmount?.toString() ?? null,
             monthlyRentSnapshot:
               updated.monthlyRentSnapshot?.toString() ?? null,
-            commissionRateBpSnapshot:
-              updated.commissionRateBpSnapshot ?? null,
+            commissionRateBpSnapshot: updated.commissionRateBpSnapshot ?? null,
           },
           occurredAt,
         },

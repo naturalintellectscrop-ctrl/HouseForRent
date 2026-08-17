@@ -84,7 +84,7 @@ export class FieldReportAlreadyFiledError extends Error {
   constructor(viewingId: string) {
     super(
       `viewing ${viewingId} already has a field report. A report is the ` +
-        'officer\'s on-site observation at a point in time; revising it ' +
+        "officer's on-site observation at a point in time; revising it " +
         'would let a later opinion overwrite what was actually seen.',
     );
     this.name = 'FieldReportAlreadyFiledError';
@@ -445,6 +445,107 @@ export class ViewingsService {
       where: { conductedByPartyId: fooPartyId, status: 'scheduled' },
       orderBy: { scheduledFor: 'asc' },
     });
+  }
+
+  /**
+   * FR-5.2 — the DISPATCHER's queue: viewings a tenant has requested and
+   * nobody has been sent to yet.
+   *
+   * ── Why this exists ──
+   * `findAssignedTo` answers "what am I going to?", scoped to the caller. It
+   * has no answer to "what has nobody been sent to?", and without that
+   * question being askable a requested viewing was unreachable: the assign
+   * endpoint existed, was tested, and could not be called because no surface
+   * could name a viewing to assign. The tenant journey stopped there.
+   *
+   * ── Why it returns a projection rather than rows ──
+   * `assign()` refuses a listing outside the service corridor, so a queue of
+   * bare viewings would let a dispatcher pick a row that is guaranteed to be
+   * rejected, with no way to see why beforehand. `inServiceArea` is computed
+   * HERE, from the same neighbourhood flag the guard reads, so the console
+   * renders the server's judgement instead of re-deriving one that could
+   * drift (Technical Architecture §7).
+   */
+  async findDispatchQueue(): Promise<
+    Array<{
+      viewing: Viewing;
+      listingId: string;
+      neighbourhood: string;
+      inServiceArea: boolean;
+      /** Why this row cannot be assigned yet — empty means it can. */
+      blockedBy: string[];
+    }>
+  > {
+    const rows = await this.prisma.viewing.findMany({
+      where: { status: 'requested' },
+      orderBy: { scheduledFor: 'asc' },
+      include: {
+        listing: {
+          include: { property: { include: { neighbourhood: true } } },
+        },
+      },
+    });
+
+    return rows.map(({ listing, ...viewing }) => {
+      const neighbourhood = listing.property.neighbourhood;
+      const blockedBy: string[] = [];
+      if (!neighbourhood.inServiceArea) {
+        blockedBy.push('outside_service_area');
+      }
+      // A listing withdrawn since the request means the visit is wasted.
+      // Reported, not hidden: the dispatcher needs to see the row to know
+      // why the tenant is waiting.
+      if (listing.publicationState !== 'live') {
+        blockedBy.push('listing_not_live');
+      }
+      return {
+        viewing,
+        listingId: listing.id,
+        neighbourhood: neighbourhood.name,
+        inServiceArea: neighbourhood.inServiceArea,
+        blockedBy,
+      };
+    });
+  }
+
+  /**
+   * The officers a viewing may be assigned to (FR-5.2, FR-5.6).
+   *
+   * V1 permits only `foo` accounts to conduct viewings, and `assign()`
+   * enforces that server-side against `user_account`. This reads the same
+   * table, so the dropdown a dispatcher sees cannot contain someone the
+   * assignment would then refuse.
+   *
+   * Deliberately returns no phone number. A dispatcher needs a name to
+   * choose from, not a roster of staff contact details, and the smallest
+   * projection that answers the question is the one that leaks least
+   * (NFR-3).
+   */
+  async findAssignableOfficers(): Promise<
+    Array<{ partyId: string; displayName: string; assignedCount: number }>
+  > {
+    const accounts = await this.prisma.userAccount.findMany({
+      where: { authRole: 'foo', party: { status: 'active' } },
+      include: { party: true },
+    });
+
+    // Current workload, so dispatch is not blind to who is already loaded.
+    const load = await this.prisma.viewing.groupBy({
+      by: ['conductedByPartyId'],
+      where: { status: 'scheduled' },
+      _count: { _all: true },
+    });
+    const byParty = new Map(
+      load.map((row) => [row.conductedByPartyId, row._count._all]),
+    );
+
+    return accounts
+      .map((account) => ({
+        partyId: account.partyId,
+        displayName: account.party.displayName,
+        assignedCount: byParty.get(account.partyId) ?? 0,
+      }))
+      .sort((a, b) => a.displayName.localeCompare(b.displayName));
   }
 
   async getViewingOrThrow(viewingId: string): Promise<Viewing> {

@@ -870,3 +870,41 @@ td:has(> .tags) {
   padding: 0.1rem 0.3rem;
   border-radius: 3px;
 }
+
+/* ── Dispatch (FR-5.2) ──────────────────────────────────────────────────
+   One assignment control per queued viewing, ruled off from the row it
+   belongs to so a card full of rows does not read as one long form. */
+.assign-form {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--line);
+}
+
+.assign-form .field {
+  margin-bottom: 0.75rem;
+}
+
+/* The blocked-reason note sits outside a .field, so it needs the hint
+   treatment explicitly rather than inheriting it. */
+.assign-form > .hint {
+  color: var(--ink-soft);
+  font-size: 0.8125rem;
+  margin: 0.5rem 0 0;
+}
+
+/* Two short controls side by side where there is room; stacked on a phone,
+   which is where an ops officer covering a corridor actually reads this. */
+@media (min-width: 38rem) {
+  .assign-form {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0 1rem;
+    align-items: end;
+  }
+
+  .assign-form > button,
+  .assign-form > .alert,
+  .assign-form > .hint {
+    grid-column: 1 / -1;
+  }
+}

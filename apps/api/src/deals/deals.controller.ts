@@ -7,6 +7,7 @@ import { DealPartyGuard } from '../auth/guards/deal-party.guard';
 import type { AuthenticatedCaller } from '../auth/auth.service';
 import {
   CancelDealDto,
+  CreateDealDto,
   DisputeHoldDto,
   FundEscrowDto,
   RefundDto,
@@ -32,6 +33,32 @@ import {
 @UseGuards(DealPartyGuard)
 export class DealsController {
   constructor(private readonly deals: DealsService) {}
+
+  /**
+   * Opens a deal off a conducted viewing's introduction record (FR-8.3).
+   *
+   * FOO/admin only, and for the same reason `match-tenant` is: creating a
+   * deal asserts that a real introduction took place, which is a statement
+   * only the company can make. Neither the tenant nor the landlord can open
+   * one — if they could, the deal record would stop being evidence of our
+   * involvement and become a claim by an interested party.
+   *
+   * The officer named on the introduction is the one who may act on it;
+   * `createFromIntroduction` enforces that server-side rather than trusting
+   * the role alone, so one officer cannot open deals off another's visits.
+   */
+  @Roles('foo', 'admin')
+  @Post()
+  async create(
+    @Caller() caller: AuthenticatedCaller,
+    @Body() dto: CreateDealDto,
+  ) {
+    return this.deals.createFromIntroduction({
+      introductionRecordId: dto.introductionRecordId,
+      actorPartyId: caller.partyId,
+      actorRole: caller.role,
+    });
+  }
 
   /** created → tenant_matched. FOO/admin only: it asserts an introduction. */
   @Roles('foo', 'admin')

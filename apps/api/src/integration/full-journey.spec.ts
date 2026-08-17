@@ -263,14 +263,35 @@ describe('The full journey (Stage 8)', () => {
     const agreement = await prisma.listingAgreement.findFirstOrThrow({
       where: { listingId, accepted: true },
     });
-    const deal = await prisma.deal.create({
-      data: {
-        listingId,
-        tenantPartyId: parties.tenant,
-        landlordPartyId: parties.lister,
-        introductionRecordId: introductionId,
-      },
-    });
+
+    /*
+     * Through the API, by the officer who made the introduction.
+     *
+     * This step used to be `prisma.deal.create(...)`, which is how F-001
+     * survived: the suite's own opening comment says a step reachable only
+     * by bypassing the API means the API does not implement the journey, and
+     * then the suite bypassed it. It passed for months against a server that
+     * had no create-deal endpoint at all.
+     *
+     * Note what the request does NOT contain: no tenant, no landlord, no
+     * listing. If the server ever stopped deriving them from the
+     * introduction record, this journey could not supply them and would
+     * fail rather than quietly proving a weaker property.
+     */
+    const created = await http()
+      .post('/v1/deals')
+      .set('Authorization', as('foo'))
+      .send({ introductionRecordId: introductionId })
+      .expect(201);
+
+    const deal = created.body as { id: string };
+
+    expect(deal.id).toBeTruthy();
+    expect(created.body.tenantPartyId).toBe(parties.tenant);
+    expect(created.body.landlordPartyId).toBe(parties.lister);
+    expect(created.body.listingId).toBe(listingId);
+    expect(created.body.introductionRecordId).toBe(introductionId);
+    expect(created.body.status).toBe('created');
 
     await http()
       .post(`/v1/deals/${deal.id}/match-tenant`)
