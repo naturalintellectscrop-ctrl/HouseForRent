@@ -3,7 +3,7 @@ import { FlatList, Modal, RefreshControl, ScrollView, View } from 'react-native'
 import { useAuthedRequest, describeError } from '@/lib/use-request';
 import { useSession } from '@/lib/session';
 import type { PresentedTerms } from '@/lib/api';
-import { formatShillings, formatShillingsCompact } from '@/lib/money';
+import { formatShillings } from '@/lib/money';
 import {
   Alert,
   Body,
@@ -142,7 +142,7 @@ export default function ListerListings() {
                   {item.bedrooms} bed · {item.neighbourhoodName}
                 </Body>
                 <Price
-                  amount={formatShillingsCompact(item.monthlyRent)}
+                  amount={formatShillings(item.monthlyRent)}
                   per="/ month"
                 />
               </View>

@@ -119,7 +119,12 @@ export default function TenantSearch() {
             </View>
 
             <View style={{ marginTop: space.md, marginBottom: space.gutter }}>
-              <ChipRow options={TYPE_CHIPS} value={type} onChange={setType} />
+              <ChipRow
+                options={TYPE_CHIPS}
+                value={type}
+                onChange={setType}
+                bleed={space.screen}
+              />
             </View>
 
             {/* FR-9.2 — the tenant-facing surface states this structurally,

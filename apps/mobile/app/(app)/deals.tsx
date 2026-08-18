@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import { useAuthedRequest } from '@/lib/use-request';
 import { useSession } from '@/lib/session';
 import type { Deal, Viewing } from '@/lib/api';
-import { formatShillingsCompact } from '@/lib/money';
+import { formatShillings } from '@/lib/money';
 import {
   Alert,
   Body,
@@ -184,7 +184,7 @@ export default function Deals() {
             <View style={{ flex: 1, gap: space.xs }}>
               {item.monthlyRentSnapshot ? (
                 <Price
-                  amount={formatShillingsCompact(item.monthlyRentSnapshot)}
+                  amount={formatShillings(item.monthlyRentSnapshot)}
                   per="/ month"
                 />
               ) : (
