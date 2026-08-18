@@ -2,15 +2,15 @@ import { View } from 'react-native';
 import type { SearchResult } from '@/lib/api';
 import { formatShillingsCompact } from '@/lib/money';
 import {
-  Body,
   BodySm,
   Card,
+  Label,
   Price,
   PropertyImage,
   Skeleton,
   VerifiedBadge,
 } from '@/components/ui';
-import { ClockIcon } from '@/components/icons';
+import { BathIcon, BedIcon, ClockIcon, PinIcon } from '@/components/icons';
 import { space, usePalette } from '@/lib/theme';
 
 /**
@@ -50,26 +50,48 @@ export function PropertyCard({
         )}
       </PropertyImage>
 
+      {/* §12's order: what it is, where it is, what it costs, then
+          how current the availability is. The title is composed from real
+          fields — bedrooms and propertyType — because listings carry no
+          name of their own, and inventing one ('Modern 4 Bedroom House')
+          would be writing copy into a data slot. */}
       <View style={{ padding: space.gutter, gap: space.xs }}>
+        <Label numberOfLines={1}>
+          {item.bedrooms} Bedroom {capitalise(item.propertyType)}
+        </Label>
+
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+          <PinIcon size={14} color={p.inkFaint} />
+          <BodySm numberOfLines={1} style={{ flex: 1 }}>
+            {item.neighbourhoodName}
+            {item.landmarkText ? `, ${item.landmarkText}` : ''}
+          </BodySm>
+        </View>
+
+        <View style={{ marginTop: space.xs }}>
+          <Price amount={formatShillingsCompact(item.monthlyRent)} per="/ month" />
+        </View>
+
         <View
           style={{
             flexDirection: 'row',
-            alignItems: 'baseline',
-            justifyContent: 'space-between',
-            gap: space.md,
+            alignItems: 'center',
+            gap: space.gutter,
+            marginTop: space.sm,
+            paddingTop: space.sm,
+            borderTopWidth: 1,
+            borderTopColor: p.line,
           }}
         >
-          <Body style={{ flex: 1 }} numberOfLines={1}>
-            {item.neighbourhoodName}
-            {item.landmarkText ? `, ${item.landmarkText}` : ''}
-          </Body>
-          <Price amount={formatShillingsCompact(item.monthlyRent)} />
+          <Feature
+            icon={<BedIcon size={16} color={p.inkSoft} />}
+            label={`${item.bedrooms} Beds`}
+          />
+          <Feature
+            icon={<BathIcon size={16} color={p.inkSoft} />}
+            label={`${item.bathrooms} Baths`}
+          />
         </View>
-
-        <BodySm>
-          {item.bedrooms} Bed · {item.bathrooms} Bath ·{' '}
-          {capitalise(item.propertyType)}
-        </BodySm>
 
         <Freshness
           daysSinceConfirmed={item.daysSinceConfirmed}
@@ -135,4 +157,20 @@ export function PropertyCardSkeleton() {
 
 function capitalise(value: string): string {
   return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+/**
+ * One attribute on a listing card.
+ *
+ * The icon earns its place here: these sit in a tight row where the label is
+ * two words, and the glyph is what makes the row scannable at a glance
+ * rather than read left to right.
+ */
+function Feature({ icon, label }: { icon: React.ReactNode; label: string }) {
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+      {icon}
+      <BodySm>{label}</BodySm>
+    </View>
+  );
 }

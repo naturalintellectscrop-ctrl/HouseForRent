@@ -25,41 +25,47 @@
  * compact and the 48px section gaps stay in the consumer app.
  */
 :root {
-  --ink: #1c1b1b;
-  --ink-soft: #41493e;
-  --ink-faint: #717a6c;
-  --line: #e5e2e1;
-  --bg: #fcf8f8;
-  --bg-soft: #f0edec;
+  --ink: #0e1412;
+  --ink-soft: #4a5350;
+  --ink-faint: #67707a;
+  --line: #e2e7eb;
+  --bg: #f8fafc;
+  --bg-soft: #eef1f4;
   --surface: #ffffff;
-  --accent: #003c08;
+  /* The board's green, one step down so white button text clears 5:1.
+     #16a34a with white measures 3.29:1 and fails AA — the mobile app makes
+     the same split, for the same reason. See apps/mobile/lib/theme.ts. */
+  --accent: #15803d;
   --accent-ink: #ffffff;
-  --danger: #ba1a1a;
-  --danger-bg: #ffdad6;
-  --ok: #0a5514;
-  --ok-bg: #e8f1e9;
-  --warn: #8a5a00;
-  --warn-bg: #fdf6e7;
+  --danger: #dc2626;
+  --danger-bg: #fdeaea;
+  --ok: #15803d;
+  --ok-bg: #eaf4ee;
+  /* Amber is 2.1:1 on white, so light takes a darker step for text. */
+  --warn: #b45309;
+  --warn-bg: #fdf3e3;
   --radius: 8px;
   --radius-lg: 12px;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --ink: #ecefea;
-    --ink-soft: #b4bcb2;
-    --ink-faint: #8a938a;
-    --line: #2e332d;
-    --bg: #111311;
-    --bg-soft: #232722;
-    --surface: #191c19;
-    --accent: #5fbf57;
-    --accent-ink: #04140a;
-    --danger: #e8555b;
+    --ink: #f8fafc;
+    --ink-soft: #a8b0ae;
+    --ink-faint: #67707a;
+    --line: #28302e;
+    --bg: #0e1412;
+    --bg-soft: #1f2624;
+    --surface: #171d1b;
+    /* On the near-black page the board's green clears 5:1 unmodified, so
+       dark gets the real brand value, not the button-safe step. */
+    --accent: #16a34a;
+    --accent-ink: #ffffff;
+    --danger: #f87171;
     --danger-bg: #2c1517;
-    --ok: #5fbf57;
-    --ok-bg: #16301a;
-    --warn: #e8c07a;
+    --ok: #16a34a;
+    --ok-bg: #14291d;
+    --warn: #f59e0b;
     --warn-bg: #2a2213;
   }
 }
@@ -579,20 +585,20 @@ button:disabled {
      shared palette so a "good" dot and a "verified" badge in the mobile app
      are the same green rather than two greens a designer would have to
      defend. */
-  --status-good: #0a5514;
-  --status-warning: #8a5a00;
-  --status-critical: #ba1a1a;
+  --status-good: #15803d;
+  --status-warning: #b45309;
+  --status-critical: #dc2626;
   /* The unfilled meter track: a lighter step of the accent's own ramp, so
      state reads across the whole bar rather than only in the fill. */
-  --meter-track: #dbe5d9;
+  --meter-track: #dde5e2;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --status-good: #5fbf57;
-    --status-warning: #e8c07a;
-    --status-critical: #e8555b;
-    --meter-track: #232722;
+    --status-good: #16a34a;
+    --status-warning: #f59e0b;
+    --status-critical: #f87171;
+    --meter-track: #1f2624;
   }
 }
 
