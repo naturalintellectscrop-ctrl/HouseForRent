@@ -23,7 +23,7 @@ import {
   usePalette,
   type Palette,
 } from '@/lib/theme';
-import { CheckIcon, ImageIcon } from '@/components/icons';
+import { CheckIcon, ImageIcon, ShieldIcon } from '@/components/icons';
 
 /**
  * The primitive set, built to the "Ugandan Rental Essence" reference.
@@ -559,6 +559,144 @@ export function VerifiedBadge({ label = 'Verified' }: { label?: string }) {
     >
       <CheckIcon size={13} color={p.verifiedInk} />
       <Text style={[t.labelSm, { color: p.verifiedInk }]}>{label}</Text>
+    </View>
+  );
+}
+
+/**
+ * The verification panel — the strongest statement of the product's
+ * differentiator, and the reason anyone should trust a listing here.
+ *
+ * ── Why this is a panel and not a bigger badge ──
+ * A badge asserts; a panel evidences. This one names WHO checked the
+ * property (a Field Operations Officer, not "our team", not an algorithm)
+ * and WHEN they stood in it. Both come from the officer's structured field
+ * report — `fieldConfirmed.reportedAt` is the moment the report was filed —
+ * so the date is a fact from the record rather than a marketing line.
+ *
+ * ── Why an unverified property renders the absence ──
+ * `inspectedAt` is nullable and the null branch says so plainly. A template
+ * that reads as inspected when nobody has been is the one failure this
+ * component exists to prevent (FR-4.3).
+ */
+export function VerificationPanel({
+  inspectedAt,
+}: {
+  inspectedAt: string | null;
+}) {
+  const p = usePalette();
+  const surface = useCardSurface();
+  const verified = inspectedAt !== null;
+
+  return (
+    <View
+      style={[
+        surface,
+        {
+          flexDirection: 'row',
+          gap: space.md,
+          padding: space.gutter,
+          alignItems: 'flex-start',
+        },
+      ]}
+    >
+      <View
+        style={{
+          width: 40,
+          height: 40,
+          borderRadius: radius.pill,
+          backgroundColor: verified ? p.brandSoft : p.surfaceAlt,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <ShieldIcon
+          size={22}
+          color={verified ? p.verified : p.inkFaint}
+        />
+      </View>
+
+      <View style={{ flex: 1 }}>
+        <Text style={[t.labelLg, { color: p.ink, marginBottom: 2 }]}>
+          {verified
+            ? 'Verified by Field Operations Officer'
+            : 'Not yet inspected'}
+        </Text>
+        <Text style={[t.bodySm, { color: p.inkSoft }]}>
+          {verified
+            ? `This property has been physically inspected and verified on ${formatInspectionDate(
+                inspectedAt,
+              )}.`
+            : 'No officer has visited this property yet, so it cannot be shown as verified.'}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+/** "10 May 2025" — the reference's format, unambiguous and not US-first. */
+function formatInspectionDate(iso: string): string {
+  return new Date(iso).toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
+}
+
+/**
+ * A list of reasons, each with its own mark.
+ *
+ * Used for the "Why choose House For Rent?" block. Every row here has to be
+ * a fact the system enforces — the moment one becomes a slogan, the block
+ * turns into the marketing section §12 says not to bury real information
+ * beneath.
+ */
+export function TrustList({
+  title,
+  items,
+}: {
+  title?: string;
+  items: { icon: React.ReactNode; title: string; detail: string }[];
+}) {
+  const p = usePalette();
+  const surface = useCardSurface();
+  return (
+    <View style={[surface, { padding: space.gutter }]}>
+      {title ? (
+        <Text style={[t.headlineSm, { color: p.ink, marginBottom: space.md }]}>
+          {title}
+        </Text>
+      ) : null}
+      {items.map((item, i) => (
+        <View
+          key={item.title}
+          style={{
+            flexDirection: 'row',
+            gap: space.md,
+            alignItems: 'flex-start',
+            marginTop: i === 0 ? 0 : space.gutter,
+          }}
+        >
+          <View
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: radius.pill,
+              backgroundColor: p.brandSoft,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            {item.icon}
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={[t.labelLg, { color: p.ink, marginBottom: 2 }]}>
+              {item.title}
+            </Text>
+            <Text style={[t.bodySm, { color: p.inkSoft }]}>{item.detail}</Text>
+          </View>
+        </View>
+      ))}
     </View>
   );
 }

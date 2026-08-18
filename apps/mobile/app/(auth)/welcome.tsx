@@ -1,7 +1,7 @@
 import { View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { BodySm, Button, Caption, Display } from '@/components/ui';
+import { BodySm, Button, Display } from '@/components/ui';
 import { FadeToPage, FilmStrip } from '@/components/film-strip';
 import { space, usePalette } from '@/lib/theme';
 
@@ -53,17 +53,17 @@ export default function Welcome() {
         }}
       >
         <View style={{ alignItems: 'center', marginBottom: space.xl }}>
-          <Caption>WELCOME TO HOUSE FOR RENT</Caption>
-          <View style={{ marginTop: space.md }}>
-            <Display style={{ textAlign: 'center' }}>
-              Let&apos;s Get You Closer
-            </Display>
-            <Display tone="brand" style={{ textAlign: 'center' }}>
-              To Your Ideal Home
-            </Display>
-          </View>
-          <BodySm style={{ marginTop: space.md, textAlign: 'center' }}>
-            Every home verified in person. You only pay when you move in.
+          {/* The brand line, from the identity board. The screen this
+              replaced opened with a headline inherited from a template
+              pack; this one is the company's own. */}
+          <Display style={{ textAlign: 'center' }}>Verified homes.</Display>
+          <Display style={{ textAlign: 'center' }}>Trusted rentals.</Display>
+          <Display tone="brand" style={{ textAlign: 'center' }}>
+            Better living.
+          </Display>
+          <BodySm style={{ marginTop: space.gutter, textAlign: 'center' }}>
+            A trusted marketplace for quality rental homes verified by our
+            Field Operations Officers.
           </BodySm>
         </View>
 

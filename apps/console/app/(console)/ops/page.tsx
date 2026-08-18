@@ -188,6 +188,13 @@ export default async function OpsPage() {
               <p className="muted">{deals.total} deals in total.</p>
             </>
           )}
+          {/* A distribution is a shape, not a queue. The list is where a
+              settlement or a refund actually gets performed (F-007). */}
+          <p>
+            <Link href="/ops/deals" className="btn btn-secondary">
+              Open the deal queue
+            </Link>
+          </p>
         </>
       )}
     </>

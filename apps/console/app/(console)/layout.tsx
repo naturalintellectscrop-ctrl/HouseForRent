@@ -28,6 +28,7 @@ export default async function ConsoleLayout({
                 access control — the backend refuses regardless. */}
             <Link href="/ops">Ops</Link>
             {role === 'admin' && <Link href="/ops/dispatch">Dispatch</Link>}
+            {role === 'admin' && <Link href="/ops/deals">Deals</Link>}
             {role === 'admin' && <Link href="/ops/config">Config</Link>}
             {role === 'admin' && <Link href="/ops/audit">Audit</Link>}
             <form action={logoutAction}>

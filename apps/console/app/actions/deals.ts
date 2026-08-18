@@ -52,3 +52,68 @@ export async function openDealAction(
     ok: `Deal ${dealId.slice(0, 8)} opened. The tenant can now see it, and it is waiting on the match-tenant step.`,
   };
 }
+
+/**
+ * Perform one deal transition (F-007).
+ *
+ * ── One action for all eleven transitions, on purpose ──
+ * The `action` segment and the field names both come from the server's
+ * `availableActions`. There is no switch here on deal status, no per-action
+ * branch, and no list of which transitions exist — because every one of
+ * those would be a copy of the state machine living in the console. If a
+ * transition is added, removed or re-scoped in the backend, this action
+ * carries it without being touched.
+ *
+ * ── Why it refreshes even when the call FAILS ──
+ * The most likely rejection is 409 ILLEGAL_TRANSITION, and the most likely
+ * cause of that is a second operator having acted on the same deal since
+ * this page was rendered. Leaving the stale page on screen would show a
+ * deal in a status it no longer holds, with actions it no longer permits —
+ * so the page is re-fetched from the server either way, and the operator
+ * reads the real state next to the rejection.
+ *
+ * Nothing here reports success on its own authority: the status shown after
+ * an action is the one the server returned on the refetch, never one this
+ * console predicted.
+ */
+export async function dealTransitionAction(
+  dealId: string,
+  action: string,
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const body: Record<string, string> = {};
+  for (const [key, value] of formData.entries()) {
+    // `confirm` is the operator's acknowledgement checkbox. It is a UI
+    // safeguard against a mis-click, not a business field — the endpoints
+    // use `forbidNonWhitelisted`, so sending it would be a 400.
+    if (key === 'confirm' || typeof value !== 'string') continue;
+    const trimmed = value.trim();
+    if (trimmed) body[key] = trimmed;
+  }
+
+  try {
+    await api(`/v1/deals/${dealId}/${action}`, { method: 'POST', body });
+  } catch (err) {
+    refresh();
+    if (err instanceof ApiError) {
+      if (err.code === 'ILLEGAL_TRANSITION') {
+        return {
+          error: `${err.message} This deal is no longer in the state this page was showing — someone else has acted on it. The state above has been reloaded from the server.`,
+          code: err.code,
+        };
+      }
+      return { error: err.message, code: err.code };
+    }
+    return {
+      error:
+        'Could not reach the House For Rent API. Nothing was changed — the deal is in whatever state the server last recorded.',
+    };
+  }
+
+  refresh();
+  return {
+    error: null,
+    ok: 'Done. The state and figures above have been reloaded from the server.',
+  };
+}

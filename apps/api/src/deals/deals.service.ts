@@ -725,6 +725,160 @@ export class DealsService {
     return this.prisma.deal.findUnique({ where: { id: dealId } });
   }
 
+  /**
+   * Everything an operator needs to understand this deal, computed HERE.
+   *
+   * ── Why the figures are server-side ──
+   * An operations console that computed "amount still held" by subtracting
+   * two numbers it had been given would be doing accounting in a React
+   * component. Every figure below is read from the ledger — the same rows
+   * reconciliation reads — so the console and the books cannot disagree.
+   * Nothing here re-derives a commission or a rate; those come from the
+   * deal's own frozen snapshots.
+   *
+   * All money leaves as STRINGS of integer shillings (API Spec §2). A
+   * bigint rendered as a JSON number is exactly the precision loss the money
+   * core exists to prevent.
+   *
+   * `expectedUpfront` is the LISTING's own asking terms, carried alongside
+   * `held` rather than compared to it. The comparison is the operator's to
+   * make: nothing in the system currently enforces that a tenant funded what
+   * the listing asked (F-012), and quietly rendering them as "correct" or
+   * "short" here would imply a check that does not exist.
+   */
+  async financialSummary(dealId: string) {
+    const deal = await this.prisma.deal.findUnique({
+      where: { id: dealId },
+      include: { listing: true },
+    });
+    if (!deal) {
+      throw new DealNotFoundError(dealId);
+    }
+
+    const entries = await this.prisma.ledgerEntry.findMany({
+      where: { dealId },
+      select: {
+        direction: true,
+        amount: true,
+        reference: true,
+        occurredAt: true,
+        account: { select: { accountType: true } },
+      },
+      orderBy: { occurredAt: 'asc' },
+    });
+
+    /** Credit-balance accounts read negative in the ledger's convention. */
+    const balance = (type: string) =>
+      entries
+        .filter((e) => e.account.accountType === type)
+        .reduce(
+          (sum, e) => (e.direction === 'debit' ? sum + e.amount : sum - e.amount),
+          0n,
+        );
+
+    /** The gross of one posting kind, by its reference. */
+    const byReference = (reference: string) =>
+      entries
+        .filter((e) => e.reference === reference && e.direction === 'credit')
+        .reduce((sum, e) => sum + e.amount, 0n);
+
+    const expectedUpfront =
+      deal.listing.monthlyRent * BigInt(deal.listing.requiredMonthsUpfront) +
+      deal.listing.depositAmount;
+
+    return {
+      /** What the listing asks for. NOT compared to `held` — see F-012. */
+      expectedUpfront: expectedUpfront.toString(),
+      /** Frozen at agreement_signed, immutable thereafter (FR-7.4). */
+      monthlyRentSnapshot: deal.monthlyRentSnapshot?.toString() ?? null,
+      commissionRateBpSnapshot: deal.commissionRateBpSnapshot,
+      /** Computed at commission_earned from the snapshots, then stored. */
+      commissionAmount: deal.commissionAmount?.toString() ?? null,
+
+      /** Still owed back to the tenant or onward to the landlord. */
+      heldInEscrow: (-balance('escrow_liability')).toString(),
+      /** Authorised to the landlord but not yet moved by the custodian. */
+      owedToLandlord: (-balance('landlord_payable')).toString(),
+      /** Revenue recognised. Only ever at commission_earned (FR-7.5). */
+      commissionRecognised: (-balance('commission_revenue')).toString(),
+
+      funded: byReference('fund_escrow').toString(),
+      releasedToLandlord: byReference('release_to_landlord').toString(),
+      refunded: byReference('refund').toString(),
+
+      /**
+       * True when the liability has fully unwound. Reported rather than
+       * asserted: a non-zero balance on a terminal deal is a real condition
+       * an operator must be able to see, not something to hide behind a
+       * green tick.
+       */
+      escrowDischarged: balance('escrow_liability') === 0n,
+    };
+  }
+
+  /**
+   * The property and the two parties, at the minimum an operator needs to
+   * know WHICH rental this is.
+   *
+   * Deliberately no phone numbers (NFR-3, data minimisation). An operator
+   * who must call a party has a real need, but a deal page that lists both
+   * counterparties' numbers is a contact-details export with a deal attached,
+   * and widening it is a decision for whoever owns the DPA position rather
+   * than a convenience to add in passing.
+   *
+   * There is also no landlord identity beyond a display name: the tenant
+   * reads this endpoint too (scoped by DealPartyGuard), and the landlord's
+   * details are not the tenant's to receive.
+   */
+  async dealContext(dealId: string) {
+    const deal = await this.prisma.deal.findUnique({
+      where: { id: dealId },
+      include: {
+        listing: {
+          include: { property: { include: { neighbourhood: true } } },
+        },
+        tenantParty: { select: { displayName: true } },
+        landlordParty: { select: { displayName: true } },
+      },
+    });
+    if (!deal) {
+      throw new DealNotFoundError(dealId);
+    }
+
+    const property = deal.listing.property;
+    return {
+      listing: {
+        id: deal.listing.id,
+        monthlyRent: deal.listing.monthlyRent.toString(),
+        requiredMonthsUpfront: deal.listing.requiredMonthsUpfront,
+        depositAmount: deal.listing.depositAmount.toString(),
+        publicationState: deal.listing.publicationState,
+        availabilityStatus: deal.listing.availabilityStatus,
+        verificationState: deal.listing.verificationState,
+      },
+      property: {
+        id: property.id,
+        propertyType: property.propertyType,
+        bedrooms: property.bedrooms,
+        bathrooms: property.bathrooms,
+        furnished: property.furnished,
+        landmarkText: property.landmarkText,
+        neighbourhood: property.neighbourhood.name,
+        inServiceArea: property.neighbourhood.inServiceArea,
+      },
+      parties: {
+        tenant: {
+          partyId: deal.tenantPartyId,
+          displayName: deal.tenantParty.displayName,
+        },
+        landlord: {
+          partyId: deal.landlordPartyId,
+          displayName: deal.landlordParty.displayName,
+        },
+      },
+    };
+  }
+
   async getTransitionHistory(dealId: string) {
     return this.prisma.dealTransition.findMany({
       where: { dealId },

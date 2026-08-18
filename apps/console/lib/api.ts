@@ -240,9 +240,117 @@ export interface Reconciliation {
   history: ReconciliationCheck[];
 }
 
+export interface DealRow {
+  id: string;
+  status: string;
+  neighbourhood: string;
+  tenantName: string;
+  landlordName: string;
+  monthlyRent: string;
+  commissionAmount: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface DealStates {
   distribution: Record<string, number>;
   total: number;
+  rows: DealRow[];
+}
+
+/**
+ * ── The deal detail contract (F-007) ──
+ *
+ * `availableActions` is the server's answer to "what may this caller do to
+ * this deal right now", derived from the real transition graph and the real
+ * `@Roles()` decorators. This console RENDERS it.
+ *
+ * There is deliberately no `DealStatus → actions` map anywhere in this app.
+ * A second copy of the transition graph here would be a second copy of the
+ * Move-In Guarantee — and the wrong one the moment it drifted, either by
+ * offering a settlement the server refuses or, worse, hiding one it would
+ * have allowed.
+ */
+export interface DealActionField {
+  name: string;
+  kind: 'shillings' | 'text';
+  label: string;
+  hint?: string;
+  required: boolean;
+}
+
+export interface AvailableDealAction {
+  action: string;
+  label: string;
+  /** Plain-language consequence, written server-side. Shown before acting. */
+  consequence: string;
+  reversible: boolean;
+  movesMoney: boolean;
+  fields: DealActionField[];
+}
+
+/** Every figure computed server-side from the ledger. None derived here. */
+export interface DealFinancial {
+  expectedUpfront: string;
+  monthlyRentSnapshot: string | null;
+  commissionRateBpSnapshot: number | null;
+  commissionAmount: string | null;
+  heldInEscrow: string;
+  owedToLandlord: string;
+  commissionRecognised: string;
+  funded: string;
+  releasedToLandlord: string;
+  refunded: string;
+  escrowDischarged: boolean;
+}
+
+export interface DealTransitionRow {
+  id: string;
+  fromStatus: string;
+  toStatus: string;
+  actorPartyId: string;
+  reason: string | null;
+  occurredAt: string;
+}
+
+export interface DealDetail {
+  deal: {
+    id: string;
+    status: string;
+    listingId: string;
+    tenantPartyId: string;
+    landlordPartyId: string;
+    introductionRecordId: string | null;
+    agreementId: string | null;
+    createdAt: string;
+    updatedAt: string;
+  };
+  transitions: DealTransitionRow[];
+  listing: {
+    id: string;
+    monthlyRent: string;
+    requiredMonthsUpfront: number;
+    depositAmount: string;
+    publicationState: string;
+    availabilityStatus: string;
+    verificationState: string;
+  };
+  property: {
+    id: string;
+    propertyType: string;
+    bedrooms: number;
+    bathrooms: number;
+    furnished: string;
+    landmarkText: string | null;
+    neighbourhood: string;
+    inServiceArea: boolean;
+  };
+  parties: {
+    tenant: { partyId: string; displayName: string };
+    landlord: { partyId: string; displayName: string };
+  };
+  financial: DealFinancial;
+  availableActions: AvailableDealAction[];
 }
 
 export interface ConfigVersion {

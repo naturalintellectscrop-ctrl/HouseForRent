@@ -20,15 +20,14 @@ import {
   Divider,
   Heading,
   Loading,
-  Pill,
   Price,
   PropertyImage,
   Row,
   Screen,
-  Subtitle,
   Title,
-  TrustNote,
+  TrustList,
   useCardSurface,
+  VerificationPanel,
   VerifiedBadge,
 } from '@/components/ui';
 import {
@@ -36,9 +35,11 @@ import {
   BedIcon,
   ClockIcon,
   HomeIcon,
+  LockIcon,
   ShieldIcon,
-  VerifiedIcon,
+  SupportIcon,
 } from '@/components/icons';
+import { ScheduleViewingSheet } from '@/components/schedule-viewing';
 import { radius, space, usePalette } from '@/lib/theme';
 
 interface ListingDetail extends SearchResult {
@@ -83,33 +84,27 @@ export default function ListingScreen() {
     usePublicRequest<ListingDetail>(`/v1/listings/${id}`, [id]);
 
   const [requesting, setRequesting] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(false);
   const [outcome, setOutcome] = useState<
     { tone: 'ok' | 'error'; message: string; code?: string } | null
   >(null);
 
-  async function requestViewing() {
-    if (!caller) {
-      router.push('/(auth)/welcome');
-      return;
-    }
+  async function requestViewing(when: Date) {
     setRequesting(true);
     setOutcome(null);
     try {
-      // Tomorrow at 10:00 as the opening proposal. Dispatch confirms or
-      // moves it when an officer is assigned — the server owns scheduling,
-      // this only starts the conversation (FR-5.1, FR-5.2).
-      const when = new Date();
-      when.setDate(when.getDate() + 1);
-      when.setHours(10, 0, 0, 0);
-
+      // The tenant's proposed slot. Dispatch confirms or moves it when an
+      // officer is assigned — the server owns scheduling, this only starts
+      // the conversation (FR-5.1, FR-5.2).
       await authed('/v1/viewings', {
         method: 'POST',
         body: { listingId: id, scheduledFor: when.toISOString() },
       });
+      setSheetOpen(false);
       setOutcome({
         tone: 'ok',
         message:
-          'Viewing requested. We will confirm a time, and one of our officers will meet you there.',
+          'Viewing requested. We will confirm the time, and one of our officers will meet you there.',
       });
     } catch (err) {
       if (err instanceof OfflineError) {
@@ -237,59 +232,44 @@ export default function ListingScreen() {
             </>
           ) : null}
 
-          {/* ── FR-4.3 ── */}
-          <Heading>What our officer confirmed</Heading>
-          {data.fieldConfirmed ? (
-            <Card>
-              <View
-                style={{
-                  flexDirection: 'row',
-                  gap: space.md,
-                  marginBottom: space.sm,
-                }}
-              >
-                <VerifiedIcon size={22} />
-                <BodySm style={{ flex: 1 }}>
-                  One of our field officers visited this property and filed the
-                  report below. You are seeing what they recorded, not what the
-                  landlord wrote.
+          {/* ── FR-4.3 ──
+              Verification leads with WHO checked and WHEN, then the report
+              itself. The panel is the claim; the rows beneath are the
+              evidence, and both come from the officer's structured record. */}
+          <View style={{ marginTop: space.lg }}>
+            <VerificationPanel
+              inspectedAt={data.fieldConfirmed?.reportedAt ?? null}
+            />
+          </View>
+
+          {data.fieldConfirmed && (
+            <>
+              <Heading>What the officer recorded</Heading>
+              <Card>
+                <BodySm style={{ marginBottom: space.md }}>
+                  You are seeing what the officer wrote down on site, not what
+                  the landlord submitted.
                 </BodySm>
-              </View>
-              <Divider />
-              <Row
-                label="Condition"
-                value={
-                  CONDITION_LABEL[data.fieldConfirmed.conditionRating] ??
-                  data.fieldConfirmed.conditionRating
-                }
-              />
-              <Divider />
-              <Row
-                label="Matches the listing"
-                value={data.fieldConfirmed.matchesListing ? 'Yes' : 'No'}
-              />
-              <Divider />
-              <Row
-                label="Available"
-                value={data.fieldConfirmed.isAvailable ? 'Yes' : 'No'}
-              />
-              <Divider />
-              <Row
-                label="Visited"
-                value={new Date(
-                  data.fieldConfirmed.reportedAt,
-                ).toLocaleDateString()}
-              />
-            </Card>
-          ) : (
-            // Never a fabricated placeholder — an unvisited home must not
-            // look inspected (FR-4.3).
-            <Card>
-              <BodySm>
-                No officer report is on file for this home yet. It cannot be
-                shown as verified until one is.
-              </BodySm>
-            </Card>
+                <Divider />
+                <Row
+                  label="Condition"
+                  value={
+                    CONDITION_LABEL[data.fieldConfirmed.conditionRating] ??
+                    data.fieldConfirmed.conditionRating
+                  }
+                />
+                <Divider />
+                <Row
+                  label="Matches the listing"
+                  value={data.fieldConfirmed.matchesListing ? 'Yes' : 'No'}
+                />
+                <Divider />
+                <Row
+                  label="Available"
+                  value={data.fieldConfirmed.isAvailable ? 'Yes' : 'No'}
+                />
+              </Card>
+            </>
           )}
 
           <Heading>What you would pay</Heading>
@@ -306,17 +286,33 @@ export default function ListingScreen() {
             <Row label="Total upfront" value={formatShillings(upfront)} strong />
           </Card>
 
-          <View style={{ marginTop: space.md }}>
-            <TrustNote
-              title="Safe Rent Guarantee"
-              icon={<ShieldIcon size={20} color={p.brand} />}
-            >
-              Your upfront payment is held in escrow by a licensed payment
-              provider — never by us — and released only once you confirm you
-              have moved in. House For Rent charges tenants nothing; the
-              landlord pays our commission.
-            </TrustNote>
-          </View>
+          {/* Every row is a rule the system enforces, not a promise made
+              here: the publish gate, the deal state machine's lack of any
+              path that releases escrow before `move_in_confirmed`, and the
+              landlord-paid commission (FR-9.2). */}
+          <Heading>Why choose House For Rent?</Heading>
+          <TrustList
+            items={[
+              {
+                icon: <ShieldIcon size={18} color={p.brand} />,
+                title: 'Verified properties',
+                detail:
+                  'Every home is physically inspected by one of our officers before it can be listed.',
+              },
+              {
+                icon: <LockIcon size={18} color={p.brand} />,
+                title: 'Trusted transactions',
+                detail:
+                  'Your upfront payment is held in escrow by a licensed provider — never by us — and released only once you confirm you have moved in.',
+              },
+              {
+                icon: <SupportIcon size={18} color={p.brand} />,
+                title: 'Free for tenants',
+                detail:
+                  'No search fee, no viewing fee, no fee to move in. The landlord pays our commission, and only after a completed let.',
+              },
+            ]}
+          />
 
           {outcome && (
             <View style={{ marginTop: space.gutter }}>
@@ -342,10 +338,14 @@ export default function ListingScreen() {
           borderTopColor: p.line,
         }}
       >
+        {/* §8: the label says what happens. Signed out it says the step
+            that comes first, rather than opening a sheet the tenant cannot
+            submit from. */}
         <Button
-          label={caller ? 'Request a viewing' : 'Sign in to request a viewing'}
-          onPress={requestViewing}
-          busy={requesting}
+          label={caller ? 'Schedule viewing' : 'Sign in to schedule a viewing'}
+          onPress={() =>
+            caller ? setSheetOpen(true) : router.push('/(auth)/welcome')
+          }
         />
         <BodySm
           tone="faint"
@@ -355,6 +355,18 @@ export default function ListingScreen() {
           landlord, and not a broker.
         </BodySm>
       </View>
+
+      <ScheduleViewingSheet
+        visible={sheetOpen}
+        busy={requesting}
+        error={
+          outcome?.tone === 'error'
+            ? { message: outcome.message, code: outcome.code }
+            : null
+        }
+        onClose={() => setSheetOpen(false)}
+        onSubmit={requestViewing}
+      />
     </View>
   );
 }
