@@ -115,19 +115,13 @@ export const DEAL_ACTIONS: readonly DealActionSpec[] = Object.freeze([
     to: 'escrow_funded',
     label: 'Record escrow funding',
     consequence:
-      "Records the tenant's upfront payment into escrow as a liability we owe back. No revenue is recognised. Once funded, this deal can only move forward to move-in or back as a full refund — it cannot be cancelled.",
+      "Records the tenant's upfront payment into escrow as a liability we owe back. The amount is derived from this deal's own signed terms. No revenue is recognised. Once funded, the deal can only move forward to move-in or back as a full refund — it cannot be cancelled.",
     reversible: false,
     movesMoney: true,
     partyScoped: true,
-    fields: [
-      {
-        name: 'amount',
-        kind: 'shillings',
-        label: 'Amount received',
-        hint: 'Total upfront transferred: rent months plus deposit. Integer shillings.',
-        required: true,
-      },
-    ],
+    // No amount field: the server derives the upfront total from the deal's
+    // own signed terms (F-012).
+    fields: [],
   },
   {
     action: 'confirm-move-in',
@@ -159,19 +153,13 @@ export const DEAL_ACTIONS: readonly DealActionSpec[] = Object.freeze([
     to: 'settled',
     label: 'Settle — pay the landlord',
     consequence:
-      'Instructs the custodian to pay the landlord the held total MINUS the earned commission. Real money leaves. A retry reuses the same idempotency key, so the landlord cannot be paid twice — but a settlement cannot be undone.',
+      'Instructs the custodian to pay the landlord everything still held for this deal — the commission has already been taken out of it. The amount is the ledger balance, not a figure anyone types. Real money leaves, and a settlement cannot be undone.',
     reversible: false,
     movesMoney: true,
     partyScoped: false,
-    fields: [
-      {
-        name: 'totalHeld',
-        kind: 'shillings',
-        label: 'Total held in escrow',
-        hint: 'Integer shillings. The landlord receives this minus the commission.',
-        required: true,
-      },
-    ],
+    // No amount field: what the landlord receives is the outstanding escrow
+    // liability, which already has the commission debited out of it (F-012).
+    fields: [],
   },
   {
     action: 'close',
@@ -191,19 +179,12 @@ export const DEAL_ACTIONS: readonly DealActionSpec[] = Object.freeze([
     to: 'refunded',
     label: 'Refund the tenant',
     consequence:
-      'Returns the held amount to the tenant and earns NO commission. Real money leaves. Terminal — the deal ends here and cannot be revived.',
+      'Returns everything still held to the tenant and earns NO commission. The amount is the ledger balance, not a figure anyone types. Real money leaves. Terminal — the deal ends here and cannot be revived.',
     reversible: false,
     movesMoney: true,
     partyScoped: false,
-    fields: [
-      {
-        name: 'amount',
-        kind: 'shillings',
-        label: 'Amount to return',
-        hint: 'Integer shillings.',
-        required: true,
-      },
-    ],
+    // No amount field: a full refund is what the ledger says we still hold.
+    fields: [],
   },
   {
     action: 'cancel',

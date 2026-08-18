@@ -269,7 +269,7 @@ describe('Deal operations (F-007)', () => {
     await http()
       .post(`/v1/deals/${s.dealId}/fund-escrow`)
       .set('Authorization', as(s.tenant))
-      .send({ amount: UPFRONT.toString() })
+      .send({})
       .expect(201);
   }
 
@@ -437,7 +437,7 @@ describe('Deal operations (F-007)', () => {
       const res = await http()
         .post(`/v1/deals/${s.dealId}/settle`)
         .set('Authorization', as(s.admin))
-        .send({ totalHeld: UPFRONT.toString() });
+        .send({});
 
       expect(res.status).toBe(409);
       expect(res.body.error.code).toBe('ILLEGAL_TRANSITION');
@@ -454,7 +454,7 @@ describe('Deal operations (F-007)', () => {
       await http()
         .post(`/v1/deals/${s.dealId}/refund`)
         .set('Authorization', as(s.tenant))
-        .send({ amount: UPFRONT.toString() })
+        .send({})
         .expect(403);
     });
 
@@ -465,7 +465,7 @@ describe('Deal operations (F-007)', () => {
       await http()
         .post(`/v1/deals/${s.dealId}/settle`)
         .set('Authorization', as(s.admin))
-        .send({ totalHeld: UPFRONT.toString() })
+        .send({})
         .expect(409);
 
       const d = await detailAs(s.admin, s.dealId);
@@ -561,7 +561,7 @@ describe('Deal operations (F-007)', () => {
       await http()
         .post(`/v1/deals/${s.dealId}/settle`)
         .set('Authorization', as(s.admin))
-        .send({ totalHeld: UPFRONT.toString() })
+        .send({})
         .expect(201);
 
       d = await detailAs(s.admin, s.dealId);

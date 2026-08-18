@@ -61,11 +61,22 @@ export class PaymentAccountDto {
   method!: 'mtn_momo' | 'airtel_money' | 'bank_transfer';
 }
 
+/**
+ * Funding. The amount is DERIVED server-side from the deal's own signed
+ * terms (F-012); this field is TRANSITIONAL.
+ *
+ * The mobile app still asks the tenant to type a figure. Until that is
+ * replaced by the server-stated total (F-013), a supplied amount is checked
+ * against the derived one and REJECTED on mismatch — silently booking a
+ * different number from the one the tenant was shown is the error class this
+ * change exists to end. It is never the source of truth, and it goes away.
+ */
 export class FundEscrowDto extends TransitionDto {
+  @IsOptional()
   @Matches(SHILLINGS, {
     message: 'amount must be a string of integer shillings, e.g. "4000000"',
   })
-  amount!: string;
+  amount?: string;
 
   @IsOptional()
   @ValidateNested()
@@ -73,11 +84,13 @@ export class FundEscrowDto extends TransitionDto {
   tenantAccount?: PaymentAccountDto;
 }
 
+/**
+ * Settlement names no amount. What the landlord receives is the deal's
+ * OUTSTANDING escrow liability, read inside the settling transaction — the
+ * commission has already been debited out of it, so the remainder is the net
+ * (F-012, FR-7.6).
+ */
 export class SettleDto extends TransitionDto {
-  @Matches(SHILLINGS, {
-    message: 'totalHeld must be a string of integer shillings',
-  })
-  totalHeld!: string;
 
   @IsOptional()
   @ValidateNested()
@@ -85,11 +98,11 @@ export class SettleDto extends TransitionDto {
   landlordAccount?: PaymentAccountDto;
 }
 
+/**
+ * A refund names no amount either. "Full refund of tenant funds" (FR-7.7) is
+ * what the ledger says we still hold, not a figure a request can assert.
+ */
 export class RefundDto extends TransitionDto {
-  @Matches(SHILLINGS, {
-    message: 'amount must be a string of integer shillings',
-  })
-  amount!: string;
 
   @IsOptional()
   @ValidateNested()

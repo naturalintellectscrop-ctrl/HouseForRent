@@ -8,8 +8,11 @@ import {
 import { Response } from 'express';
 import { IllegalTransitionError } from '../deals/deal-state-machine';
 import {
+  AmountNotAuthoritativeError,
   DealAlreadyExistsError,
   DealNotFoundError,
+  ListingTermsChangedError,
+  NothingHeldError,
   IntroductionRecordNotFoundError,
   MissingIntroductionRecordError,
   NotTheIntroducingOfficerError,
@@ -179,6 +182,16 @@ export class DomainExceptionFilter implements ExceptionFilter {
     }
     if (error instanceof OutsideServiceAreaError) {
       return { status: 422, code: 'OUTSIDE_SERVICE_AREA' };
+    }
+    // 422 — the request is well-formed but its money figure is not ours.
+    if (error instanceof AmountNotAuthoritativeError) {
+      return { status: 422, code: 'AMOUNT_NOT_AUTHORITATIVE' };
+    }
+    if (error instanceof ListingTermsChangedError) {
+      return { status: 422, code: 'LISTING_TERMS_CHANGED' };
+    }
+    if (error instanceof NothingHeldError) {
+      return { status: 422, code: 'NOTHING_HELD' };
     }
     if (error instanceof MissingIntroductionRecordError) {
       return { status: 422, code: 'INTRODUCTION_RECORD_REQUIRED' };

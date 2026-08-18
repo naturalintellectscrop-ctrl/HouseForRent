@@ -56,14 +56,23 @@ describe('Deal orchestration with PSP (Stage 4)', () => {
     method: 'airtel_money',
   };
 
+  /**
+   * Since F-012 the upfront total is DERIVED from the listing's terms, so
+   * a scenario that wants a particular escrow balance sets the terms that
+   * produce it rather than naming an amount.
+   */
   async function seedFundedDeal(opts?: {
     monthlyRent?: bigint;
     rateBp?: number;
-    upfront?: bigint;
+    requiredMonthsUpfront?: number;
+    depositAmount?: bigint;
   }) {
     const monthlyRent = opts?.monthlyRent ?? 1_000_000n;
     const rateBp = opts?.rateBp ?? 10000;
-    const upfront = opts?.upfront ?? 4_000_000n;
+    const requiredMonthsUpfront = opts?.requiredMonthsUpfront ?? 3;
+    const depositAmount = opts?.depositAmount ?? monthlyRent;
+    const upfront =
+      monthlyRent * BigInt(requiredMonthsUpfront) + depositAmount;
     seq += 1;
 
     const tenant = await prisma.party.create({
@@ -96,8 +105,8 @@ describe('Deal orchestration with PSP (Stage 4)', () => {
       data: {
         propertyId: property.id,
         monthlyRent,
-        requiredMonthsUpfront: 3,
-        depositAmount: monthlyRent,
+        requiredMonthsUpfront,
+        depositAmount,
       },
     });
     // Evidence first, status last — the Stage 7 DB trigger rejects a
@@ -166,11 +175,7 @@ describe('Deal orchestration with PSP (Stage 4)', () => {
       actorPartyId: landlord.id,
       agreementId: agreement.id,
     });
-    await deals.fundEscrow({
-      dealId: deal.id,
-      actorPartyId: tenant.id,
-      amount: upfront,
-    });
+    await deals.fundEscrow({ dealId: deal.id, actorPartyId: tenant.id });
 
     return { deal, tenant, landlord, foo, admin, upfront, monthlyRent };
   }
@@ -191,7 +196,8 @@ describe('Deal orchestration with PSP (Stage 4)', () => {
     test('fund → move-in → earn → settle (via PSP) → close posts correctly throughout', async () => {
       const s = await seedFundedDeal({
         monthlyRent: 1_000_000n,
-        upfront: 4_000_000n,
+        requiredMonthsUpfront: 3,
+        depositAmount: 1_000_000n,
       });
 
       // funded: liability held, no revenue
@@ -216,7 +222,6 @@ describe('Deal orchestration with PSP (Stage 4)', () => {
       const settled = await deals.settle({
         dealId: s.deal.id,
         actorPartyId: s.admin.id,
-        totalHeld: s.upfront,
         landlordAccount,
       });
       expect(settled.status).toBe('settled');
@@ -259,7 +264,6 @@ describe('Deal orchestration with PSP (Stage 4)', () => {
       await deals.settle({
         dealId: s.deal.id,
         actorPartyId: s.admin.id,
-        totalHeld: s.upfront,
         landlordAccount,
       });
 
@@ -270,7 +274,6 @@ describe('Deal orchestration with PSP (Stage 4)', () => {
         deals.settle({
           dealId: s.deal.id,
           actorPartyId: s.admin.id,
-          totalHeld: s.upfront,
           landlordAccount,
         }),
       ).rejects.toThrow();
@@ -302,7 +305,6 @@ describe('Deal orchestration with PSP (Stage 4)', () => {
       await deals.settle({
         dealId: s.deal.id,
         actorPartyId: s.admin.id,
-        totalHeld: s.upfront,
         landlordAccount,
       });
 
@@ -317,12 +319,11 @@ describe('Deal orchestration with PSP (Stage 4)', () => {
 
   describe('pre-move-in refund returns tenant funds fully (FR-7.7)', () => {
     test('refund issues a PSP instruction, unwinds the liability, and earns nothing', async () => {
-      const s = await seedFundedDeal({ upfront: 5_000_000n });
+      const s = await seedFundedDeal({ requiredMonthsUpfront: 4, depositAmount: 1_000_000n });
 
       const refunded = await deals.refund({
         dealId: s.deal.id,
         actorPartyId: s.admin.id,
-        amount: s.upfront,
         tenantAccount,
       });
       expect(refunded.status).toBe('refunded');
@@ -339,11 +340,10 @@ describe('Deal orchestration with PSP (Stage 4)', () => {
     });
 
     test('a retried refund does not refund twice', async () => {
-      const s = await seedFundedDeal({ upfront: 2_000_000n });
+      const s = await seedFundedDeal({ requiredMonthsUpfront: 1, depositAmount: 1_000_000n });
       await deals.refund({
         dealId: s.deal.id,
         actorPartyId: s.admin.id,
-        amount: s.upfront,
         tenantAccount,
       });
 
@@ -353,7 +353,6 @@ describe('Deal orchestration with PSP (Stage 4)', () => {
         deals.refund({
           dealId: s.deal.id,
           actorPartyId: s.admin.id,
-          amount: s.upfront,
           tenantAccount,
         }),
       ).rejects.toThrow();
@@ -400,7 +399,6 @@ describe('Deal orchestration with PSP (Stage 4)', () => {
         deals.settle({
           dealId: s.deal.id,
           actorPartyId: s.admin.id,
-          totalHeld: s.upfront,
           landlordAccount,
         }),
       ).rejects.toThrow(/custodian rejected/);

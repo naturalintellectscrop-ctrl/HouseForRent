@@ -100,9 +100,12 @@ export class DealsController {
   }
 
   /**
-   * agreement_signed → escrow_funded. The tenant sends only the amount they
-   * are paying; every derived figure (commission, net) is server-computed
-   * from the deal's own snapshots (API Spec §7.1).
+   * agreement_signed → escrow_funded.
+   *
+   * The request names NO amount (F-012). The upfront total is derived from
+   * the deal's own signed terms; `dto.amount`, if present, is checked
+   * against that and rejected on mismatch. It is transitional and goes away
+   * with the mobile pass (F-013).
    */
   @Roles('tenant', 'admin')
   @RequiresDealParty()
@@ -115,7 +118,7 @@ export class DealsController {
     return this.deals.fundEscrow({
       dealId,
       actorPartyId: caller.partyId,
-      amount: BigInt(dto.amount),
+      expectedAmount: dto.amount === undefined ? undefined : BigInt(dto.amount),
       reason: dto.reason,
     });
   }
@@ -173,7 +176,6 @@ export class DealsController {
     return this.deals.settle({
       dealId,
       actorPartyId: caller.partyId,
-      totalHeld: BigInt(dto.totalHeld),
       landlordAccount: dto.landlordAccount,
       reason: dto.reason,
     });
@@ -193,7 +195,10 @@ export class DealsController {
     });
   }
 
-  /** escrow_funded → refunded. Full tenant refund (FR-7.7). */
+  /**
+   * escrow_funded → refunded. Returns everything still held (FR-7.7).
+   * The amount is the outstanding escrow liability, not a request field.
+   */
   @Roles('admin')
   @Post(':dealId/refund')
   async refund(
@@ -204,7 +209,6 @@ export class DealsController {
     return this.deals.refund({
       dealId,
       actorPartyId: caller.partyId,
-      amount: BigInt(dto.amount),
       tenantAccount: dto.tenantAccount,
       reason: dto.reason,
     });

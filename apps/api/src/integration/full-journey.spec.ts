@@ -308,7 +308,7 @@ describe('The full journey (Stage 8)', () => {
     await http()
       .post(`/v1/deals/${deal.id}/fund-escrow`)
       .set('Authorization', as('tenant'))
-      .send({ amount: UPFRONT.toString() })
+      .send({})
       .expect(201);
 
     if (stopAfter === 'funded') {
@@ -330,7 +330,7 @@ describe('The full journey (Stage 8)', () => {
     await http()
       .post(`/v1/deals/${deal.id}/settle`)
       .set('Authorization', as('admin'))
-      .send({ totalHeld: UPFRONT.toString() })
+      .send({})
       .expect(201);
 
     await http()
@@ -634,7 +634,7 @@ describe('The full journey (Stage 8)', () => {
       await http()
         .post(`/v1/deals/${dealId}/settle`)
         .set('Authorization', as('admin'))
-        .send({ totalHeld: UPFRONT.toString() })
+        .send({})
         .expect(409);
 
       const settled = await prisma.auditEvent.count({
