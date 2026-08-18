@@ -4,7 +4,11 @@ import { PrismaService } from '../prisma/prisma.service';
 import { LedgerModule } from '../ledger/ledger.module';
 import { LedgerService } from '../ledger/ledger.service';
 import { DealsModule } from './deals.module';
-import { DealsService, SnapshotImmutableError } from './deals.service';
+import {
+  DealsService,
+  ListingTermsChangedError,
+  SnapshotImmutableError,
+} from './deals.service';
 import { IllegalTransitionError } from './deal-state-machine';
 
 /**
@@ -47,9 +51,19 @@ describe('Deals service (Stage 3)', () => {
    * Builds a deal sitting at `created`, with a real listing, a real
    * introduction record, and a commission rate version in force.
    */
-  async function seedDeal(params?: { monthlyRent?: bigint; rateBp?: number }) {
+  async function seedDeal(params?: {
+    monthlyRent?: bigint;
+    rateBp?: number;
+    /* The upfront TERMS, not an amount. Since F-012 the figure a tenant
+     * owes is derived from these, so a test that wants a different
+     * upfront changes the listing rather than passing a number. */
+    requiredMonthsUpfront?: number;
+    depositAmount?: bigint;
+  }) {
     const monthlyRent = params?.monthlyRent ?? 1_000_000n;
     const rateBp = params?.rateBp ?? 10000;
+    const requiredMonthsUpfront = params?.requiredMonthsUpfront ?? 3;
+    const depositAmount = params?.depositAmount ?? monthlyRent;
 
     const tenant = await prisma.party.create({
       data: { displayName: 'Deal Tenant', primaryPhone: uniquePhone('t') },
@@ -81,8 +95,8 @@ describe('Deals service (Stage 3)', () => {
       data: {
         propertyId: property.id,
         monthlyRent,
-        requiredMonthsUpfront: 3,
-        depositAmount: monthlyRent,
+        requiredMonthsUpfront,
+        depositAmount,
       },
     });
     // Built in the order the Stage 7 DB trigger requires: evidence first,
@@ -155,18 +169,27 @@ describe('Deals service (Stage 3)', () => {
       landlord,
       foo,
       admin,
+      /** What the server will derive and post — not a figure a test picks. */
+      upfront: monthlyRent * BigInt(requiredMonthsUpfront) + depositAmount,
       monthlyRent,
     };
   }
 
-  /** Advances a freshly seeded deal to escrow_funded. */
+  /**
+   * Advances a freshly seeded deal to escrow_funded.
+   *
+   * Note what it does NOT pass: an amount. Since F-012 the upfront total
+   * is derived from the listing's own terms, so `seeded.upfront` is what
+   * the server will post — read from the seed, not asserted by the test.
+   */
   async function fundedDeal(opts?: {
     monthlyRent?: bigint;
     rateBp?: number;
-    upfront?: bigint;
+    requiredMonthsUpfront?: number;
+    depositAmount?: bigint;
   }) {
     const seeded = await seedDeal(opts);
-    const upfront = opts?.upfront ?? seeded.monthlyRent * 3n;
+    const upfront = seeded.upfront;
 
     await deals.matchTenant({
       dealId: seeded.deal.id,
@@ -180,7 +203,6 @@ describe('Deals service (Stage 3)', () => {
     await deals.fundEscrow({
       dealId: seeded.deal.id,
       actorPartyId: seeded.tenant.id,
-      amount: upfront,
     });
 
     return { ...seeded, upfront };
@@ -230,7 +252,6 @@ describe('Deals service (Stage 3)', () => {
       await deals.fundEscrow({
         dealId: seeded.deal.id,
         actorPartyId: seeded.tenant.id,
-        amount: 3_000_000n,
       });
       await deals.confirmMoveIn({
         dealId: seeded.deal.id,
@@ -249,7 +270,7 @@ describe('Deals service (Stage 3)', () => {
       );
     });
 
-    test('editing the LISTING rent after signing does not re-price the deal either', async () => {
+    test('editing the LISTING rent after FUNDING does not re-price the deal', async () => {
       const seeded = await seedDeal({ monthlyRent: 1_000_000n, rateBp: 10000 });
 
       await deals.matchTenant({
@@ -261,6 +282,10 @@ describe('Deals service (Stage 3)', () => {
         actorPartyId: seeded.landlord.id,
         agreementId: seeded.agreement.id,
       });
+      await deals.fundEscrow({
+        dealId: seeded.deal.id,
+        actorPartyId: seeded.tenant.id,
+      });
 
       // landlord triples the asking rent on the listing afterwards
       await prisma.listing.update({
@@ -268,11 +293,6 @@ describe('Deals service (Stage 3)', () => {
         data: { monthlyRent: 3_000_000n },
       });
 
-      await deals.fundEscrow({
-        dealId: seeded.deal.id,
-        actorPartyId: seeded.tenant.id,
-        amount: 3_000_000n,
-      });
       await deals.confirmMoveIn({
         dealId: seeded.deal.id,
         actorPartyId: seeded.tenant.id,
@@ -285,6 +305,44 @@ describe('Deals service (Stage 3)', () => {
       // still priced off the SNAPSHOT
       expect(earned.monthlyRentSnapshot).toBe(1_000_000n);
       expect(earned.commissionAmount).toBe(1_000_000n);
+    });
+
+    /**
+     * The other half of the same rule, and the stronger one (F-012).
+     *
+     * Before funding, a listing whose rent has moved since signing is not
+     * merely ignored — it is REFUSED. The upfront total is derived from that
+     * listing's months and deposit, and those are not snapshotted anywhere,
+     * so terms that have shifted underneath a signed deal would silently
+     * re-price what the tenant owes. The rent snapshot is the tripwire that
+     * detects it.
+     */
+    test('editing the LISTING rent BEFORE funding refuses the funding', async () => {
+      const seeded = await seedDeal({ monthlyRent: 1_000_000n, rateBp: 10000 });
+
+      await deals.matchTenant({
+        dealId: seeded.deal.id,
+        actorPartyId: seeded.foo.id,
+      });
+      await deals.signAgreement({
+        dealId: seeded.deal.id,
+        actorPartyId: seeded.landlord.id,
+        agreementId: seeded.agreement.id,
+      });
+      await prisma.listing.update({
+        where: { id: seeded.listing.id },
+        data: { monthlyRent: 3_000_000n },
+      });
+
+      await expect(
+        deals.fundEscrow({
+          dealId: seeded.deal.id,
+          actorPartyId: seeded.tenant.id,
+        }),
+      ).rejects.toThrow(ListingTermsChangedError);
+
+      // and nothing was posted
+      expect(await creditBalance(seeded.deal.id, 'escrow_liability')).toBe(0n);
     });
 
     test('snapshots cannot be re-taken — signing twice is rejected', async () => {
@@ -319,7 +377,8 @@ describe('Deals service (Stage 3)', () => {
       const dealA = await fundedDeal({
         monthlyRent,
         rateBp: 10000,
-        upfront: 4_000_000n,
+        requiredMonthsUpfront: 3,
+        depositAmount: 1_000_000n,
       });
       await deals.confirmMoveIn({
         dealId: dealA.deal.id,
@@ -334,7 +393,8 @@ describe('Deals service (Stage 3)', () => {
       const dealB = await fundedDeal({
         monthlyRent,
         rateBp: 10000,
-        upfront: 13_000_000n,
+        requiredMonthsUpfront: 12,
+        depositAmount: 1_000_000n,
       });
       await deals.confirmMoveIn({
         dealId: dealB.deal.id,
@@ -388,14 +448,17 @@ describe('Deals service (Stage 3)', () => {
       await deals.fundEscrow({
         dealId: seeded.deal.id,
         actorPartyId: seeded.tenant.id,
-        amount: 3_000_000n,
       });
       // funded — money is held, but STILL no revenue
       expect(await creditBalance(seeded.deal.id, 'commission_revenue')).toBe(
         0n,
       );
+      // 4,000,000 — 3 months at 1,000,000 plus the 1,000,000 deposit. This
+      // used to assert 3,000,000, matching a figure the test itself passed
+      // to fundEscrow while the listing asked for more. That mismatch was
+      // F-012 in miniature: nothing objected, because nothing could.
       expect(await creditBalance(seeded.deal.id, 'escrow_liability')).toBe(
-        3_000_000n,
+        seeded.upfront,
       );
 
       await deals.confirmMoveIn({
@@ -449,7 +512,6 @@ describe('Deals service (Stage 3)', () => {
         deals.settle({
           dealId: funded.deal.id,
           actorPartyId: funded.admin.id,
-          totalHeld: funded.upfront,
         }),
       ).rejects.toThrow(IllegalTransitionError);
 
@@ -504,7 +566,6 @@ describe('Deals service (Stage 3)', () => {
       await deals.refund({
         dealId: funded.deal.id,
         actorPartyId: funded.admin.id,
-        amount: funded.upfront,
       });
 
       expect(await creditBalance(funded.deal.id, 'escrow_liability')).toBe(0n);
@@ -522,7 +583,8 @@ describe('Deals service (Stage 3)', () => {
       const funded = await fundedDeal({
         monthlyRent: 1_000_000n,
         rateBp: 10000,
-        upfront: 4_000_000n,
+        requiredMonthsUpfront: 3,
+        depositAmount: 1_000_000n,
       });
 
       await deals.confirmMoveIn({
@@ -536,7 +598,6 @@ describe('Deals service (Stage 3)', () => {
       const settled = await deals.settle({
         dealId: funded.deal.id,
         actorPartyId: funded.admin.id,
-        totalHeld: funded.upfront,
       });
       expect(settled.status).toBe('settled');
 

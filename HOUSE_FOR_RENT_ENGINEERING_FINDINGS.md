@@ -4,8 +4,8 @@ Persistent across sessions. Nothing is removed; findings move to
 `RESOLVED` with the evidence that closed them.
 
 **Established:** 2026-08-15, at commit `6274e38`.
-**Last updated:** 2026-08-17 — F-001, F-002 and F-007 resolved; F-012 and
-F-013 opened.
+**Last updated:** 2026-08-18 — F-012 fixed; F-014 and F-015 opened during
+the F-007 browser pass.
 **Method:** every route enumerated from controller decorators, then grepped
 against actual call sites in `apps/console` and `apps/mobile`. Connectivity
 is traced, not inferred from filenames.
@@ -546,6 +546,75 @@ console does.
 **Next action.** Replace the three status comparisons with a render of
 `availableActions`. Out of scope for F-007, which was the operations
 console; in scope for whoever next touches the mobile deal screen.
+
+---
+
+## F-014 — `sign-agreement` is offered but cannot be completed from any client
+
+| | |
+|---|---|
+| **Priority** | **P1** |
+| **Area** | API / Agreements + Console / Deals |
+| **Status** | OPEN — found 2026-08-18 while preparing the F-007 browser pass |
+
+`POST /v1/deals/:id/sign-agreement` requires `agreementId`. **No endpoint any
+client can call returns one.**
+
+- `GET /v1/listings/:id/agreement` returns `presentTerms(...)`, whose shape is
+  `{ listingId, monthlyRent, commissionRateBp, commissionIfLet, clause, payer,
+  tenantPays, alreadyAccepted }` — no `id`.
+- `POST /v1/listings/:id/agreement/accept` **does** return the full
+  `ListingAgreement`, but only to the caller at the moment of acceptance —
+  the landlord, in the mobile app, which discards it.
+- `GET /v1/deals/:dealId` exposes `deal.agreementId`, which is `null` until
+  after signing — the value is published only once it is no longer needed.
+
+```
+$ grep -rn "agreementId" apps/console/app apps/mobile/app apps/mobile/components
+  (no output)
+```
+
+**Impact.** F-007's deal page renders a `sign-agreement` action with a
+required "Accepted listing agreement" field that an operator has no way to
+fill. The action is reachable, correctly authorised, and unusable.
+
+**How it survived the F-007 suite.** `deal-operations.spec.ts` obtains the id
+with `prisma.listingAgreement.findFirstOrThrow(...)` in its scene builder.
+That is the F-011 pattern repeating one layer down: the test reached around
+the API for a value no client can obtain, and so proved the endpoint works
+without proving it is *reachable*. The suite is not wrong about what it
+asserts — it is silent about what it had to fetch by other means.
+
+**Next action.** Return the accepted agreement's id from the read endpoint
+(`presentTerms`), or from `dealContext`. One field, no new semantics. Then
+have the console pre-fill it and the spec stop touching Prisma.
+
+---
+
+## F-015 — Neighbourhoods can only be created by writing to the database
+
+| | |
+|---|---|
+| **Priority** | P1 |
+| **Area** | API / Listings |
+| **Status** | OPEN — found 2026-08-18 |
+
+`POST /v1/properties` requires `neighbourhoodId`. There is **no route that
+creates a neighbourhood, and none that lists them.** `GET /v1/listings`
+accepts a `neighbourhoodId` filter, so a client is expected to know ids it
+has no way to discover.
+
+Every test and seed script creates them with `prisma.neighbourhood.create`.
+
+**Impact.** Blocks F-003 directly: a landlord authoring a property needs a
+neighbourhood picker, and taxonomy-first location is not a detail — FR-2.2
+makes the neighbourhood the primary location field and forbids requiring a
+street address. It also means no end-to-end scenario can be seeded through
+the API alone.
+
+**Next action.** `GET /v1/neighbourhoods` (public — it is the search
+taxonomy) and an admin-only create. Both are prerequisites for F-003, not
+part of it.
 
 ---
 

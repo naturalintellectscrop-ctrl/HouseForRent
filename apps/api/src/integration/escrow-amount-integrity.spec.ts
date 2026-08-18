@@ -8,30 +8,33 @@ import { IdentityService } from '../identity/identity.service';
 import { LedgerService } from '../ledger/ledger.service';
 
 /**
- * PHASE 7 — do the AMOUNTS on the money path hold?
+ * F-012 — the AMOUNTS on the money path.
  *
- * The sequencing guarantees are structural and proven: there is no
- * `escrow_funded → settled` edge, so funds cannot be released before move-in
- * (FR-8.2), and every posting is double-entry and immutable at the database
- * level.
- *
- * None of that constrains the FIGURES. Three amounts are supplied by a
- * caller rather than derived:
- *   - `fund-escrow.amount`   — by the tenant
- *   - `settle.totalHeld`     — by an admin
- *   - `refund.amount`        — by an admin
- *
- * And the ledger's own integrity check cannot catch an error in any of them:
+ * ── What this suite used to be ──
+ * A probe. Three amounts were supplied by a caller rather than derived
+ * (`fund-escrow.amount`, `settle.totalHeld`, `refund.amount`), and the
+ * ledger's own integrity check could not catch an error in any of them:
  * `everyPostingBalances()` asserts each posting nets to zero, which a WRONG
- * amount does just as perfectly as a right one. This suite exists to find
- * out whether anything else does.
+ * amount does just as perfectly as a right one. The probe documented actual
+ * behaviour rather than preferred behaviour, so its PASSING was the
+ * confirmation of the defect: a 1-shilling funding, a 10x settlement and a
+ * 3x refund were all accepted.
  *
- * These tests are written to DOCUMENT ACTUAL BEHAVIOUR, not to assert the
- * behaviour we would prefer. Where the system accepts something it should
- * not, the test says so plainly and the finding is recorded in the ledger —
- * a test rewritten to pass would hide exactly what it was written to find.
+ * ── What it is now ──
+ * The same scenarios, INVERTED. Every one is still exercised end to end over
+ * real HTTP; each now asserts refusal, or asserts that the derived figure is
+ * posted regardless of what the request said. Nothing was deleted or
+ * weakened — the cases that found the defect are the cases that now guard
+ * the fix, which is the only way to know the fix addresses what was found.
+ *
+ * The invariant under test:
+ *
+ *   NO MONEY ENDPOINT ACCEPTS AN AMOUNT.
+ *   Funding is derived from the deal's signed terms; settlement and refund
+ *   are derived from the outstanding escrow liability, read inside the
+ *   transaction that posts against it.
  */
-describe('Escrow amount integrity (Phase 7 probe)', () => {
+describe('Escrow amount integrity (F-012)', () => {
   let app: INestApplication;
   let prisma: PrismaService;
   let auth: AuthService;
@@ -126,8 +129,12 @@ describe('Escrow amount integrity (Phase 7 probe)', () => {
     listingId: string;
   }
 
-  /** A deal carried to `escrow_funded` over HTTP, funded with `amount`. */
-  async function fundedDeal(amount: bigint): Promise<Funded> {
+  /**
+   * A deal carried to `agreement_signed` over HTTP, on a listing asking
+   * 3 months at 1,000,000 plus a 1,000,000 deposit — so the amount the
+   * server will derive at funding is 4,000,000.
+   */
+  async function sceneToSigned(): Promise<Funded> {
     seq += 1;
     const tenant = await actor('tenant', { verifyIdentity: true });
     const lister = await actor('lister');
@@ -237,14 +244,37 @@ describe('Escrow amount integrity (Phase 7 probe)', () => {
       .set('Authorization', as(lister))
       .send({ agreementId: agreement.id })
       .expect(201);
-    await http()
-      .post(`/v1/deals/${dealId}/fund-escrow`)
-      .set('Authorization', as(tenant))
-      .send({ amount: amount.toString() })
-      .expect(201);
-
     return { tenant, lister, foo, admin, dealId, listingId };
   }
+
+  /** …and on to `escrow_funded`, naming no amount. */
+  async function scene(): Promise<Funded> {
+    const s = await sceneToSigned();
+    await http()
+      .post(`/v1/deals/${s.dealId}/fund-escrow`)
+      .set('Authorization', as(s.tenant))
+      .send({})
+      .expect(201);
+    return s;
+  }
+
+  /** Carries a funded deal to `commission_earned`. */
+  async function moveInAndEarn(s: Funded) {
+    await http()
+      .post(`/v1/deals/${s.dealId}/confirm-move-in`)
+      .set('Authorization', as(s.tenant))
+      .send({})
+      .expect(201);
+    await http()
+      .post(`/v1/deals/${s.dealId}/earn-commission`)
+      .set('Authorization', as(s.admin))
+      .send({})
+      .expect(201);
+  }
+
+  /** What the deal still owes back, straight from the ledger. */
+  const heldFor = (dealId: string) =>
+    ledger.outstandingEscrowLiability(dealId);
 
   // ──────────────────────────────────────────────────────────────────────
   // What DOES hold
@@ -252,17 +282,20 @@ describe('Escrow amount integrity (Phase 7 probe)', () => {
 
   describe('the guarantees that are structural', () => {
     test('a funded deal cannot be settled — the edge does not exist', async () => {
-      const f = await fundedDeal(REQUIRED_UPFRONT);
+      const f = await scene();
       const res = await http()
         .post(`/v1/deals/${f.dealId}/settle`)
         .set('Authorization', as(f.admin))
-        .send({ totalHeld: REQUIRED_UPFRONT.toString() });
+        // No amount — the point here is the TRANSITION rule. Sending a
+        // field the DTO no longer has would be answered by validation
+        // (400) before the state machine was ever consulted.
+        .send({});
       expect(res.status).toBe(409);
       expect(res.body.error.code).toBe('ILLEGAL_TRANSITION');
     });
 
     test('a funded deal cannot be cancelled — Amendment A1', async () => {
-      const f = await fundedDeal(REQUIRED_UPFRONT);
+      const f = await scene();
       const res = await http()
         .post(`/v1/deals/${f.dealId}/cancel`)
         .set('Authorization', as(f.admin))
@@ -274,7 +307,7 @@ describe('Escrow amount integrity (Phase 7 probe)', () => {
       // Under-funding must not shrink the commission: it is one month's rent
       // as snapshotted at signing, and nothing about the escrow total enters
       // the calculation.
-      const f = await fundedDeal(1_000n);
+      const f = await scene();
       await http()
         .post(`/v1/deals/${f.dealId}/confirm-move-in`)
         .set('Authorization', as(f.tenant))
@@ -297,82 +330,256 @@ describe('Escrow amount integrity (Phase 7 probe)', () => {
   // F-012 — the amounts nobody reconciles
   // ──────────────────────────────────────────────────────────────────────
 
-  describe('caller-supplied amounts (F-012)', () => {
-    test('a tenant may fund LESS than the listing requires, and the deal proceeds', async () => {
-      // Documents current behaviour. `fund-escrow` does not compare the
-      // amount against the listing's own terms
-      // (monthlyRent × requiredMonthsUpfront + depositAmount), so a deal can
-      // reach escrow_funded — and therefore move_in_confirmed — on a
-      // fraction of what the tenant actually owes.
-      const f = await fundedDeal(1n);
+  describe('the server is the financial authority (F-012)', () => {
+    test('funding posts the DERIVED total when the request names no amount', async () => {
+      const s = await scene();
 
-      const deal = await prisma.deal.findUniqueOrThrow({
-        where: { id: f.dealId },
-      });
-      expect(deal.status).toBe('escrow_funded');
-
-      const balances = await ledger.balancesByTypeForDeal(f.dealId);
-      // Liability is a credit balance, so it reads negative here.
-      expect(balances.get('escrow_liability')).toBe(-1n);
-
-      const listing = await prisma.listing.findUniqueOrThrow({
-        where: { id: f.listingId },
-      });
-      const owed =
-        listing.monthlyRent * BigInt(listing.requiredMonthsUpfront) +
-        listing.depositAmount;
-      expect(owed).toBe(REQUIRED_UPFRONT);
-      // …and nothing anywhere compared the two.
-      expect(owed).not.toBe(1n);
-    });
-
-    test('an admin may settle a total that was NEVER held, driving the liability negative', async () => {
-      const f = await fundedDeal(REQUIRED_UPFRONT);
-
-      await http()
-        .post(`/v1/deals/${f.dealId}/confirm-move-in`)
-        .set('Authorization', as(f.tenant))
-        .send({})
-        .expect(201);
-      await http()
-        .post(`/v1/deals/${f.dealId}/earn-commission`)
-        .set('Authorization', as(f.admin))
-        .send({})
-        .expect(201);
-
-      // Ten times what the tenant ever paid in. A fat finger, not an attack.
-      const inflated = REQUIRED_UPFRONT * 10n;
-      await http()
-        .post(`/v1/deals/${f.dealId}/settle`)
-        .set('Authorization', as(f.admin))
-        .send({ totalHeld: inflated.toString() })
-        .expect(201);
-
-      const balances = await ledger.balancesByTypeForDeal(f.dealId);
-      // The liability should discharge to exactly zero on a correct
-      // settlement. It does not — the deal now claims we held far more than
-      // we did, and the landlord was instructed for the difference.
-      expect(balances.get('escrow_liability')).not.toBe(0n);
-
-      // And the ledger's own integrity check is BLIND to it: every posting
-      // still nets to zero, because a wrong amount balances as perfectly as
-      // a right one. This is the assertion that matters — it is why the
-      // green suite could not have caught this.
+      // 3 months at 1,000,000 plus a 1,000,000 deposit.
+      expect(await heldFor(s.dealId)).toBe(4_000_000n);
       expect(await ledger.everyPostingBalances()).toBe(true);
     });
 
-    test('an admin may refund MORE than was ever funded', async () => {
-      const f = await fundedDeal(REQUIRED_UPFRONT);
+    test('a tenant CANNOT fund less than the listing requires', async () => {
+      const s = await sceneToSigned();
+
+      const res = await http()
+        .post(`/v1/deals/${s.dealId}/fund-escrow`)
+        .set('Authorization', as(s.tenant))
+        .send({ amount: '1' });
+
+      expect(res.status).toBe(422);
+      expect(res.body.error.code).toBe('AMOUNT_NOT_AUTHORITATIVE');
+      // and nothing was posted
+      expect(await heldFor(s.dealId)).toBe(0n);
+    });
+
+    test('a tenant CANNOT fund more than the listing requires either', async () => {
+      const s = await sceneToSigned();
+
+      const res = await http()
+        .post(`/v1/deals/${s.dealId}/fund-escrow`)
+        .set('Authorization', as(s.tenant))
+        .send({ amount: '99000000' });
+
+      expect(res.status).toBe(422);
+      expect(res.body.error.code).toBe('AMOUNT_NOT_AUTHORITATIVE');
+      expect(await heldFor(s.dealId)).toBe(0n);
+    });
+
+    test('a CORRECT supplied amount is accepted — and is not what was trusted', async () => {
+      const s = await sceneToSigned();
 
       await http()
-        .post(`/v1/deals/${f.dealId}/refund`)
-        .set('Authorization', as(f.admin))
-        .send({ amount: (REQUIRED_UPFRONT * 3n).toString() })
+        .post(`/v1/deals/${s.dealId}/fund-escrow`)
+        .set('Authorization', as(s.tenant))
+        .send({ amount: '4000000' })
         .expect(201);
 
-      const balances = await ledger.balancesByTypeForDeal(f.dealId);
-      expect(balances.get('escrow_liability')).not.toBe(0n);
+      // The posted figure is the derived one. That it happens to equal what
+      // was sent is the point: the request agreed with the server, it did
+      // not instruct it.
+      expect(await heldFor(s.dealId)).toBe(4_000_000n);
+    });
+
+    test('funding is REFUSED when the listing terms moved after signing', async () => {
+      const s = await sceneToSigned();
+
+      await prisma.listing.update({
+        where: { id: s.listingId },
+        data: { monthlyRent: 5_000_000n },
+      });
+
+      const res = await http()
+        .post(`/v1/deals/${s.dealId}/fund-escrow`)
+        .set('Authorization', as(s.tenant))
+        .send({});
+
+      expect(res.status).toBe(422);
+      expect(res.body.error.code).toBe('LISTING_TERMS_CHANGED');
+      expect(await heldFor(s.dealId)).toBe(0n);
+    });
+
+    test('settlement releases the OUTSTANDING liability, and no request can inflate it', async () => {
+      const s = await scene();
+      await moveInAndEarn(s);
+
+      // commission (1,000,000) has already been debited out of escrow
+      expect(await heldFor(s.dealId)).toBe(3_000_000n);
+
+      // A body naming a total is refused outright — the field no longer
+      // exists, so `forbidNonWhitelisted` rejects it before any handler runs.
+      const smuggled = await http()
+        .post(`/v1/deals/${s.dealId}/settle`)
+        .set('Authorization', as(s.admin))
+        .send({ totalHeld: '40000000' });
+      expect(smuggled.status).toBe(400);
+      expect(await heldFor(s.dealId)).toBe(3_000_000n);
+
+      await http()
+        .post(`/v1/deals/${s.dealId}/settle`)
+        .set('Authorization', as(s.admin))
+        .send({})
+        .expect(201);
+
+      // Liability lands exactly on zero, landlord got rent-minus-commission.
+      expect(await heldFor(s.dealId)).toBe(0n);
+      const balances = await ledger.balancesByTypeForDeal(s.dealId);
+      expect(-(balances.get('commission_revenue') ?? 0n)).toBe(1_000_000n);
+      expect(balances.get('landlord_payable') ?? 0n).toBe(0n);
       expect(await ledger.everyPostingBalances()).toBe(true);
+    });
+
+    test('a refund returns exactly what is held — no more, no less', async () => {
+      const s = await scene();
+      expect(await heldFor(s.dealId)).toBe(4_000_000n);
+
+      const smuggled = await http()
+        .post(`/v1/deals/${s.dealId}/refund`)
+        .set('Authorization', as(s.admin))
+        .send({ amount: '12000000' });
+      expect(smuggled.status).toBe(400);
+      expect(await heldFor(s.dealId)).toBe(4_000_000n);
+
+      await http()
+        .post(`/v1/deals/${s.dealId}/refund`)
+        .set('Authorization', as(s.admin))
+        .send({})
+        .expect(201);
+
+      expect(await heldFor(s.dealId)).toBe(0n);
+      const balances = await ledger.balancesByTypeForDeal(s.dealId);
+      expect(balances.get('commission_revenue') ?? 0n).toBe(0n);
+      expect(await ledger.everyPostingBalances()).toBe(true);
+    });
+
+    test('the liability NEVER goes negative, on any path', async () => {
+      const settled = await scene();
+      await moveInAndEarn(settled);
+      await http()
+        .post(`/v1/deals/${settled.dealId}/settle`)
+        .set('Authorization', as(settled.admin))
+        .send({})
+        .expect(201);
+
+      const refunded = await scene();
+      await http()
+        .post(`/v1/deals/${refunded.dealId}/refund`)
+        .set('Authorization', as(refunded.admin))
+        .send({})
+        .expect(201);
+
+      for (const id of [settled.dealId, refunded.dealId]) {
+        const held = await heldFor(id);
+        expect(held).toBe(0n);
+        expect(held >= 0n).toBe(true);
+      }
+    });
+
+    test('a SECOND settlement finds nothing left and is refused', async () => {
+      // The zero-liability case, and the shape a double-release would take.
+      const s = await scene();
+      await moveInAndEarn(s);
+      await http()
+        .post(`/v1/deals/${s.dealId}/settle`)
+        .set('Authorization', as(s.admin))
+        .send({})
+        .expect(201);
+
+      // `settled` has no outgoing settle edge, so the state machine refuses
+      // first — the liability guard sits behind it as the second line.
+      const again = await http()
+        .post(`/v1/deals/${s.dealId}/settle`)
+        .set('Authorization', as(s.admin))
+        .send({});
+      expect(again.status).toBe(409);
+      expect(await heldFor(s.dealId)).toBe(0n);
+    });
+
+    test('CONCURRENT settlements cannot both release the same escrow', async () => {
+      const s = await scene();
+      await moveInAndEarn(s);
+      const held = await heldFor(s.dealId);
+
+      // Fired together. The balance is read INSIDE the settling transaction,
+      // so the second sees the first's effect (or the state change) rather
+      // than a stale full liability.
+      const [a, b] = await Promise.all([
+        http()
+          .post(`/v1/deals/${s.dealId}/settle`)
+          .set('Authorization', as(s.admin))
+          .send({}),
+        http()
+          .post(`/v1/deals/${s.dealId}/settle`)
+          .set('Authorization', as(s.admin))
+          .send({}),
+      ]);
+
+      const statuses = [a.status, b.status].sort();
+      // Exactly one succeeds.
+      expect(statuses[0]).toBe(201);
+      expect(statuses[1]).toBeGreaterThanOrEqual(400);
+
+      // And the landlord was paid once, for what was actually held.
+      const balances = await ledger.balancesByTypeForDeal(s.dealId);
+      expect(await heldFor(s.dealId)).toBe(0n);
+      expect(balances.get('landlord_payable') ?? 0n).toBe(0n);
+      expect(await ledger.everyPostingBalances()).toBe(true);
+
+      const released = await prisma.ledgerEntry.findMany({
+        where: { dealId: s.dealId, reference: 'release_to_landlord' },
+      });
+      const total = released
+        .filter((e) => e.direction === 'credit')
+        .reduce((sum, e) => sum + e.amount, 0n);
+      expect(total).toBe(held);
+    });
+
+    test('CONCURRENT refunds cannot both return the same escrow', async () => {
+      const s = await scene();
+      const held = await heldFor(s.dealId);
+
+      const [a, b] = await Promise.all([
+        http()
+          .post(`/v1/deals/${s.dealId}/refund`)
+          .set('Authorization', as(s.admin))
+          .send({}),
+        http()
+          .post(`/v1/deals/${s.dealId}/refund`)
+          .set('Authorization', as(s.admin))
+          .send({}),
+      ]);
+
+      const statuses = [a.status, b.status].sort();
+      expect(statuses[0]).toBe(201);
+      expect(statuses[1]).toBeGreaterThanOrEqual(400);
+
+      expect(await heldFor(s.dealId)).toBe(0n);
+      const refunded = await prisma.ledgerEntry.findMany({
+        where: { dealId: s.dealId, reference: 'refund' },
+      });
+      const total = refunded
+        .filter((e) => e.direction === 'credit')
+        .reduce((sum, e) => sum + e.amount, 0n);
+      expect(total).toBe(held);
+    });
+
+    test('authorisation is UNCHANGED by any of this', async () => {
+      const s = await scene();
+
+      // still tenant-only to fund, admin-only to refund
+      await http()
+        .post(`/v1/deals/${s.dealId}/refund`)
+        .set('Authorization', as(s.tenant))
+        .send({})
+        .expect(403);
+      await http()
+        .post(`/v1/deals/${s.dealId}/refund`)
+        .set('Authorization', as(s.lister))
+        .send({})
+        .expect(403);
+      await http().post(`/v1/deals/${s.dealId}/refund`).send({}).expect(401);
+
+      expect(await heldFor(s.dealId)).toBe(4_000_000n);
     });
   });
 });

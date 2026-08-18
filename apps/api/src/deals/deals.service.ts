@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { AuthRole, Deal, DealStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { EscrowService } from '../ledger/escrow.service';
+import { LedgerService } from '../ledger/ledger.service';
 import { PaymentsService } from '../payments/payments.service';
 import type { PaymentAccountRef } from '../payments/interfaces/payment-provider.interface';
 import {
@@ -43,6 +44,44 @@ export class SnapshotImmutableError extends Error {
         'once taken at agreement_signed (FR-7.4)',
     );
     this.name = 'SnapshotImmutableError';
+  }
+}
+
+export class ListingTermsChangedError extends Error {
+  constructor(dealId: string) {
+    super(
+      `deal ${dealId} cannot be funded: the listing's monthly rent no longer ` +
+        'matches the rent snapshotted onto this deal at signing. The upfront ' +
+        'total is derived from that listing, so terms that have ' +
+        'moved since signing would silently re-price what the tenant owes ' +
+        '(FR-7.4).',
+    );
+    this.name = 'ListingTermsChangedError';
+  }
+}
+
+export class AmountNotAuthoritativeError extends Error {
+  constructor(
+    readonly supplied: bigint,
+    readonly derived: bigint,
+  ) {
+    super(
+      `the amount supplied (${supplied}) is not the amount this deal's own ` +
+        `terms require (${derived}). The server derives every posted figure; ` +
+        'a request may ask for an operation but may not name its amount.',
+    );
+    this.name = 'AmountNotAuthoritativeError';
+  }
+}
+
+export class NothingHeldError extends Error {
+  constructor(dealId: string) {
+    super(
+      `deal ${dealId} holds no escrow balance, so there is nothing to release ` +
+        'or return. A zero-value posting would record a money movement that ' +
+        'did not happen.',
+    );
+    this.name = 'NothingHeldError';
   }
 }
 
@@ -130,6 +169,8 @@ export class DealsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly escrow: EscrowService,
+    /** Read-only here: the authority on what a deal still holds (F-012). */
+    private readonly ledger: LedgerService,
     private readonly payments: PaymentsService,
     private readonly audit: AuditService,
   ) {}
@@ -340,24 +381,68 @@ export class DealsService {
    * agreement_signed → escrow_funded. Posts fundEscrow in the SAME
    * transaction as the status change: liability up, no revenue.
    *
-   * `amount` is the total upfront transferred (rent months + deposit). It is
-   * deliberately NOT the commission base — that is monthlyRentSnapshot
-   * (Decision 5, FR-7.3).
+   * ── The amount is DERIVED, never accepted (F-012) ──
+   * The upfront total is `monthlyRentSnapshot × requiredMonthsUpfront +
+   * depositAmount`. Every term in that comes from server state: the rent
+   * frozen onto this deal at signing, and the listing's own upfront terms.
+   *
+   * The rent is deliberately taken from the DEAL's snapshot rather than the
+   * listing, so an in-flight deal is priced by what was agreed. The months
+   * and deposit are not snapshotted anywhere — no schema carries them — so
+   * they are read from the listing, and `monthlyRentSnapshot !==
+   * listing.monthlyRent` is used as a TRIPWIRE: if the rent has moved, the
+   * terms have been edited since signing and the other two cannot be trusted
+   * either. No code path currently edits any of the three, which is what
+   * makes reading them safe; the tripwire is what keeps that true if one
+   * ever does.
+   *
+   * `expectedAmount` is a TRANSITIONAL compatibility field. The mobile app
+   * still asks the tenant to type a figure; until that field is replaced
+   * with the server-stated total (F-013), a supplied amount is checked
+   * against the derived one and REJECTED on mismatch rather than ignored —
+   * silently booking a different number from the one the tenant was shown is
+   * exactly the class of error this change exists to end. It is never the
+   * source of truth, and it will be removed.
+   *
+   * Note what this is NOT: it is not the commission base. That is
+   * monthlyRentSnapshot (Decision 5, FR-7.3), and it is unchanged.
    */
   async fundEscrow(params: {
     dealId: string;
     actorPartyId: string;
-    amount: bigint;
+    /** @deprecated transitional — see above. Checked, never trusted. */
+    expectedAmount?: bigint;
     reason?: string;
   }): Promise<Deal> {
     return this.prisma.$transaction(async (tx) => {
       const deal = await this.loadForUpdate(params.dealId, tx);
       assertTransitionAllowed(deal.status, 'escrow_funded');
 
-      await this.escrow.fundEscrow(
-        { dealId: deal.id, amount: params.amount },
-        tx,
-      );
+      const listing = await tx.listing.findUniqueOrThrow({
+        where: { id: deal.listingId },
+      });
+
+      // Guaranteed non-null: escrow_funded is reachable only from
+      // agreement_signed, and signAgreement is what writes the snapshot.
+      if (
+        deal.monthlyRentSnapshot === null ||
+        deal.monthlyRentSnapshot !== listing.monthlyRent
+      ) {
+        throw new ListingTermsChangedError(params.dealId);
+      }
+
+      const amount =
+        deal.monthlyRentSnapshot * BigInt(listing.requiredMonthsUpfront) +
+        listing.depositAmount;
+
+      if (
+        params.expectedAmount !== undefined &&
+        params.expectedAmount !== amount
+      ) {
+        throw new AmountNotAuthoritativeError(params.expectedAmount, amount);
+      }
+
+      await this.escrow.fundEscrow({ dealId: deal.id, amount }, tx);
 
       return this.applyTransition(
         {
@@ -438,30 +523,49 @@ export class DealsService {
   }
 
   /**
-   * commission_earned → settled. Releases to the landlord NET of the earned
-   * commission (FR-7.6).
+   * commission_earned -> settled. Releases what is still held to the landlord
+   * (FR-7.6).
    *
    * Reachable only from commission_earned, which is reachable only from
-   * move_in_confirmed — so settlement structurally cannot precede move-in.
+   * move_in_confirmed - so settlement structurally cannot precede move-in.
    *
-   * ── Ordering, and why it is this way round ──
+   * -- The amount is the OUTSTANDING LIABILITY (F-012) --
+   * This used to take a `totalHeld` from the caller and subtract the
+   * commission from it. Both halves of that were wrong: the total was
+   * whatever the request said, and the subtraction recomputed a figure the
+   * ledger already held.
+   *
+   * `recogniseCommission` has already debited the earned commission out of
+   * `escrow_liability`, so what remains in that account IS the net owed to
+   * the landlord. FR-7.6's "net of earned commission" is therefore satisfied
+   * by construction rather than by arithmetic on a number someone typed.
+   *
+   * The balance is read INSIDE the settling transaction. Read outside, two
+   * operators settling concurrently would each see the full liability and
+   * each release it, paying the landlord twice out of one escrow.
+   *
+   * -- Ordering, and why it is this way round --
    * The external PSP call happens BEFORE the transaction, not inside it.
-   * Holding a DB transaction open across a network call would hold locks
-   * for the duration and, worse, allow the transaction to roll back after
-   * real money had already moved at the custodian — leaving our books
-   * denying a payout the landlord actually received. Instead:
+   * Holding a DB transaction open across a network call would hold locks for
+   * the duration and, worse, allow the transaction to roll back after real
+   * money had already moved at the custodian - leaving our books denying a
+   * payout the landlord actually received. Instead:
    *   1. issue the release instruction (idempotent, recorded immutably);
    *   2. only if the custodian accepted it, atomically post the ledger
    *      effect and flip the status.
-   * If step 2 fails, the instruction remains on record and the deal stays
-   * at commission_earned, so a retry re-issues under the SAME idempotency
-   * key and the custodian will not pay twice — the discrepancy is visible
-   * to reconciliation in the meantime rather than silently lost.
+   * If step 2 fails, the instruction remains on record and the deal stays at
+   * commission_earned, so a retry re-issues under the SAME idempotency key
+   * and the custodian will not pay twice.
+   *
+   * The pre-flight balance read is therefore necessarily outside the
+   * transaction, because the instruction amount must be known before the
+   * custodian is called. The AUTHORITATIVE read is the one INSIDE, and the
+   * posting uses that one - so a balance that moved in between cannot cause
+   * a double release.
    */
   async settle(params: {
     dealId: string;
     actorPartyId: string;
-    totalHeld: bigint;
     landlordAccount?: PaymentAccountRef;
     reason?: string;
   }): Promise<Deal> {
@@ -474,14 +578,18 @@ export class DealsService {
     // fail fast before touching the custodian
     assertTransitionAllowed(preflight.status, 'settled');
 
-    const commissionAmount = preflight.commissionAmount ?? 0n;
-    const netToLandlord = params.totalHeld - commissionAmount;
+    const provisional = await this.ledger.outstandingEscrowLiability(
+      preflight.id,
+    );
+    if (provisional <= 0n) {
+      throw new NothingHeldError(preflight.id);
+    }
 
     if (params.landlordAccount) {
       const { instruction } = await this.payments.issueInstruction({
         dealId: preflight.id,
         kind: 'release',
-        amount: netToLandlord,
+        amount: provisional,
         // deterministic key: a retry of THIS settlement reuses it
         idempotencyKey: `settle:${preflight.id}`,
         counterparty: params.landlordAccount,
@@ -495,6 +603,15 @@ export class DealsService {
     return this.prisma.$transaction(async (tx) => {
       const deal = await this.loadForUpdate(params.dealId, tx);
       assertTransitionAllowed(deal.status, 'settled');
+
+      // Re-read under the transaction. THIS is the figure that gets posted.
+      const netToLandlord = await this.ledger.outstandingEscrowLiability(
+        deal.id,
+        tx,
+      );
+      if (netToLandlord <= 0n) {
+        throw new NothingHeldError(deal.id);
+      }
 
       await this.escrow.settle({ dealId: deal.id, amount: netToLandlord }, tx);
       await this.escrow.releaseToLandlord(
@@ -536,15 +653,28 @@ export class DealsService {
   }
 
   /**
-   * escrow_funded → refunded. The full held amount goes back to the tenant
+   * escrow_funded -> refunded. Everything still held goes back to the tenant
    * (FR-7.7) and no commission is earned. This is the "money back" exit
    * that, together with move_in_confirmed, forms the only two ways out of
-   * escrow_funded — the Move-In Guarantee.
+   * escrow_funded - the Move-In Guarantee.
+   *
+   * -- The amount is the OUTSTANDING LIABILITY (F-012) --
+   * "Full refund of tenant funds" is not a number a request can assert; it
+   * is what the ledger says we still hold. Deriving it means a refund can
+   * neither exceed what was funded nor quietly return less than the tenant
+   * is owed, and the liability lands exactly on zero.
+   *
+   * Read inside the transaction, for the same reason settlement is: two
+   * concurrent refunds reading a stale balance would each return the full
+   * amount.
+   *
+   * Refund is also reachable from `dispute_hold`, where a commission may
+   * already have been recognised. The outstanding balance is still the right
+   * answer there - it is what remains ours to give back.
    */
   async refund(params: {
     dealId: string;
     actorPartyId: string;
-    amount: bigint;
     tenantAccount?: PaymentAccountRef;
     originalProviderRef?: string;
     reason?: string;
@@ -557,13 +687,20 @@ export class DealsService {
     }
     assertTransitionAllowed(preflight.status, 'refunded');
 
+    const provisional = await this.ledger.outstandingEscrowLiability(
+      preflight.id,
+    );
+    if (provisional <= 0n) {
+      throw new NothingHeldError(preflight.id);
+    }
+
     // Same ordering rationale as settle(): instruct the custodian before
     // opening the transaction, under a deterministic idempotency key.
     if (params.tenantAccount) {
       await this.payments.issueInstruction({
         dealId: preflight.id,
         kind: 'refund',
-        amount: params.amount,
+        amount: provisional,
         idempotencyKey: `refund:${preflight.id}`,
         counterparty: params.tenantAccount,
         originalProviderRef: params.originalProviderRef,
@@ -574,7 +711,12 @@ export class DealsService {
       const deal = await this.loadForUpdate(params.dealId, tx);
       assertTransitionAllowed(deal.status, 'refunded');
 
-      await this.escrow.refund({ dealId: deal.id, amount: params.amount }, tx);
+      const amount = await this.ledger.outstandingEscrowLiability(deal.id, tx);
+      if (amount <= 0n) {
+        throw new NothingHeldError(deal.id);
+      }
+
+      await this.escrow.refund({ dealId: deal.id, amount }, tx);
 
       return this.applyTransition(
         {
@@ -903,7 +1045,43 @@ export class DealsService {
     });
   }
 
+  /**
+   * Loads the deal AND TAKES A ROW LOCK on it, for the duration of `tx`.
+   *
+   * ── Why the raw SELECT ... FOR UPDATE ──
+   * This method was named `loadForUpdate` from Stage 3 and, until F-012, did
+   * not lock anything: it was a plain `findUnique`. Under READ COMMITTED
+   * that is enough to read a consistent row and nothing else, so two
+   * concurrent operators could each read `commission_earned`, each pass
+   * `assertTransitionAllowed`, each read the FULL outstanding liability, and
+   * each post a release. Prisma's `update` does not re-check the status it
+   * read, so the second commit succeeded too — the landlord was paid twice
+   * out of one escrow.
+   *
+   * That was not hypothetical. Two settlements fired together both returned
+   * 201 against real Postgres, and so did two refunds. Reading the balance
+   * inside the transaction — which F-012 already did — is necessary and NOT
+   * sufficient; without the lock, "inside the transaction" only means both
+   * readers see the same stale number.
+   *
+   * With the lock, the second transaction blocks until the first commits,
+   * then re-reads a deal whose status has moved. `settled` has no outgoing
+   * `settled` edge and `refunded` has no outgoing edges at all, so the
+   * second attempt is refused by the state machine it already passed once —
+   * this time against the truth.
+   *
+   * Prisma has no first-class row lock, hence the raw statement. It selects
+   * only `id`: the lock is the point, and the row itself is then read
+   * through the typed client so callers keep a real `Deal`.
+   */
   private async loadForUpdate(dealId: string, tx: Tx): Promise<Deal> {
+    const locked = await tx.$queryRaw<Array<{ id: string }>>`
+      SELECT id FROM "deal" WHERE id = ${dealId} FOR UPDATE
+    `;
+    if (locked.length === 0) {
+      throw new DealNotFoundError(dealId);
+    }
+
     const deal = await tx.deal.findUnique({ where: { id: dealId } });
     if (!deal) {
       throw new DealNotFoundError(dealId);

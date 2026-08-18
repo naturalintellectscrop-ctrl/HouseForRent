@@ -549,7 +549,12 @@ describe('Mobile client contract', () => {
     });
 
     test('fund-escrow takes the amount as a STRING and refuses a number', async () => {
-      // The app sends `amount` as digits-only text for exactly this reason.
+      // TRANSITIONAL (F-012): the server now DERIVES the funding amount, and
+      // `amount` survives only as a compatibility field the app still sends.
+      // While it exists it must keep its validator — a JSON number would lose
+      // precision above 2^53, which is the whole reason money is a string at
+      // this boundary. The field goes away with the mobile pass (F-013), and
+      // this test goes with it.
       const { listingId } = await seedLiveListing();
       const deal = await prisma.deal.create({
         data: {

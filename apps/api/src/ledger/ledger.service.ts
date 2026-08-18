@@ -176,6 +176,43 @@ export class LedgerService {
     );
   }
 
+  /**
+   * What this deal STILL OWES BACK — the credit-side magnitude of
+   * `escrow_liability`, as a positive number.
+   *
+   * ── Why this is the authoritative settlement figure ──
+   * `recogniseCommission` has already DEBITED the earned commission out of
+   * this account by the time settlement runs, so whatever remains is
+   * precisely what is still owed onward to the landlord. Settlement
+   * therefore does not need to subtract a commission from a total someone
+   * typed in: FR-7.6's "net of earned commission" is satisfied by
+   * construction, because the commission has already left this balance.
+   *
+   * ── Why it takes a transaction client ──
+   * The balance MUST be read inside the same transaction that posts against
+   * it. Read outside, two operators settling the same deal concurrently
+   * would each see the full liability and each release it, paying a landlord
+   * twice from one escrow. Inside, the second sees the first's effect — or
+   * blocks until it can.
+   *
+   * Returned positive so callers cannot accidentally post a negated figure;
+   * `balanceOf` deliberately preserves the raw sign for reading, and this
+   * deliberately does not, because it exists to be POSTED.
+   */
+  async outstandingEscrowLiability(dealId: string, tx?: Tx): Promise<bigint> {
+    const client = tx ?? this.prisma;
+    const entries = await client.ledgerEntry.findMany({
+      where: { dealId, account: { accountType: 'escrow_liability' } },
+      select: { direction: true, amount: true },
+    });
+
+    return entries.reduce(
+      (acc, entry) =>
+        entry.direction === 'credit' ? acc + entry.amount : acc - entry.amount,
+      0n,
+    );
+  }
+
   /** Sum of debits − credits across every entry for a deal, per account type. */
   async balancesByTypeForDeal(
     dealId: string,

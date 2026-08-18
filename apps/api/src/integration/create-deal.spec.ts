@@ -481,7 +481,7 @@ describe('POST /v1/deals (F-001)', () => {
       await http()
         .post(`/v1/deals/${deal.body.id}/fund-escrow`)
         .set('Authorization', as(s.tenant))
-        .send({ amount: '3600000' })
+        .send({})
         .expect(201);
 
       await http()
