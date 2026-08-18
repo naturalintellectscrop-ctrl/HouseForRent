@@ -267,3 +267,25 @@ export function ImageIcon(props: IconProps) {
     </Icon>
   );
 }
+
+/** Secure transactions — the escrow guarantee. */
+export function LockIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <Path d="M6 10.5h12v9H6z" />
+      <Path d="M8.75 10.5V7.75a3.25 3.25 0 0 1 6.5 0v2.75" />
+      <Path d="M12 14v2" />
+    </Icon>
+  );
+}
+
+/** Local support — a person reachable, not a chatbot. */
+export function SupportIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <Path d="M4.5 14v-2a7.5 7.5 0 0 1 15 0v2" />
+      <Path d="M4.5 13.5h2.25v5H5.75a1.25 1.25 0 0 1-1.25-1.25z" />
+      <Path d="M19.5 13.5h-2.25v5h1a1.25 1.25 0 0 0 1.25-1.25z" />
+    </Icon>
+  );
+}

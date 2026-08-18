@@ -1,135 +1,152 @@
 import { useColorScheme, type TextStyle } from 'react-native';
 
 /**
- * ── The design system: "Ugandan Rental Essence" ──
+ * ── The House For Rent design language ──
  *
- * Implemented from the Stitch design reference packs, whose own spec is at
- * `docs/design-reference/stitch/01-tenant-discovery/ugandan_rental_essence/DESIGN.md`.
- * The reference shipped a second system alongside it ("Azure Property"),
- * built on a #0053ce blue with Plus Jakarta Sans, and it is deliberately
- * NOT implemented here: blue is not this company's colour, and the screens
- * drawn in it are a re-skin of a generic real-estate template — one of them
- * is still captioned "Welcome to Real Scout" and offers Google sign-in,
- * which this product cannot use because accounts are keyed to a Ugandan
- * MSISDN and NIN.
+ * Implemented from the brand reference board: a near-black product surface,
+ * one green carrying trust and action, Poppins, and thin-line iconography.
+ * The board names its own design feel — trustworthy, professional, modern,
+ * clean, human — and the job of these tokens is to make those the default
+ * rather than something each screen has to remember.
  *
- * ── Why this palette is trustworthy ──
- * The reference's `primary-container` is #0a5514, which is the exact green
- * measured out of the House For Rent logo when this app was first built.
- * The system was drawn for this brand rather than adapted to it.
+ * ── Dark is the designed-for theme, not the fallback ──
+ * The reference draws the product on #0E1412. That is a deliberate identity
+ * choice and not a preference toggle: a near-black page is what lets
+ * property photography carry the screen, which is the whole point of a
+ * discovery product. Light is implemented as a real counterpart for anyone
+ * whose phone asks for it, but dark is what the product looks like.
  */
 
 /* ── colour ──────────────────────────────────────────────────────────── */
 
 /**
- * The brand hues, measured from the logo artwork.
+ * The five brand colours, straight off the reference board.
  *
- * Green leads and red accents: in the mark, green carries the wordmark and
- * the ground line while red is a stripe across the roof. Making red primary
- * would invert that, and — more practically — red reads as danger in a UI
- * that moves money. The design system agrees, and is blunt about it: the
- * accent red is "strictly forbidden for decoration or emphasis; it is used
- * exclusively for genuine error states".
+ * ── Why there are two greens ──
+ * The board specifies one, #16A34A, and it is correct everywhere it is used
+ * AS A MARK: a verified pill, a price, a line of accent text on the dark
+ * surface, where it clears 5:1 against #0E1412.
+ *
+ * It is not correct as a button FILL. White text on #16A34A measures
+ * 3.29:1, which fails WCAG AA for anything short of large text, and a
+ * primary button is the one control a user must never mis-read. `action`
+ * is the same hue taken down one step to 5.02:1 with white. At a glance the
+ * two are indistinguishable; under a contrast checker only one of them
+ * passes, and the buttons in this product move money.
  */
 const brand = {
-  /** Button fill. The reference's `primary` — deeper than the logo green. */
-  forest: '#003C08',
-  /** The logo green. The reference's `primary-container`; verified badges. */
-  green: '#0A5514',
-  /** Lifted for legibility on the dark surface. */
-  greenBright: '#5FBF57',
-  greenSoft: '#81C97A',
-  red: '#BA1A1A',
-  redSoft: '#E8555B',
+  /** The board's near-black. The product surface. */
+  ink: '#0E1412',
+  /** The board's green. Verified marks, prices, accent text. */
+  green: '#16A34A',
+  /** The same green, dark enough to carry white button text at 5:1. */
+  action: '#15803D',
+  /** The board's off-white. */
+  paper: '#F8FAFC',
+  /** The board's neutral. */
+  grey: '#67707A',
+  /** The board's amber. Pending and awaiting states — never decoration. */
+  amber: '#F59E0B',
+  /** Amber is 2.1:1 on white, so light mode gets a darker step for text. */
+  amberInk: '#B45309',
+  red: '#DC2626',
+  redBright: '#F87171',
 } as const;
 
 type PaletteShape = Record<string, string>;
 
 /**
- * The reference's two-tier surface model: a warm off-white page with pure
- * white cards floating on it. The warmth is the point — the spec calls it
- * "more domestic and inviting than a sterile pure white", and it is what
- * stops a screen full of property photography reading like a spreadsheet.
+ * The product as the reference draws it.
+ *
+ * Three surface steps, not one: the page (#0E1412), the card lifted off it
+ * (#171D1B), and the input/inert step below the card (#1F2624). A single
+ * flat black with borders everywhere reads as a wireframe; the steps are
+ * what make it read as a surface with things resting on it.
  */
-const light = {
+const dark = {
   /** Text */
-  ink: '#1C1B1B',
-  inkSoft: '#41493E',
-  inkFaint: '#717A6C',
+  ink: '#F8FAFC',
+  inkSoft: '#A8B0AE',
+  inkFaint: '#67707A',
 
   /** Surfaces */
-  bg: '#FCF8F8',
-  surface: '#FFFFFF',
-  surfaceAlt: '#F0EDEC',
-  /** Inputs and inert chips sit a step down from a card. */
-  surfaceInput: '#F6F3F2',
-  line: '#E5E2E1',
-  lineStrong: '#C0C9BA',
+  bg: '#0E1412',
+  surface: '#171D1B',
+  surfaceAlt: '#1F2624',
+  surfaceInput: '#1F2624',
+  line: '#28302E',
+  lineStrong: '#3A4340',
 
   /** Brand */
-  brand: brand.forest,
+  brand: brand.green,
   brandInk: '#FFFFFF',
-  brandSoft: '#E8F1E9',
-  /** Verified badges — the logo green, not the deeper button green. */
+  brandSoft: 'rgba(22,163,74,0.14)',
+  /** Verified marks. The board's green, unmodified. */
   verified: brand.green,
   verifiedInk: '#FFFFFF',
 
   /** Status. Fixed roles, always paired with a text label. */
   ok: brand.green,
-  okBg: '#E8F1E9',
-  warn: '#8A5A00',
-  warnBg: '#FDF6E7',
-  danger: brand.red,
-  dangerBg: '#FFDAD6',
+  okBg: 'rgba(22,163,74,0.14)',
+  warn: brand.amber,
+  warnBg: 'rgba(245,158,11,0.14)',
+  danger: brand.redBright,
+  dangerBg: 'rgba(220,38,38,0.16)',
 
   /** Chrome */
-  skeleton: '#EBE7E7',
-  scrim: 'rgba(28,27,27,0.4)',
+  skeleton: '#1F2624',
+  scrim: 'rgba(0,0,0,0.6)',
 } satisfies PaletteShape;
 
 /**
- * The reference is a light-only system. This is the dark counterpart,
- * derived rather than invented: every role keeps its job, and the greens
- * are lifted until they clear 4.5:1 on the surface they actually sit on —
- * #0A5514 on a near-black card is unreadable.
+ * The light counterpart. Every role keeps its job; the values are re-derived
+ * against a white page rather than inverted, because an inverted dark theme
+ * produces greys that are correct in ratio and wrong in feel.
  */
-const dark: Record<keyof typeof light, string> = {
-  ink: '#ECEFEA',
-  inkSoft: '#B4BCB2',
-  inkFaint: '#8A938A',
+const light: Record<keyof typeof dark, string> = {
+  ink: brand.ink,
+  inkSoft: '#4A5350',
+  inkFaint: brand.grey,
 
-  bg: '#111311',
-  surface: '#191C19',
-  surfaceAlt: '#232722',
-  surfaceInput: '#232722',
-  line: '#2E332D',
-  lineStrong: '#414A40',
+  bg: brand.paper,
+  surface: '#FFFFFF',
+  surfaceAlt: '#EEF1F4',
+  surfaceInput: '#F1F4F7',
+  line: '#E2E7EB',
+  lineStrong: '#CBD3D8',
 
-  brand: brand.greenBright,
-  brandInk: '#04140A',
-  brandSoft: '#16301A',
-  verified: brand.greenBright,
-  verifiedInk: '#04140A',
+  brand: brand.action,
+  brandInk: '#FFFFFF',
+  brandSoft: 'rgba(22,163,74,0.10)',
+  verified: brand.action,
+  verifiedInk: '#FFFFFF',
 
-  ok: brand.greenBright,
-  okBg: '#16301A',
-  warn: '#E8C07A',
-  warnBg: '#2A2213',
-  danger: brand.redSoft,
-  dangerBg: '#2C1517',
+  ok: brand.action,
+  okBg: 'rgba(22,163,74,0.10)',
+  warn: brand.amberInk,
+  warnBg: 'rgba(245,158,11,0.14)',
+  danger: brand.red,
+  dangerBg: 'rgba(220,38,38,0.10)',
 
-  skeleton: '#232722',
-  scrim: 'rgba(0,0,0,0.55)',
+  skeleton: '#E6EAEE',
+  scrim: 'rgba(14,20,18,0.5)',
 };
 
-export type Palette = Record<keyof typeof light, string>;
+export type Palette = Record<keyof typeof dark, string>;
 
+/**
+ * Dark unless the phone explicitly asks for light.
+ *
+ * `useColorScheme()` returns null when the platform has no preference, and
+ * the product's designed appearance is the right answer to "no preference"
+ * — so only an explicit `'light'` switches.
+ */
 export function usePalette(): Palette {
-  return useColorScheme() === 'dark' ? dark : light;
+  return useColorScheme() === 'light' ? light : dark;
 }
 
 export function useIsDark(): boolean {
-  return useColorScheme() === 'dark';
+  return useColorScheme() !== 'light';
 }
 
 export const BRAND = brand;
@@ -137,29 +154,29 @@ export const BRAND = brand;
 /* ── type ────────────────────────────────────────────────────────────── */
 
 /**
- * Hanken Grotesk, bundled as three static weights rather than fetched.
+ * Poppins, bundled as the reference's three weights.
  *
  * A webfont over a Ugandan mobile connection costs a download and a layout
- * shift on every cold start (NFR-5). ~57KB per weight ships inside the
+ * shift on every cold start (NFR-5). ~150KB per weight ships inside the
  * binary instead, so the first frame is already correct.
  *
  * ── Why weights are families, not `fontWeight` ──
  * Android does not synthesise weights for custom fonts: setting
- * `fontWeight: '700'` on a family that has no bold face silently renders
- * regular. Each weight is therefore its own family name, and nothing in
- * this app sets `fontWeight` on Hanken Grotesk.
+ * `fontWeight: '600'` on a family with no semibold face silently renders
+ * regular. Each weight is its own family name, and nothing in this app sets
+ * `fontWeight` on Poppins.
  */
 export const fontFamily = {
-  regular: 'HankenGrotesk-400',
-  semibold: 'HankenGrotesk-600',
-  bold: 'HankenGrotesk-700',
+  regular: 'Poppins-400',
+  medium: 'Poppins-500',
+  semibold: 'Poppins-600',
 } as const;
 
 /** The files `expo-font` loads at startup, keyed by the names above. */
 export const FONT_ASSETS = {
-  [fontFamily.regular]: require('@/assets/fonts/HankenGrotesk-400.ttf'),
-  [fontFamily.semibold]: require('@/assets/fonts/HankenGrotesk-600.ttf'),
-  [fontFamily.bold]: require('@/assets/fonts/HankenGrotesk-700.ttf'),
+  [fontFamily.regular]: require('@/assets/fonts/Poppins-400.ttf'),
+  [fontFamily.medium]: require('@/assets/fonts/Poppins-500.ttf'),
+  [fontFamily.semibold]: require('@/assets/fonts/Poppins-600.ttf'),
 };
 
 /**
@@ -170,79 +187,82 @@ export const FONT_ASSETS = {
  * agreed to, and two of those are what make an interface look assembled
  * rather than designed.
  *
- * `displayLg` is the reference's 40px headline at its documented mobile
- * size: the spec says to scale it to 32 on phones "to prevent awkward word
- * wrapping", and this app is only ever a phone.
+ * Poppins runs large for its point size and its ascenders are tall, so the
+ * line heights here are looser than the previous face needed. Display is
+ * capped at 30: the reference's headline wraps to three lines on a phone,
+ * and it is meant to.
  */
 export const type = {
   displayLg: {
-    fontFamily: fontFamily.bold,
-    fontSize: 32,
+    fontFamily: fontFamily.semibold,
+    fontSize: 30,
     lineHeight: 38,
-    letterSpacing: -0.64,
+    letterSpacing: -0.5,
   },
   headlineLg: {
     fontFamily: fontFamily.semibold,
-    fontSize: 28,
-    lineHeight: 34,
-    letterSpacing: -0.4,
-  },
-  headlineMd: {
-    fontFamily: fontFamily.semibold,
     fontSize: 24,
     lineHeight: 32,
-    letterSpacing: -0.24,
+    letterSpacing: -0.3,
   },
-  headlineSm: {
+  headlineMd: {
     fontFamily: fontFamily.semibold,
     fontSize: 20,
     lineHeight: 28,
     letterSpacing: -0.2,
   },
+  headlineSm: {
+    fontFamily: fontFamily.semibold,
+    fontSize: 17,
+    lineHeight: 24,
+    letterSpacing: -0.1,
+  },
   bodyLg: {
     fontFamily: fontFamily.regular,
-    fontSize: 18,
-    lineHeight: 28,
+    fontSize: 16,
+    lineHeight: 26,
   },
   bodyMd: {
     fontFamily: fontFamily.regular,
-    fontSize: 16,
-    lineHeight: 24,
+    fontSize: 15,
+    lineHeight: 23,
   },
   bodySm: {
     fontFamily: fontFamily.regular,
-    fontSize: 14,
+    fontSize: 13,
     lineHeight: 20,
   },
   labelLg: {
     fontFamily: fontFamily.semibold,
-    fontSize: 16,
-    lineHeight: 24,
+    fontSize: 15,
+    lineHeight: 22,
   },
   labelMd: {
-    fontFamily: fontFamily.semibold,
-    fontSize: 14,
-    lineHeight: 20,
-    letterSpacing: 0.14,
+    fontFamily: fontFamily.medium,
+    fontSize: 13,
+    lineHeight: 18,
   },
-  /** All-caps micro label — verified pills, eyebrows, table headers. */
+  /**
+   * The one all-caps step — verified pills and nothing else.
+   * §4 of the directive: avoid excessive uppercase.
+   */
   labelSm: {
     fontFamily: fontFamily.semibold,
-    fontSize: 12,
-    lineHeight: 16,
+    fontSize: 11,
+    lineHeight: 14,
     letterSpacing: 0.6,
   },
 } satisfies Record<string, TextStyle>;
 
 /* ── space & shape ───────────────────────────────────────────────────── */
 
-/** The reference's 4px baseline, under its own names. */
+/** A 4px baseline. */
 export const space = {
   xs: 4,
   sm: 8,
   md: 12,
   gutter: 16,
-  /** The 20px safe margin the spec puts on every screen edge. */
+  /** The safe margin on every screen edge. */
   screen: 20,
   lg: 24,
   xl: 32,
@@ -250,55 +270,52 @@ export const space = {
 } as const;
 
 /**
- * "Rounded — a balance between the efficiency of a square and the
- * friendliness of a circle." Four steps, named for what they wrap.
+ * "Subtle radius" (§7). Four steps, named for what they wrap.
+ *
+ * The reference's cards and buttons sit around 12–14px — rounded enough to
+ * read as modern, short of the fully-pilled shapes that make an interface
+ * look like a toy.
  */
 export const radius = {
   /** Chips, tags, small utility surfaces. */
-  chip: 8,
-  /** The standard: cards, buttons, inputs, and all property imagery — the
-      spec is explicit that photos carry the same radius as the containers
-      around them, so an image never reads as a foreign object. */
-  control: 12,
+  chip: 10,
+  /** The standard: cards, buttons, inputs, and all property imagery. */
+  control: 14,
   /** Bottom sheets and modals. */
   sheet: 24,
   pill: 999,
 } as const;
 
 /**
- * One shadow, extra-diffused, exactly as specified.
+ * Minimal elevation (§7).
  *
- * It is applied on the light theme only. On the dark surface a 5%-opacity
- * drop shadow is invisible, so cards there take a hairline border instead —
- * see `useCardSurface`. Depth that only exists in one theme is worse than
- * no depth at all, because the component then reads as two components.
+ * On the dark theme a drop shadow is invisible, so cards are separated by
+ * the surface step instead — `surface` sits above `bg` by design. This
+ * shadow therefore only ever applies on light, where the page is white and
+ * a card needs an edge. `useCardSurface()` in `components/ui.tsx` picks.
  */
 export const shadow = {
-  shadowColor: '#0A0A0A',
-  shadowOpacity: 0.05,
-  shadowRadius: 20,
+  shadowColor: '#0E1412',
+  shadowOpacity: 0.06,
+  shadowRadius: 16,
   shadowOffset: { width: 0, height: 4 },
   elevation: 2,
 } as const;
 
 /**
- * Motion.
+ * Motion (§10) — "fast first and animated second".
  *
  * Built on React Native's own `Animated`, with no animation library: every
- * movement in this product is an opacity or a transform, all of which run
+ * movement in this product is an opacity or a transform, both of which run
  * on the native driver, and a dependency for that would be weight on a
  * mid-range Android for nothing.
- *
- * The durations are short on purpose. Motion here exists to explain a
- * change — a photo arriving, a sheet opening, a press registering — and
- * anything an operator has to wait through is a cost, not polish.
  */
 export const motion = {
   /** Press feedback, chip selection. */
   instant: 120,
   /** The default: fades, sheet transitions. */
   quick: 200,
-  /** Image reveal, where a slower fade reads as the photo "developing". */
+  /** Image reveal, where a slower fade reads as the photo arriving. */
   settle: 320,
 } as const;
 

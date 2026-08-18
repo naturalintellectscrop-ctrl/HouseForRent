@@ -4,7 +4,8 @@ Persistent across sessions. Nothing is removed; findings move to
 `RESOLVED` with the evidence that closed them.
 
 **Established:** 2026-08-15, at commit `6274e38`.
-**Last updated:** 2026-08-17 — F-001 and F-002 resolved; F-012 opened.
+**Last updated:** 2026-08-17 — F-001, F-002 and F-007 resolved; F-012 and
+F-013 opened.
 **Method:** every route enumerated from controller decorators, then grepped
 against actual call sites in `apps/console` and `apps/mobile`. Connectivity
 is traced, not inferred from filenames.
@@ -21,18 +22,26 @@ prevents it.
 
 | Priority | Open | Resolved |
 |---|---:|---:|
-| P0 | 2 | 1 |
-| P1 | 3 | 1 |
-| P2 | 3 | 1 |
+| P0 | 0 | 2 |
+| P1 | 4 | 1 |
+| P2 | 3 | 2 |
 | P3 | 3 | 0 |
 
-**Where it stands.** The tenant journey was severed at two points; both are
-now repaired and demonstrated over HTTP. It is severed again further down:
-money can enter escrow from the mobile app and **no surface can release or
-refund it** (F-007, raised to P0). A new financial finding (F-012) is that
-the three caller-supplied amounts on the money path are reconciled against
-nothing, and the ledger's own integrity check is structurally incapable of
-catching an error in them.
+**Where it stands.** The transaction journey is now executable end to end
+through real surfaces: registration → browse → viewing → dispatch →
+introduction → deal → escrow → move-in → commission → settlement → close.
+No P0 findings remain open.
+
+The largest open item is **F-012**: the three caller-supplied amounts on the
+money path are reconciled against nothing, and the ledger's own integrity
+check is structurally incapable of catching an error in them. F-007's
+console pre-fills settlement from the ledger, which reduces the fat-finger
+exposure but does not close the finding — a pre-fill is a convenience, not a
+check.
+
+Inventory still cannot enter the system through any surface (F-003,
+decided), and brokers and management companies cannot publish at all because
+mandate submission has no route.
 
 ---
 
@@ -290,44 +299,77 @@ signal that makes logout-all worth having is invisible.
 
 ---
 
-## F-007 — Admin deal transitions have no UI: money enters escrow and cannot leave
+## F-007 — Admin deal transitions had no UI: money entered escrow and could not leave
 
 | | |
 |---|---|
 | **Priority** | **P0** — raised from P2 on 2026-08-17 |
-| **Area** | Console / Deals |
-| **Status** | OPEN |
+| **Area** | API + Console / Deals |
+| **Status** | **RESOLVED** — 2026-08-17 |
 
-**Why it was raised.** F-001 and F-002 made the money path *reachable*. That
-changes the severity of this finding rather than reducing it: a tenant can
-now genuinely be walked from registration to funded escrow through real
-surfaces, and there is still **no surface that can settle, refund or close**.
+**What was wrong.** `earn-commission`, `settle`, `close`, `refund`,
+`dispute-hold`, `resolve-dispute`, `match-tenant` and `sign-agreement` were
+all tested and none was callable from any client. `/ops/deals` showed a
+distribution count only. The two transitions that DID have surfaces were the
+two that put money **in**; every exit was missing, so client funds would
+have been trapped from the first real transaction.
 
-`earn-commission`, `settle`, `close`, `refund`, `dispute-hold`,
-`resolve-dispute` and `sign-agreement` are all tested and none is callable
-from any client. `/ops/deals` shows a distribution count only.
+**Why it was raised to P0.** F-001 and F-002 made the money path reachable.
+That sharpened this finding rather than reducing it.
 
-Traced end to end:
+**What was done.**
 
-| Transition | Actor | Surface |
-|---|---|---|
-| `created → tenant_matched` | foo | ❌ none |
-| `tenant_matched → agreement_signed` | lister | ❌ none |
-| `agreement_signed → escrow_funded` | tenant | ✅ mobile |
-| `escrow_funded → move_in_confirmed` | tenant | ✅ mobile |
-| `move_in_confirmed → commission_earned` | admin | ❌ none |
-| `commission_earned → settled` | admin | ❌ none |
-| `settled → closed` | admin | ❌ none |
-| `escrow_funded → refunded` | admin | ❌ none |
+The load-bearing decision is that **the server decides what may be done**.
 
-The two transitions that exist as surfaces are the two that put money IN.
-Every exit is missing. Client funds would be trapped from the first real
-transaction.
+- `apps/api/src/deals/deal-actions.ts` — one descriptor per legal transition
+  endpoint, and `availableDealActions()`, which filters by three independent
+  conditions: the transition graph permits it, the caller's role appears in
+  the handler's own `@Roles()` list, and any `@RequiresDealParty()`
+  constraint holds.
+- **The roles are not written down here.** They are read off the controller
+  methods with `Reflector` at request time. Listing them in the table would
+  be the exact duplication the table exists to prevent — the guard enforcing
+  one list while the console rendered another, with nothing failing when
+  they diverged.
+- `GET /v1/deals/:dealId` now returns `property`, `parties`, `financial` and
+  `availableActions` alongside the existing `deal` and `transitions`.
+  Role-scoped, so the same endpoint serves the tenant's app and the console
+  without either seeing the other's actions.
+- `DealsService.financialSummary()` — every figure read from the ledger, the
+  same rows reconciliation reads. Money leaves as strings.
+- `GET /v1/admin/deals` gained `rows`. A distribution is a shape, not a
+  queue: "3 deals at `commission_earned`" says three landlords are waiting
+  to be paid and gives no way to reach any of them.
+- Console `/ops/deals` (queue) and `/ops/deals/:dealId` (detail).
 
-**Next action.** A console deal detail page under `/ops/deals/:id` offering
-exactly the transitions the state machine permits from the deal's current
-status, each rendered from the server's own view of what is legal rather
-than a client-side copy of the graph.
+**The console holds no copy of the deal state machine.** It never asks what
+the status is in order to decide what to offer — it renders
+`availableActions`. One server action posts all eleven transitions, with no
+per-action branch.
+
+**Confirmation UX.** Money actions and irreversible actions require an
+explicit tick whose text names the actual amount and states plainly whether
+the action can be undone — *"Settle — pay the landlord. Amount involved:
+UGX 3,000,000. This CANNOT be undone."* rather than "Are you sure?". It is a
+mis-click safeguard, not a permission: the flag is stripped before the
+request, and the server refuses an illegal transition whether or not it was
+ticked.
+
+**Concurrency.** The transition action re-fetches the deal **even when the
+call fails**, because the likeliest rejection is a second operator having
+acted on the same deal. A 409 `ILLEGAL_TRANSITION` is reported as such, next
+to freshly-loaded server state. Nothing reports success on the console's own
+authority.
+
+**Verification.** See the session report for exact counts.
+
+**Files.** `apps/api/src/deals/deal-actions.ts`,
+`apps/api/src/deals/deals.service.ts`,
+`apps/api/src/deals/deals.controller.ts`,
+`apps/api/src/admin/admin.service.ts`,
+`apps/api/src/integration/deal-operations.spec.ts`,
+`apps/console/app/(console)/ops/deals/`,
+`apps/console/app/actions/deals.ts`
 
 ---
 
@@ -468,6 +510,42 @@ core, so it is recorded rather than patched in passing:
 3. `refund` does the same.
 4. A ledger-level invariant that no account of type `escrow_liability` may
    hold a debit balance — the check `everyPostingBalances` cannot make.
+
+---
+
+## F-013 — The mobile deal screen holds its own copy of the state machine
+
+| | |
+|---|---|
+| **Priority** | P2 |
+| **Area** | Mobile / Deals |
+| **Status** | OPEN — found while building F-007 |
+
+`apps/mobile/app/(app)/deal/[id].tsx` decides what to offer with literal
+status comparisons:
+
+```tsx
+{isTenant && deal.status === 'agreement_signed' && ( …pay into escrow… )}
+{isTenant && deal.status === 'escrow_funded'    && ( …confirm move-in… )}
+{!isTenant && deal.status === 'tenant_matched'  && ( …sign the agreement… )}
+```
+
+That is a second copy of the transition graph and of the role matrix, living
+in a React Native component. It happens to be correct today. It is free to
+drift, and the drift is silent in both directions: offering an action the
+server refuses is merely annoying, but *hiding* an action the server would
+have allowed is invisible — nobody files a bug about a button they never
+saw.
+
+**Not a defect in behaviour today.** Logged because F-007 built the fix and
+did not apply it here: `GET /v1/deals/:dealId` now returns
+`availableActions`, already role-scoped, so the tenant's app receives
+exactly the tenant's actions. The screen can render that list the way the
+console does.
+
+**Next action.** Replace the three status comparisons with a render of
+`availableActions`. Out of scope for F-007, which was the operations
+console; in scope for whoever next touches the mobile deal screen.
 
 ---
 

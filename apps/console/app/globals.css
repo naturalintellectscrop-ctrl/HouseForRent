@@ -908,3 +908,49 @@ td:has(> .tags) {
     grid-column: 1 / -1;
   }
 }
+
+/* ── Deal operations (F-007) ────────────────────────────────────────────
+   One card per transition the SERVER currently permits. Ruled off from each
+   other so a page offering four actions does not read as one long form an
+   operator might submit by reflex. */
+.deal-action {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+.deal-action > .card-head {
+  margin-bottom: 0.5rem;
+}
+
+.deal-action > .muted {
+  margin-top: 0;
+}
+
+/* The acknowledgement for a money action. Deliberately not styled to
+   disappear: it is the last thing between an operator and an irreversible
+   payment, so it gets a box of its own rather than a checkbox in a row of
+   fields. */
+.confirm-field {
+  border: 1px solid var(--warn);
+  background: var(--warn-bg);
+  border-radius: var(--radius);
+  padding: 0.75rem;
+}
+
+.confirm-label {
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-start;
+  font-weight: 500;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.confirm-label input[type='checkbox'] {
+  width: auto;
+  margin: 0.2rem 0 0;
+  flex: none;
+}

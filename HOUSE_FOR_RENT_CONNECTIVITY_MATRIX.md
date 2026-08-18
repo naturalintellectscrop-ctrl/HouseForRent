@@ -3,8 +3,8 @@
 Traced by enumerating controller routes and grepping actual call sites in
 `apps/console` and `apps/mobile`. Nothing here is inferred from a filename.
 
-**First traced** at commit `6274e38`. **Updated 2026-08-17** after F-001 and
-F-002.
+**First traced** at commit `6274e38`. **Updated 2026-08-17** after F-001,
+F-002 and F-007.
 
 **Status meanings**
 
@@ -23,14 +23,12 @@ F-002.
 
 ## The headline number
 
-**23 of 56 routes have no client caller** (was 24 of 54).
+**13 of 57 routes have no client caller** (was 24 of 54 at the audit).
 
-That the count barely moved is the honest reading. Two routes were added and
-one previously-inert route was connected, so the *arithmetic* is nearly
-unchanged. What changed is which links were missing: the two breaks that
-severed the tenant journey in the middle are closed, and the remaining
-disconnection is concentrated in one place — the operator surfaces for money
-(F-007) and for inventory (F-003).
+F-007 connected nine deal-transition routes at once, which is why the number
+finally moved. What remains is concentrated rather than scattered: six
+listing/property routes waiting on the F-003 build, five auth routes waiting
+on F-004/F-005/F-006, one health check, and one superseded route.
 
 ---
 
@@ -50,7 +48,7 @@ disconnection is concentrated in one place — the operator surfaces for money
 | See own deals | ✅ | ✅ | ✅ | ✅ | ✅ mobile | ✅ | Now genuinely populated | `VERIFIED` |
 | Fund escrow | ✅ | ✅ | ✅ | ✅ | ✅ mobile | ✅ | Liability up, no revenue | `VERIFIED` |
 | Confirm move-in | ✅ | ✅ | ✅ | ✅ | ✅ mobile | ✅ | Unlocks the earn step | `VERIFIED` |
-| **Get the money back / see it settle** | ✅ | ✅ | ✅ | ✅ | ❌ **none** | ❌ | **Funds cannot leave escrow** | **`INERT`** — F-007 (P0) |
+| **Money leaves escrow — settled or refunded** | ✅ | ✅ | ✅ | ✅ | ✅ **console** | ✅ | Landlord paid net, or tenant refunded in full | **`VERIFIED`** — F-007 closed |
 | Password reset | ✅ | ✅ | ✅ | public | ❌ **none** | ❌ | No way back in | **`INERT`** — F-004, `BLOCKED` on SMS |
 | Manage devices | ✅ | ✅ | ✅ | ✅ | ❌ **none** | ❌ | — | **`INERT`** — F-006 |
 
@@ -68,7 +66,7 @@ disconnection is concentrated in one place — the operator surfaces for money
 | Accept the agreement | ✅ | ✅ | ✅ | ✅ | ✅ mobile | ✅ | Immutable row + audit | `VERIFIED` |
 | **Publish / withdraw** | ✅ | ✅ | ✅ | ✅ | ❌ **none** | ❌ | — | **`INERT`** — F-003 |
 | **Submit a mandate** (broker / mgmt co.) | ✅ | ✅ | ❌ **no route** | — | ❌ | ❌ | Two of three lister tiers can never publish | **`BROKEN`** — F-003 |
-| **Sign the deal agreement** | ✅ | ✅ | ✅ | ✅ | ❌ **none** | ❌ | Deal stalls at `tenant_matched` | **`INERT`** — F-007 |
+| **Sign the deal agreement** | ✅ | ✅ | ✅ | ✅ | ✅ **console** | ✅ | Rent + rate frozen onto the deal | **`VERIFIED`** — F-007 |
 
 ---
 
@@ -104,7 +102,9 @@ disconnection is concentrated in one place — the operator surfaces for money
 | **See the dispatch queue** | ✅ | ✅ | ✅ **new** | ✅ | ✅ **console** | ✅ | Waiting viewings + officer roster | **`VERIFIED`** — F-002 |
 | **Assign a viewing** | ✅ | ✅ | ✅ | ✅ | ✅ **console** | ✅ | Officer dispatched | **`VERIFIED`** — F-002 |
 | **Provision staff** | ✅ | ✅ | ✅ | ✅ | ❌ **none** | ❌ | Script only — and dispatch needs officers | **`INERT`** — F-005 |
-| **Settle / refund / close** | ✅ | ✅ | ✅ | ✅ | ❌ **none** | ❌ | Money cannot leave escrow | **`INERT`** — F-007 (P0) |
+| **Settle / refund / close** | ✅ | ✅ | ✅ | ✅ | ✅ **console** | ✅ | Every exit reachable, with explicit confirmation | **`VERIFIED`** — F-007 |
+| **Deal queue + per-deal ledger position** | ✅ | ✅ | ✅ **new** | ✅ | ✅ **console** | ✅ | A settlement queue an operator can clear | **`VERIFIED`** — F-007 |
+| **Dispute hold / resolve** | ✅ | ✅ | ✅ | ✅ | ✅ **console** | ✅ | Blocks settlement, restores prior status | **`VERIFIED`** — F-007 |
 | **Decide a mandate** | ✅ | ✅ | ❌ no route | — | ❌ | ❌ | `MandateService` has no controller | **`BROKEN`** — F-003 |
 
 ---
@@ -141,19 +141,10 @@ Per the Phase 6 taxonomy.
 |---|---|
 | `GET /` | Health check. Called by the platform, not a client. |
 
-### B — Missing UI, backend capability exists (19)
+### B — Missing UI, backend capability exists (10)
 
 | Route | Blocked by |
 |---|---|
-| `POST /v1/deals/:id/match-tenant` | F-007 |
-| `POST /v1/deals/:id/sign-agreement` | F-007 |
-| `POST /v1/deals/:id/earn-commission` | F-007 |
-| `POST /v1/deals/:id/settle` | F-007 |
-| `POST /v1/deals/:id/close` | F-007 |
-| `POST /v1/deals/:id/refund` | F-007 |
-| `POST /v1/deals/:id/cancel` | F-007 |
-| `POST /v1/deals/:id/dispute-hold` | F-007 |
-| `POST /v1/deals/:id/resolve-dispute` | F-007 |
 | `POST /v1/properties` | F-003 |
 | `POST /v1/listings` | F-003 |
 | `POST /v1/listings/:id/publish` | F-003 |
@@ -164,6 +155,11 @@ Per the Phase 6 taxonomy.
 | `GET /v1/auth/sessions` | F-006 |
 | `POST /v1/auth/logout-all` | F-006 |
 | `POST /v1/auth/password` | F-004 |
+
+Nine deal-transition routes left this category when F-007 shipped:
+`match-tenant`, `sign-agreement`, `earn-commission`, `settle`, `close`,
+`refund`, `cancel`, `dispute-hold` and `resolve-dispute` are all reachable
+from `/ops/deals/:dealId`.
 
 ### C — Missing API, no backend bridge (2 capabilities)
 
@@ -198,28 +194,32 @@ that already exist.
 
 ## Where the journey now breaks
 
-Before this session it broke twice, at assignment and at deal creation, and
-a tenant could get no further than "viewing requested".
+At the audit it broke twice — at assignment and at deal creation — and a
+tenant could get no further than "viewing requested". After F-001 and F-002
+it ran to funded escrow and stopped, with no way for money to leave.
 
-It now runs unbroken from registration to **funded escrow**:
+It now runs unbroken, end to end, every step through a real surface:
 
 ```
 register → browse → listing detail → request viewing
   → dispatch queue → assign → officer's board
   → field report → conduct → introduction record
-  → open the deal → match tenant → sign agreement → fund escrow
-  → confirm move-in
+  → open the deal → match tenant → sign agreement
+  → fund escrow → confirm move-in
+  → recognise commission → settle → close
 ```
 
-with two caveats that are not cosmetic:
+with refund, dispute hold and dispute resolution reachable at the points the
+state machine permits them.
 
-1. `match-tenant` and `sign-agreement` have **no UI** (F-007). They are
-   reachable over HTTP and proven by test, but no operator or landlord can
-   perform them in the product.
-2. Nothing after `move_in_confirmed` has a surface at all. **Money enters
-   escrow and cannot leave.** That is now the single most consequential
-   remaining break, which is why F-007 was raised to P0.
+**What still cannot happen.** Nothing can enter the system at the top: no
+surface creates a property or a listing (F-003, decided but not built), and
+brokers and management companies cannot publish at all because mandate
+submission has no route. Every deal today therefore begins from
+seed-scripted inventory.
 
-And nothing can enter the system at the top: no surface creates a property
-or a listing (F-003), and brokers and management companies cannot publish at
-all because mandate submission has no route.
+**What is reachable but not yet safe.** F-012 — the amounts on the money
+path are reconciled against nothing. The settlement form pre-fills from the
+ledger, which narrows the fat-finger window, but a pre-fill is a convenience
+and not a check: an operator can still type any figure and the server will
+accept it.

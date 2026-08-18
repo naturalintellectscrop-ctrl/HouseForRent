@@ -221,9 +221,44 @@ export class AdminService {
       grouped.map((row) => [row.status, row._count._all]),
     ) as Record<string, number>;
 
+    /*
+     * The distribution alone was not actionable (F-007). "3 deals at
+     * commission_earned" tells an operator that three landlords are waiting
+     * to be paid and gives them no way to reach any of them, which is how a
+     * settlement queue becomes invisible work.
+     *
+     * Rows are newest-first and capped: this is a working queue, not an
+     * export. Money leaves as strings (API Spec §2), and nothing here is
+     * computed — the per-deal figures come from the ledger when a deal is
+     * actually opened.
+     */
+    const rows = await this.prisma.deal.findMany({
+      ...(status ? { where: { status } } : {}),
+      orderBy: { updatedAt: 'desc' },
+      take: 100,
+      include: {
+        listing: {
+          include: { property: { include: { neighbourhood: true } } },
+        },
+        tenantParty: { select: { displayName: true } },
+        landlordParty: { select: { displayName: true } },
+      },
+    });
+
     return {
       distribution,
       total: grouped.reduce((sum, row) => sum + row._count._all, 0),
+      rows: rows.map((deal) => ({
+        id: deal.id,
+        status: deal.status,
+        neighbourhood: deal.listing.property.neighbourhood.name,
+        tenantName: deal.tenantParty.displayName,
+        landlordName: deal.landlordParty.displayName,
+        monthlyRent: deal.listing.monthlyRent.toString(),
+        commissionAmount: deal.commissionAmount?.toString() ?? null,
+        createdAt: deal.createdAt,
+        updatedAt: deal.updatedAt,
+      })),
     };
   }
 

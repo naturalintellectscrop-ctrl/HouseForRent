@@ -1,6 +1,9 @@
 import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
-import { DealsService } from './deals.service';
-import { Roles } from '../auth/roles.decorator';
+import { Reflector } from '@nestjs/core';
+import { AuthRole } from '@prisma/client';
+import { DealNotFoundError, DealsService } from './deals.service';
+import { availableDealActions } from './deal-actions';
+import { REQUIRED_ROLES, Roles } from '../auth/roles.decorator';
 import { Caller } from '../auth/caller.decorator';
 import { RequiresDealParty } from '../auth/deal-party.decorator';
 import { DealPartyGuard } from '../auth/guards/deal-party.guard';
@@ -32,7 +35,11 @@ import {
 @Controller('v1/deals')
 @UseGuards(DealPartyGuard)
 export class DealsController {
-  constructor(private readonly deals: DealsService) {}
+  constructor(
+    private readonly deals: DealsService,
+    /** Used to read each handler's own `@Roles()` — see `getDeal`. */
+    private readonly reflector: Reflector,
+  ) {}
 
   /**
    * Opens a deal off a conducted viewing's introduction record (FR-8.3).
@@ -260,12 +267,60 @@ export class DealsController {
     return this.deals.findForParty(caller.partyId);
   }
 
-  /** Parties and staff only (API Spec §7.4 — non-parties get 404). */
+  /**
+   * One deal, with everything a surface needs to act on it — and nothing a
+   * surface would otherwise have to work out for itself.
+   *
+   * Parties and staff only (API Spec §7.4 — non-parties get 404).
+   *
+   * ── `availableActions` is the point ──
+   * It is the server's answer to "what may THIS caller do to THIS deal right
+   * now", derived from the real transition graph and the real `@Roles()`
+   * decorators. A client renders it. A client that instead re-implemented
+   * the graph would hold a second copy of the Move-In Guarantee, free to
+   * drift from the one that actually binds — and the drift would show up as
+   * a console offering a settlement the server refuses, or worse, hiding one
+   * it would have allowed.
+   *
+   * The list is role-scoped, so the same endpoint serves the tenant's app
+   * and the operations console without either seeing the other's actions.
+   */
   @RequiresDealParty()
   @Get(':dealId')
-  async getDeal(@Param('dealId') dealId: string) {
+  async getDeal(
+    @Param('dealId') dealId: string,
+    @Caller() caller: AuthenticatedCaller,
+  ) {
     const deal = await this.deals.getDeal(dealId);
-    const transitions = await this.deals.getTransitionHistory(dealId);
-    return { deal, transitions };
+    if (!deal) {
+      throw new DealNotFoundError(dealId);
+    }
+
+    const [transitions, context, financial] = await Promise.all([
+      this.deals.getTransitionHistory(dealId),
+      this.deals.dealContext(dealId),
+      this.deals.financialSummary(dealId),
+    ]);
+
+    return {
+      deal,
+      transitions,
+      ...context,
+      financial,
+      availableActions: availableDealActions({
+        deal,
+        callerPartyId: caller.partyId,
+        callerRole: caller.role,
+        // Read straight off the handler's own decorator — see deal-actions.ts
+        // for why the roles are not written down a second time here.
+        rolesFor: (handler) =>
+          this.reflector.get<AuthRole[] | undefined>(
+            REQUIRED_ROLES,
+            DealsController.prototype[
+              handler as keyof DealsController
+            ] as unknown as () => unknown,
+          ),
+      }),
+    };
   }
 }

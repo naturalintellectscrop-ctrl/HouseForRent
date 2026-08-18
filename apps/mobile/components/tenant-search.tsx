@@ -108,7 +108,10 @@ export default function TenantSearch() {
                 gap: space.md,
               }}
             >
-              <Title>Find a home</Title>
+              <View style={{ flex: 1 }}>
+                <Title>Find your next home</Title>
+                <Title tone="brand">with confidence.</Title>
+              </View>
               <FilterButton
                 count={activeCount}
                 onPress={() => setSheetOpen(true)}
