@@ -54,28 +54,6 @@ export function formatShillings(value: string | bigint): string {
   return `${negative ? '-' : ''}UGX ${grouped}`;
 }
 
-/** Compact form for dense lists: `1200000` → `UGX 1.2M`. */
-export function formatShillingsCompact(value: string): string {
-  let amount: bigint;
-  try {
-    amount = parseShillings(value);
-  } catch {
-    return formatShillings(value);
-  }
-
-  if (amount >= 1_000_000n) {
-    // Integer arithmetic throughout: one decimal place via ×10 then divide,
-    // never a float division that could round a price misleadingly.
-    const tenths = (amount * 10n) / 1_000_000n;
-    const whole = tenths / 10n;
-    const frac = tenths % 10n;
-    return frac === 0n ? `UGX ${whole}M` : `UGX ${whole}.${frac}M`;
-  }
-  if (amount >= 1_000n) {
-    return `UGX ${amount / 1_000n}K`;
-  }
-  return formatShillings(amount);
-}
 
 /**
  * What a tenant is asked to pay upfront.

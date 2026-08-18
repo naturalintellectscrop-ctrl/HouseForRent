@@ -102,18 +102,6 @@ export function DealAction({
               type="text"
               inputMode={field.kind === 'shillings' ? 'numeric' : 'text'}
               required={field.required}
-              /*
-               * Pre-filled from the ledger for amount fields, as a
-               * convenience against a mistyped figure. It is NOT a check:
-               * the operator can change it and the server accepts whatever
-               * arrives (F-012). Nothing here should be read as the system
-               * having verified the number.
-               */
-              defaultValue={
-                field.kind === 'shillings' && field.name === 'totalHeld'
-                  ? amounts.heldInEscrow
-                  : undefined
-              }
               spellCheck={false}
             />
             {field.hint && <p className="hint">{field.hint}</p>}

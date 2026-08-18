@@ -1,6 +1,6 @@
 import { View } from 'react-native';
 import type { SearchResult } from '@/lib/api';
-import { formatShillingsCompact } from '@/lib/money';
+import { formatShillings } from '@/lib/money';
 import {
   BodySm,
   Card,
@@ -69,7 +69,7 @@ export function PropertyCard({
         </View>
 
         <View style={{ marginTop: space.xs }}>
-          <Price amount={formatShillingsCompact(item.monthlyRent)} per="/ month" />
+          <Price amount={formatShillings(item.monthlyRent)} per="/ month" />
         </View>
 
         <View

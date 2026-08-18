@@ -408,11 +408,21 @@ export function ChipRow<T extends string>({
   value,
   onChange,
   scroll = true,
+  bleed = 0,
 }: {
   options: { value: T; label: string }[];
   value: T;
   onChange: (value: T) => void;
   scroll?: boolean;
+  /**
+   * Screen inset to cancel, so the row can scroll off the real screen edge.
+   *
+   * Inside a padded column a horizontal row shears its last chip at the
+   * column boundary, which reads as a rendering fault. Bleeding the
+   * ScrollView out to the display edge and putting the inset back on its
+   * content makes the same clip read as "there is more this way".
+   */
+  bleed?: number;
 }) {
   const row = options.map((option) => (
     <Chip
@@ -435,14 +445,14 @@ export function ChipRow<T extends string>({
     <ScrollView
       horizontal
       showsHorizontalScrollIndicator={false}
+      style={bleed ? { marginHorizontal: -bleed } : undefined}
       contentContainerStyle={{
         gap: space.sm,
         paddingVertical: space.xs,
-        // Trailing room so the last chip can scroll clear of whatever sits
-        // beside the row. Without it the final chip is sheared mid-word by
-        // the filter button and reads as a rendering fault rather than as
-        // content that scrolls.
-        paddingRight: space.gutter,
+        paddingLeft: bleed,
+        // Trailing room so the last chip can scroll clear of the edge rather
+        // than sitting flush against it.
+        paddingRight: bleed + space.gutter,
       }}
     >
       {row}
