@@ -16,7 +16,14 @@ The PRD defines *what the product must do* — features, user stories, functiona
 A trust-first residential rental marketplace for mid-market Kampala, in which House For Rent verifies properties through its own field officers, holds the tenant's upfront payment in licensed escrow until move-in, and earns a one-time success commission from the landlord on a completed let.
 
 ### 1.3 In scope (V1)
-Long-term residential rentals only; the Ntinda–Kira launch corridor; tenant and landlord/lister mobile surfaces; the internal Field Operations Officer (FOO) / admin surface; identity-only tenant screening; landlord-paid success commission via escrow; the Move-In Guarantee (property-integrity scope).
+Long-term residential rentals only; the Ntinda–Kira launch corridor; the public web marketplace and the tenant, landlord/lister and Field Operations Officer / admin surfaces within it; identity-only tenant screening; landlord-paid success commission via escrow; the Move-In Guarantee (property-integrity scope).
+
+> **Revised 2026-08-24.** This document originally scoped tenant and
+> landlord surfaces as MOBILE apps. They are now surfaces of one responsive
+> web application; see Technical Architecture §7 for the decision and its
+> reasoning. No functional requirement below changed as a result — the
+> requirements were about what a tenant and a landlord must be able to do,
+> not about what they must install.
 
 ### 1.4 Out of scope (V1) — build the seam, not the feature
 Property sales; premium-tier *operations*; property management / recurring billing; diaspora-tenant remote transacting and cross-border payments; enhanced screening modules; Certified Partner viewing program; tenant-conduct guarantees. Each must be *representable* in the model without being *built* (per SSOT Decisions 1, 6, 9, 10, 11).
@@ -37,7 +44,7 @@ Per the direction governing this build: validation results adjust **configuratio
 
 ## 2. Personas
 
-**Tenant (primary demand).** A mid-market Kampala professional, Android, mobile-money-native, often on a slower connection. Has been burned by fake listings, wasted transport, and deposit risk. Wants: genuine, available, verified homes; no viewing fees; assurance their money is safe until they actually move in.
+**Tenant (primary demand).** A mid-market Kampala professional, browsing from an Android phone, mobile-money-native, often on a slower connection. Has been burned by fake listings, wasted transport, and deposit risk. Wants: genuine, available, verified homes; no viewing fees; assurance their money is safe until they actually move in.
 
 **Property Owner (primary supply).** Owns 1–3 units, frequently absentee (including diaspora). Wants tenants filled fast, low hassle, and trustworthy occupants. Historically pays agents nothing (brokers extract from tenants), so must be sold the *substitution*: a verified tenant with escrow-secured funds, at no upfront cost and no risk.
 
@@ -267,5 +274,5 @@ Handoff notes for document 2, so the boundary between "what" and "how" stays cle
 - The payments abstraction's interface and the PSP integration boundary.
 - Where the ledger and deal state machine live and how transactionality is guaranteed.
 - The three-surface topology (tenant app, landlord app/mode, FOO-admin surface) and their shared backend.
-- Tech-stack confirmation (mobile framework still to be locked; PostgreSQL for money/state is a standing constraint).
+- Tech-stack confirmation — RESOLVED 2026-08-24: Next.js web client, NestJS API, PostgreSQL for money and state (a standing constraint).
 - How configuration (Section 1.5) is stored, versioned, and served without enabling in-flight re-pricing.

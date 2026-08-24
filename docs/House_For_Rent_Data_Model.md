@@ -153,6 +153,12 @@ commission_rate_version 🔒
 ## 4. Listings & Properties
 
 ### 4.1 `neighbourhood`
+
+> **2026-08-24.** This table had no API surface until the taxonomy routes
+> were built (F-015). `GET /v1/neighbourhoods` is public — the taxonomy IS
+> the search vocabulary (FR-2.2) — and creation is admin-only, because
+> `in_service_area` decides what the public feed may contain (FR-2.5).
+
 Taxonomy-first location (FR-2.2). Hierarchical to allow corridor grouping.
 ```
 neighbourhood
@@ -459,7 +465,44 @@ media_asset
   kind          enum('image','video') not null
   perceptual_hash text                     -- seam: future duplicate-listing detection
   uploaded_by_party_id uuid fk -> party.id
+  mime_type     text                       -- nullable: see below
+  byte_size     int                        -- nullable: see below
 ```
+
+`mime_type` and `byte_size` were added 2026-08-24 for browser-uploaded
+photography. They are **nullable on purpose**: every row written by the V1
+mock capture path genuinely has no file behind it, and a `NOT NULL DEFAULT`
+would assert a fact about those rows that is not true.
+
+### 10.1a `listing_photo` (added 2026-08-24)
+```
+listing_photo
+  id             uuid pk
+  listing_id     uuid fk -> listing.id not null
+  media_asset_id uuid fk -> media_asset.id not null
+  sort_order     int not null default 0
+  caption        text
+  source         enum('field_officer','lister','development_fixture') not null
+  created_at     timestamptz not null default now()
+  unique (listing_id, media_asset_id)
+  index (listing_id, sort_order)
+```
+
+**Why a table and not a column on `listing`.** A listing has many
+photographs, they are ordered, and each carries its own provenance.
+
+**Why `source` is an enum and not a boolean.** Provenance is the point. A
+tenant deciding whether to spend a Saturday travelling to Kira is entitled
+to know whether the picture was taken by our field officer, supplied by the
+person trying to let the property, or seeded for a demonstration — and a
+development fixture must be able to say so out loud rather than pass as
+either of the other two. `field_officer` is the only value any surface may
+present as verified photography, and it is written from the caller's ROLE,
+never from a request field.
+
+**Why photographs are not deleted with their asset.** `listing_photo` rows
+are removable; the `media_asset` behind them is not. An audit row points at
+it, and deleting bytes an audit trail references defeats the trail.
 
 ### 10.2 `audit_event` 🔒
 Append-only (NFR-2). Money, verification, consent, config-change events.

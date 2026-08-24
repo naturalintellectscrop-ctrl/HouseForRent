@@ -14,7 +14,7 @@ node_modules
 /coverage
 
 # next.js
-/.next/
+.next/
 /out/
 
 # production
@@ -46,8 +46,12 @@ local-*
 *.log
 dev.log
 dev.out.log
-test
-prompt
+
+# Anchored deliberately. As bare patterns, `test` and `prompt` matched a
+# directory of that name at ANY depth — which silently excluded
+# `apps/api/test/` from version control.
+/test
+/prompt
 
 server.log
 # Skills directory
@@ -55,3 +59,16 @@ server.log
 
 # Uploaded files
 /public/uploads/
+
+# Playwright
+test-results/
+playwright-report/
+apps/web/shots/
+
+# Listing photographs.
+#
+# `PhotoStore` writes bytes here (MEDIA_ROOT, default `apps/api/var/media`).
+# They are NOT committed: the demo set is regenerated deterministically by
+# `scripts/seed-web-demo.mjs`, and real officer photography belongs on a
+# persistent disk or an object store, never in git history.
+apps/api/var/

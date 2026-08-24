@@ -4,8 +4,8 @@ Persistent across sessions. Nothing is removed; findings move to
 `RESOLVED` with the evidence that closed them.
 
 **Established:** 2026-08-15, at commit `6274e38`.
-**Last updated:** 2026-08-18 — F-012 fixed; F-014 and F-015 opened during
-the F-007 browser pass.
+**Last updated:** 2026-08-24 — the web-first migration. F-013 superseded,
+F-014 and F-015 closed, F-016 and F-017 opened and closed.
 **Method:** every route enumerated from controller decorators, then grepped
 against actual call sites in `apps/console` and `apps/mobile`. Connectivity
 is traced, not inferred from filenames.
@@ -23,25 +23,31 @@ prevents it.
 | Priority | Open | Resolved |
 |---|---:|---:|
 | P0 | 0 | 2 |
-| P1 | 4 | 1 |
+| P1 | 1 | 5 |
 | P2 | 3 | 2 |
 | P3 | 3 | 0 |
+| Superseded | — | 2 |
 
-**Where it stands.** The transaction journey is now executable end to end
-through real surfaces: registration → browse → viewing → dispatch →
-introduction → deal → escrow → move-in → commission → settlement → close.
-No P0 findings remain open.
+**Where it stands (2026-08-24).** The product is a **website**. The Expo
+client has been removed and one Next.js application now carries the public
+marketplace, the tenant and landlord portals, and the operations console.
 
-The largest open item is **F-012**: the three caller-supplied amounts on the
-money path are reconciled against nothing, and the ledger's own integrity
-check is structurally incapable of catching an error in them. F-007's
-console pre-fills settlement from the ledger, which reduces the fat-finger
-exposure but does not close the finding — a pre-fill is a convenience, not a
-check.
+The full journey is executable end to end **through HTTP by a real client**,
+proven by `apps/api/scripts/journey-http.mjs` — which holds no database
+connection, and therefore cannot pass by obtaining a state no user could
+reach. That script is the direct answer to F-011, and running it is what
+exposed F-014 and F-017 as still-live defects after both had been believed
+either fixed or absent.
 
-Inventory still cannot enter the system through any surface (F-003,
-decided), and brokers and management companies cannot publish at all because
-mandate submission has no route.
+56/56 steps pass, including the financial invariants: an escrow of
+3,600,000 funded, 1,200,000 commission recognised, 2,400,000 released, zero
+outstanding, discharged.
+
+What remains open is inventory-adjacent rather than journey-blocking:
+brokers and management companies still cannot submit a mandate through any
+route, so they cannot publish (F-003's remaining half).
+
+---
 
 ---
 
@@ -549,45 +555,39 @@ console; in scope for whoever next touches the mobile deal screen.
 
 ---
 
-## F-014 — `sign-agreement` is offered but cannot be completed from any client
+## F-014 — `sign-agreement` was offered but could not be completed
 
 | | |
 |---|---|
-| **Priority** | **P1** |
-| **Area** | API / Agreements + Console / Deals |
-| **Status** | OPEN — found 2026-08-18 while preparing the F-007 browser pass |
+| **Priority** | P1 |
+| **Area** | API / Deals |
+| **Status** | **RESOLVED** — 2026-08-24 |
 
-`POST /v1/deals/:id/sign-agreement` requires `agreementId`. **No endpoint any
-client can call returns one.**
+`POST /v1/deals/:dealId/sign-agreement` required `agreementId`, and **no
+route returned one.** There is no endpoint that lists a listing's
+agreements; the id existed only in the database and in test fixtures. The
+one transition that freezes the commission snapshot — the point at which the
+landlord's rate becomes immutable — was unreachable from any real surface.
 
-- `GET /v1/listings/:id/agreement` returns `presentTerms(...)`, whose shape is
-  `{ listingId, monthlyRent, commissionRateBp, commissionIfLet, clause, payer,
-  tenantPays, alreadyAccepted }` — no `id`.
-- `POST /v1/listings/:id/agreement/accept` **does** return the full
-  `ListingAgreement`, but only to the caller at the moment of acceptance —
-  the landlord, in the mobile app, which discards it.
-- `GET /v1/deals/:dealId` exposes `deal.agreementId`, which is `null` until
-  after signing — the value is published only once it is no longer needed.
+The server offered it in `availableActions`, so a correctly-written thin
+client rendered a button that could not succeed.
 
-```
-$ grep -rn "agreementId" apps/console/app apps/mobile/app apps/mobile/components
-  (no output)
-```
+**Resolution.** `agreementId` is now **optional and derived**. A listing
+cannot be published without exactly one accepted agreement (the publish gate
+enforces that), and a deal is created from an introduction on one listing —
+so the server looks it up rather than asking a client to know something it
+cannot know.
 
-**Impact.** F-007's deal page renders a `sign-agreement` action with a
-required "Accepted listing agreement" field that an operator has no way to
-fill. The action is reachable, correctly authorised, and unusable.
+It remains *accepted* but optional, for the operations console: an admin
+acting on a listing with more than one accepted agreement in its history can
+name which. **A supplied id is scoped to the deal's own listing in both
+branches** — an id belonging to another listing is refused rather than
+honoured, because honouring it would freeze a different landlord's
+commission terms onto this deal.
 
-**How it survived the F-007 suite.** `deal-operations.spec.ts` obtains the id
-with `prisma.listingAgreement.findFirstOrThrow(...)` in its scene builder.
-That is the F-011 pattern repeating one layer down: the test reached around
-the API for a value no client can obtain, and so proved the endpoint works
-without proving it is *reachable*. The suite is not wrong about what it
-asserts — it is silent about what it had to fetch by other means.
-
-**Next action.** Return the accepted agreement's id from the read endpoint
-(`presentTerms`), or from `dealContext`. One field, no new semantics. Then
-have the console pre-fill it and the spec stop touching Prisma.
+**Evidence.** `journey-http.mjs` calls `sign-agreement` with an empty body
+and the deal reaches `agreement_signed`; the run then funds, confirms
+move-in, earns commission, settles and closes with a balanced ledger.
 
 ---
 
@@ -597,7 +597,7 @@ have the console pre-fill it and the spec stop touching Prisma.
 |---|---|
 | **Priority** | P1 |
 | **Area** | API / Listings |
-| **Status** | OPEN — found 2026-08-18 |
+| **Status** | **RESOLVED** — 2026-08-24 |
 
 `POST /v1/properties` requires `neighbourhoodId`. There is **no route that
 creates a neighbourhood, and none that lists them.** `GET /v1/listings`
@@ -612,27 +612,171 @@ makes the neighbourhood the primary location field and forbids requiring a
 street address. It also means no end-to-end scenario can be seeded through
 the API alone.
 
-**Next action.** `GET /v1/neighbourhoods` (public — it is the search
-taxonomy) and an admin-only create. Both are prerequisites for F-003, not
-part of it.
+**Resolution.** `src/taxonomy/` — `GET /v1/neighbourhoods` and
+`GET /v1/amenities` are **public**, because the taxonomy IS the search
+vocabulary (FR-2.2) and a filter whose values cannot be discovered is not a
+filter. `POST /v1/neighbourhoods` and `POST /v1/neighbourhoods/:id/service-area`
+are **admin-only**: `inServiceArea` decides what the public feed may
+contain, so a lister able to mint an in-service neighbourhood would have
+routed around corridor scoping entirely. Both writes emit audit events.
+
+The listing defaults to the service area only — a neighbourhood outside the
+corridor can never carry a live listing, so offering one in a picker sets a
+landlord up to publish into a void.
+
+`liveListingCount` applies the same predicate the search does, **freshness
+included**. The first implementation omitted the freshness filter and
+advertised 16 homes across areas whose search returned 12; a count that
+disagrees with the page it links to is a small dishonesty on a surface whose
+whole job is being believed.
+
+**Evidence.** `journey-http.mjs` obtains a `neighbourhoodId` from
+`GET /v1/neighbourhoods` and creates a property with it, holding no database
+connection. The landlord Playwright spec asserts the picker has more than
+one option — before this it could have had none.
+
+---
+
+## F-016 — `@Roles('lister')` was being read as ownership
+
+| | |
+|---|---|
+| **Priority** | **P0** |
+| **Area** | API / Listings — authorisation |
+| **Status** | **RESOLVED** — found and fixed 2026-08-24 |
+
+API Spec §4.2 has always footnoted `POST /listings`, `publish`,
+`withdraw` and `agreement/accept` with "¹ and must be the lister who owns
+that listing". For the first three it was **not implemented**. The handlers
+carried `@Roles('lister', 'admin')` and nothing else, and neither
+`createListing` nor `publish` nor `withdraw` looked at who owned the
+property.
+
+**Impact.** Any registered lister — an account anyone can self-serve in
+under a minute — could, knowing only an id:
+
+- publish terms against a stranger's property, which a landlord would
+  discover when a tenant arrived;
+- **withdraw a competitor's live listing from the marketplace.**
+
+Ids are not secret: every listing id is in a public URL.
+
+**Why it survived.** Role membership and ownership are answered by the same
+English word ("is this caller a landlord?" / "is this caller THIS
+landlord?"), and the failure mode is silent — an endpoint written without
+the check looks identical to one written with it, and works correctly for
+the owner. Every test had the owner call it.
+
+**Resolution.** `ListingsService.assertOwnsListing()` and
+`assertOwnsProperty()`, called on every lister-callable mutation including
+photo upload and removal. **403 `NOT_THE_PROPERTY_OWNER`**, not 404: the
+caller already holds the role and already possesses the id, so hiding the
+resource conceals nothing and would deny a landlord who mistyped their own
+id the real reason. Admin is exempt — operations legitimately author on a
+landlord's behalf, and every such act is already attributable.
+
+Deliberately **not** a guard decorator: a guard is opt-in, and opt-in is
+exactly how this was missed four times.
+
+**Evidence.** `journey-http.mjs` registers a second landlord and asserts
+403 on withdrawing another owner's live listing, on listing against their
+property, and on uploading a photograph to their listing.
+
+---
+
+## F-017 — no client could make a tenant identity-verified
+
+| | |
+|---|---|
+| **Priority** | **P0** |
+| **Area** | API / Screening |
+| **Status** | **RESOLVED** — found and fixed 2026-08-24 |
+
+`POST /v1/viewings` refuses an unverified tenant with 422
+`TENANT_NOT_VERIFIED` (FR-5.1), and that rule is correct. But
+**`ScreeningModule` registered no controller.** `OnboardingService`,
+`IdentityService.recordConsent`, `verifyNin`, `verifyPhone` and
+`verifySelfieMatch` all existed, were unit-tested, and were reachable from
+nothing but spec files and seed scripts writing to Prisma directly.
+
+**Impact.** The tenant journey ended at registration **for every real
+user**. Not degraded — ended. A tenant could register, browse, open a
+property, press "request a viewing", and be refused, with no route anywhere
+in the API that would have changed that.
+
+**Why it survived, and why this is the same defect as F-011.** Every test
+and both seed scripts granted verification by writing `identity_verification`
+rows directly. The suite was green because it obtained through the database
+a state no client could obtain. This is the fourth instance of that exact
+pattern (F-001, F-002, F-007, F-017): the service is complete, the tests
+pass, and the product does not work.
+
+**Resolution.** `src/screening/screening.controller.ts` —
+`GET /v1/identity/me`, `POST /v1/identity/consent`, `POST /v1/identity/verify`,
+`POST /v1/identity/screen`. The subject is always the caller; no endpoint
+accepts a party id. Consent is a separate call made first, and
+`IdentityService` independently refuses to verify a party without a consent
+record, so the DPA-2019 ordering is enforced rather than merely intended.
+
+The NIN and phone cross the `IdentityProvider` boundary and are never
+persisted. **V1 runs a mock provider, and the web page that calls this says
+so** — it does not show a government crest or claim a register was
+consulted. A product selling verification cannot be the thing that
+overstates its own.
+
+**Evidence.** `journey-http.mjs` registers a fresh tenant, asserts
+`identityVerified: false`, asserts the viewing request is refused with 422,
+then verifies through HTTP and completes the viewing. The tenant Playwright
+spec drives the same sequence through the browser.
+
+---
+
+## F-013 — mobile deal screen held its own copy of the state machine
+
+**SUPERSEDED — 2026-08-24.** The Expo client was removed. The web client
+renders the server's `availableActions` and contains no status→action map;
+the one status table it holds (`DEAL_TRAIL` in `lib/portal.ts`) is a display
+ORDER for a progress bar and is never consulted to decide whether an action
+is permitted.
+
+Recorded as superseded rather than resolved: the defect was not fixed, the
+code containing it no longer exists.
+
+---
+
+## F-008 — `GET /v1/listings/:id/field-confirmed` is superseded
+
+Unchanged. The route still exists; `GET /v1/listings/:id` returns the same
+projection inline, which is what the web client uses.
 
 ---
 
 ## Verification status
 
+Recorded 2026-08-24, against the hosted Supabase instance.
+
 | Layer | Status |
 |---|---|
-| TypeScript (3 workspaces) | **VERIFIED** — all clean |
-| API unit + integration (local run) | **UNVERIFIED since F-001/F-002** — full suite not re-run; exceeds the tool timeout |
-| `create-deal.spec.ts` vs Supabase | **VERIFIED** — 16/16 remote |
-| `dispatch.spec.ts` vs Supabase | **VERIFIED** — 16/16 remote |
-| `escrow-amount-integrity.spec.ts` vs Supabase | **VERIFIED** — 6/6 remote; passing **confirms F-012**, see that finding |
-| Money core vs Supabase | **VERIFIED** — 78/78 remote (before this change) |
-| Auth vs Supabase | **VERIFIED** — 29/29 remote |
-| Full suite vs Supabase | **UNVERIFIED** — exceeds the 10-min tool limit; run manually |
-| Console production build | **VERIFIED** — builds, 12 routes |
-| Console in a browser | **UNVERIFIED for the new screens** — `/ops/dispatch` not yet driven in a real browser |
-| Mobile bundle | **VERIFIED** — exports clean (before this change) |
-| Mobile on a device | **UNVERIFIED** — deferred at the user's request |
+| TypeScript — `@hfr/api` | **VERIFIED** — clean |
+| TypeScript — `@hfr/web` | **VERIFIED** — clean |
+| Web production build | **VERIFIED** — 32 routes |
+| **Full journey over HTTP** (`scripts/journey-http.mjs`) | **VERIFIED** — 56/56 steps, 0 failures, no database connection held |
+| Financial invariants at close | **VERIFIED** — funded 3,600,000 · commission 1,200,000 · released 2,400,000 · escrow 0 · discharged |
+| F-012 (caller-supplied amount) | **VERIFIED still closed** — `fund-escrow` with a wrong amount returns 422 `AMOUNT_NOT_AUTHORITATIVE` *while the deal is otherwise ready to fund*, so the refusal is about the figure and not the transition |
+| Authorisation refusals | **VERIFIED** — 11 assertions: unauthenticated, cross-role, non-party (404), and three F-016 ownership refusals |
+| Browser journeys, desktop 1440px | **VERIFIED** — 8/8 Playwright specs |
+| Browser journeys, phone 412px | **VERIFIED** — 4/4 Playwright specs, including no horizontal overflow on any public page |
+| API unit + integration suite | **UNVERIFIED since the web migration** — exceeds the tool timeout; run manually. The list/read contracts widened (`findForTenant`, `findForParty`), so specs asserting the old bare-row shapes are expected to need updating |
 | Vercel deployment | **UNVERIFIED** — not yet deployed |
 | API deployment | **UNVERIFIED** — no host provisioned |
+| Photograph persistence across redeploy | **UNVERIFIED** — needs a persistent disk; see DEPLOYMENT.md §2.3 |
+
+### Known open items
+
+| Item | Note |
+|---|---|
+| Mandate submission has no route | Brokers and management companies cannot publish. The remaining half of F-003 |
+| API spec suite not re-run | See above — a known consequence of widening two read contracts, not a suspected regression |
+| Identity provider is a mock | Behind `IdentityProvider`. Every surface that calls it says so |
+| PSP is a mock | Behind `PaymentProvider`. The ledger behaves correctly regardless |
+| Photographs on the demo corridor are generated fixtures | Marked `development_fixture` by the API and labelled on the image itself |

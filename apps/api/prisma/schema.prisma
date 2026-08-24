@@ -494,6 +494,7 @@ model Listing {
   introductionRecords IntroductionRecord[]
   deals               Deal[]
   listingAgreements   ListingAgreement[]
+  photos              ListingPhoto[]
 
   @@map("listing")
 }
@@ -943,13 +944,56 @@ model MediaAsset {
   kind              MediaKind
   perceptualHash    String?   @map("perceptual_hash")
   uploadedByPartyId String    @map("uploaded_by_party_id")
+  /// The MIME type actually stored. Nullable because rows written by the
+  /// V1 mock capture path predate byte storage and have no file behind them.
+  mimeType          String?   @map("mime_type")
+  byteSize          Int?      @map("byte_size")
   createdAt         DateTime  @default(now()) @map("created_at")
 
   uploadedByParty Party @relation(fields: [uploadedByPartyId], references: [id])
 
   propertyMandates PropertyMandate[]
+  listingPhotos    ListingPhoto[]
 
   @@map("media_asset")
+}
+
+/// A photograph shown on a listing (FR-4.2 — the property is the evidence).
+///
+/// ── Why this is a table and not a column on Listing ──
+/// A listing has many photographs, they are ordered, and each one carries
+/// its own provenance. Provenance is the point: `source` records whether a
+/// human being from this platform stood in that room. A tenant deciding
+/// whether to spend a Saturday travelling to Kira is entitled to know
+/// whether the picture was taken by our field officer or supplied by the
+/// person trying to let the property — and a development fixture must be
+/// able to say so out loud rather than pass as either.
+enum PhotoSource {
+  /// Captured by a Field Operations Officer during a verification visit.
+  /// The only value that may be presented as verified photography.
+  field_officer
+  /// Supplied by the lister. Shown, but never described as verified.
+  lister
+  /// Seeded demonstration imagery. NOT a real property on this platform.
+  /// The API marks it and every surface must label it.
+  development_fixture
+}
+
+model ListingPhoto {
+  id           String      @id @default(uuid())
+  listingId    String      @map("listing_id")
+  mediaAssetId String      @map("media_asset_id")
+  sortOrder    Int         @default(0) @map("sort_order")
+  caption      String?
+  source       PhotoSource
+  createdAt    DateTime    @default(now()) @map("created_at")
+
+  listing    Listing    @relation(fields: [listingId], references: [id])
+  mediaAsset MediaAsset @relation(fields: [mediaAssetId], references: [id])
+
+  @@unique([listingId, mediaAssetId])
+  @@index([listingId, sortOrder])
+  @@map("listing_photo")
 }
 
 /// 🔒 Append-only (NFR-2). Money, verification, consent, config-change

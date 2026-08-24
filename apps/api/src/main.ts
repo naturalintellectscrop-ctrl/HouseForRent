@@ -1,3 +1,16 @@
+/**
+ * Loaded FIRST, and by a side-effect import rather than a call.
+ *
+ * `auth/better-auth/auth.ts` reads `DATABASE_URL` at module scope and throws
+ * if it is absent, so it must already be populated by the time any other
+ * import is evaluated. ES imports evaluate in source order, which makes this
+ * line's position load-bearing — moving it below the others reintroduces a
+ * boot crash that only appears when the variable comes from a file.
+ *
+ * In a deployed environment the variables come from the platform and this
+ * finds no file, which is exactly right: it fills gaps, it does not override.
+ */
+import 'dotenv/config';
 import { NestFactory } from '@nestjs/core';
 import { Logger } from '@nestjs/common';
 import { json, urlencoded } from 'express';

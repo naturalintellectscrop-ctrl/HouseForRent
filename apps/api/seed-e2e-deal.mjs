@@ -2,9 +2,11 @@
  * Seeds ONE deal at `commission_earned` for the F-007 browser verification,
  * entirely through the real HTTP API.
  *
- * Nothing here writes to the database directly. A fixture built with Prisma
- * would prove the schema accepts these rows, not that the product produces
- * them — and the whole point of F-001/F-002 was that the two had diverged.
+ * Everything the API can reach is driven over real HTTP. A fixture built with
+ * Prisma would prove the schema accepts these rows, not that the product
+ * produces them — and the whole point of F-001/F-002 was that the two had
+ * diverged. The three database writes below are gaps in the API, each
+ * labelled with the finding that records it.
  *
  * `commission_earned` is the state chosen deliberately: it is the one where
  * `settle` becomes available, which is the money action the browser pass
@@ -16,7 +18,28 @@
  * Prints shell exports for the Playwright run. The admin password comes from
  * E2E_PASSWORD, defaulting to the same value the console e2e suite uses.
  */
+import { PrismaClient } from '@prisma/client';
+
 const API = process.env.API_BASE ?? 'http://localhost:3000';
+
+/*
+ * ── Two Prisma escapes, and why they are here ──
+ *
+ * This seed drives the real HTTP API for everything the product can reach
+ * that way. Exactly two things it cannot, and both are recorded findings:
+ *
+ *   F-015  No route creates or lists a neighbourhood, yet POST /v1/properties
+ *          requires a neighbourhoodId. Nothing but a database write can make
+ *          one.
+ *   F-014  POST /v1/deals/:id/sign-agreement requires an agreementId, and no
+ *          endpoint any client can call returns one.
+ *
+ * They are done with Prisma HERE, loudly, rather than hidden in a helper —
+ * every line below that touches the database is a gap in the API, and when
+ * those findings are fixed these lines should disappear rather than being
+ * quietly kept for convenience.
+ */
+const prisma = new PrismaClient();
 const PASSWORD = process.env.E2E_PASSWORD ?? 'correct-horse-battery';
 
 const stamp = Date.now().toString().slice(-8);
@@ -42,7 +65,7 @@ async function call(path, { method = 'GET', token, body } = {}) {
   return parsed;
 }
 
-async function actor(role, { verify = false } = {}) {
+async function actor(role) {
   const primaryPhone = phone(role.slice(0, 2));
   const displayName = `E2E ${role}`;
   const path =
@@ -82,14 +105,6 @@ async function actor(role, { verify = false } = {}) {
   });
   const me = await call('/v1/auth/me', { token: session.accessToken });
 
-  if (verify) {
-    console.error(
-      `  ! ${role} ${primaryPhone} needs identity verification — the API has ` +
-        'no self-serve route for it, so this seed relies on the tenant ' +
-        'already being verifiable. See the note at the end.',
-    );
-  }
-
   return {
     primaryPhone,
     token: session.accessToken,
@@ -102,6 +117,28 @@ const log = (...a) => console.error(...a);
 log('Seeding an F-007 deal through the real API…');
 
 const tenant = await actor('tenant');
+// Identity verification has no self-serve route either; the tenant must be
+// verified before a viewing can be requested (FR-5.1).
+await prisma.$transaction(async (tx) => {
+  await tx.consentRecord.create({
+    data: {
+      partyId: tenant.partyId,
+      purpose: 'identity_verification',
+      policyVersion: 'v1',
+      grantedAt: new Date(),
+    },
+  });
+  for (const method of ['nin', 'phone', 'selfie_match']) {
+    await tx.identityVerification.create({
+      data: {
+        partyId: tenant.partyId,
+        method,
+        state: 'verified',
+        verifiedAt: new Date(),
+      },
+    });
+  }
+});
 const lister = await actor('lister');
 const foo = await actor('foo');
 const admin = await actor('admin');
@@ -114,6 +151,11 @@ await call('/v1/admin/commission-rates', {
 
 log('  parties created');
 
+// [F-015] no API route creates a neighbourhood
+const neighbourhood = await prisma.neighbourhood.create({
+  data: { name: `E2EHood-${stamp}`, inServiceArea: true },
+});
+
 const property = await call('/v1/properties', {
   method: 'POST',
   token: lister.token,
@@ -122,7 +164,7 @@ const property = await call('/v1/properties', {
     bedrooms: 2,
     bathrooms: 1,
     furnished: 'furnished',
-    neighbourhoodId: process.env.E2E_NEIGHBOURHOOD_ID,
+    neighbourhoodId: neighbourhood.id,
     landmarkText: 'by the mango tree',
   },
 });
@@ -193,8 +235,11 @@ const deal = await call('/v1/deals', {
   body: { introductionRecordId: conducted.introduction.id },
 });
 
-const detail = await call(`/v1/deals/${deal.id}`, { token: admin.token });
-const agreementId = process.env.E2E_AGREEMENT_ID;
+// [F-014] no endpoint returns the accepted agreement's id
+const agreement = await prisma.listingAgreement.findFirstOrThrow({
+  where: { listingId: listing.id, accepted: true },
+});
+const agreementId = agreement.id;
 
 await call(`/v1/deals/${deal.id}/match-tenant`, {
   method: 'POST',
@@ -233,3 +278,5 @@ console.log(`export E2E_ADMIN_OPS_PHONE="${admin.primaryPhone}"`);
 console.log(`export E2E_PASSWORD="${PASSWORD}"`);
 console.log(`export E2E_DEAL_ID="${deal.id}"`);
 console.log(`export E2E_DEAL_HELD="${final.financial.heldInEscrow}"`);
+
+await prisma.$disconnect();

@@ -28,6 +28,12 @@ export class SearchController {
       bedrooms: query.bedrooms,
       amenityIds: query.amenityId ? [query.amenityId] : undefined,
       includeStale: query.includeStale,
+      furnished: query.furnished,
+      propertyType: query.propertyType,
+      q: query.q,
+      sort: query.sort,
+      limit: query.limit,
+      offset: query.offset,
     });
   }
 

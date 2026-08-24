@@ -1,0 +1,2055 @@
+/*
+ * ── The House For Rent design language ──
+ *
+ * Hand-written, deliberately. A component library would ship tens of
+ * kilobytes of JavaScript to render what is, in truth, a photo grid, some
+ * prose and a handful of forms. This file is a few kilobytes of CSS, cached
+ * after the first load, and nearly every page it styles is a server
+ * component that ships no interactive JavaScript at all (NFR-5).
+ *
+ * ── Two registers, one system ──
+ * The public marketplace and the operations console are the same product
+ * and share every token below. What they do NOT share is generosity: the
+ * marketplace breathes, because a landlord deciding whether to trust us is
+ * reading it; the console is dense, because an officer in a stairwell needs
+ * rows and form fields, not whitespace. The `.ops` scope is where that
+ * difference lives, and it is the only difference.
+ *
+ * Mobile-first throughout. The base rules assume a phone; the media queries
+ * only ever widen.
+ */
+
+/* ── tokens ─────────────────────────────────────────────────────────── */
+
+:root {
+  /*
+   * The five brand colours, from the identity board.
+   *
+   * ── Why there are two greens ──
+   * The board specifies #16a34a, and it is right everywhere it appears as a
+   * MARK: a verified pill, a price, accent text. It is wrong as a button
+   * FILL — white on #16a34a measures 3.29:1 and fails WCAG AA, and the
+   * primary button in this product is the one control nobody may mis-read.
+   * `--accent` is the same hue one step down, at 5.02:1 with white.
+   */
+  --brand-ink: #0e1412;
+  --brand-green: #16a34a;
+  --brand-action: #15803d;
+  --brand-paper: #f8fafc;
+
+  --ink: #0e1412;
+  --ink-soft: #47514d;
+  --ink-faint: #6b7570;
+  --line: #e3e8e6;
+  --line-strong: #c9d2ce;
+  --bg: #ffffff;
+  --bg-soft: #f5f7f6;
+  --bg-sunk: #eef1f0;
+  --surface: #ffffff;
+  --surface-alt: #f5f7f6;
+
+  --accent: #15803d;
+  --accent-ink: #ffffff;
+  --accent-soft: rgba(22, 163, 74, 0.1);
+  --accent-line: rgba(22, 163, 74, 0.28);
+
+  --ok: #15803d;
+  --ok-bg: #eaf4ee;
+  /* Amber is 2.1:1 on white, so light mode takes a darker step for text. */
+  --warn: #b45309;
+  --warn-bg: #fdf4e5;
+  --danger: #b91c1c;
+  --danger-bg: #fdeaea;
+
+  --radius-sm: 6px;
+  --radius: 10px;
+  --radius-lg: 16px;
+
+  /*
+   * Elevation is used sparingly and never for decoration. A card that
+   * floats for no reason is noise; these two steps exist to say "this
+   * overlays the page" and nothing else.
+   */
+  --shadow-sm: 0 1px 2px rgba(14, 20, 18, 0.06);
+  --shadow-lg: 0 12px 32px -8px rgba(14, 20, 18, 0.18);
+
+  /*
+   * ── Type ──
+   * A system stack. A webfont over a Ugandan mobile connection costs a
+   * download and a layout shift on every cold start; the identity is
+   * carried by colour, spacing and hierarchy, which cost nothing.
+   */
+  --font: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto,
+    'Helvetica Neue', Arial, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, Consolas,
+    monospace;
+
+  --measure: 34rem;
+  --page: 74rem;
+}
+
+/*
+ * Dark is a real counterpart, not an inversion. The values are re-derived
+ * against the near-black identity surface, because inverting a light theme
+ * produces greys that are correct in ratio and wrong in feel.
+ */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ink: #f4f7f6;
+    --ink-soft: #a5aeaa;
+    --ink-faint: #78827d;
+    --line: #232b28;
+    --line-strong: #354039;
+    --bg: #0e1412;
+    --bg-soft: #141b19;
+    --bg-sunk: #0a0f0d;
+    --surface: #161e1b;
+    --surface-alt: #1c2522;
+
+    /* On the near-black page the board's green clears 5:1 unmodified, so
+       dark gets the real brand value rather than the button-safe step. */
+    --accent: #16a34a;
+    --accent-ink: #ffffff;
+    --accent-soft: rgba(22, 163, 74, 0.14);
+    --accent-line: rgba(22, 163, 74, 0.34);
+
+    --ok: #22c55e;
+    --ok-bg: rgba(22, 163, 74, 0.14);
+    --warn: #f59e0b;
+    --warn-bg: rgba(245, 158, 11, 0.13);
+    --danger: #f87171;
+    --danger-bg: rgba(220, 38, 38, 0.15);
+
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow-lg: 0 12px 32px -8px rgba(0, 0, 0, 0.6);
+  }
+}
+
+/* ── reset ──────────────────────────────────────────────────────────── */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  scroll-behavior: smooth;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font);
+  font-size: 1rem;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+img,
+svg {
+  max-width: 100%;
+  display: block;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  margin: 0;
+  line-height: 1.15;
+  letter-spacing: -0.021em;
+  font-weight: 640;
+  text-wrap: balance;
+}
+
+p {
+  margin: 0;
+  text-wrap: pretty;
+}
+
+a {
+  color: inherit;
+}
+
+/*
+ * A visible focus ring on everything, in the accent. Removing it is the
+ * single most common accessibility regression in a hand-written stylesheet,
+ * so it is stated once here rather than per component.
+ */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* Skip link — the first thing a keyboard user meets. */
+.skip {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  background: var(--surface);
+  color: var(--ink);
+  padding: 0.75rem 1rem;
+  z-index: 100;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.skip:focus {
+  left: 0.5rem;
+  top: 0.5rem;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ── layout ─────────────────────────────────────────────────────────── */
+
+.page {
+  width: 100%;
+  max-width: var(--page);
+  margin: 0 auto;
+  padding: 0 1.25rem;
+}
+
+@media (min-width: 60rem) {
+  .page {
+    padding: 0 2rem;
+  }
+}
+
+.section {
+  padding: 3.5rem 0;
+}
+.section-lg {
+  padding: 4.5rem 0;
+}
+@media (min-width: 60rem) {
+  .section {
+    padding: 5rem 0;
+  }
+  .section-lg {
+    padding: 7rem 0;
+  }
+}
+
+.section-sunk {
+  background: var(--bg-soft);
+}
+
+.stack > * + * {
+  margin-top: 1rem;
+}
+.stack-sm > * + * {
+  margin-top: 0.5rem;
+}
+.stack-lg > * + * {
+  margin-top: 2rem;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+}
+.row-between {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* ── type scale ─────────────────────────────────────────────────────── */
+
+/*
+ * Display steps use `clamp` rather than breakpoints. A headline that jumps
+ * two sizes at 60rem reads as two designs stitched together; one that grows
+ * continuously reads as one.
+ */
+.display {
+  font-size: clamp(2.25rem, 1.5rem + 3.2vw, 3.9rem);
+  line-height: 1.04;
+  letter-spacing: -0.03em;
+  font-weight: 660;
+}
+.h1 {
+  font-size: clamp(1.85rem, 1.35rem + 1.9vw, 2.75rem);
+}
+.h2 {
+  font-size: clamp(1.4rem, 1.15rem + 1vw, 1.9rem);
+}
+.h3 {
+  font-size: 1.15rem;
+  font-weight: 620;
+}
+
+.lede {
+  font-size: clamp(1.05rem, 1rem + 0.4vw, 1.25rem);
+  line-height: 1.55;
+  color: var(--ink-soft);
+  max-width: var(--measure);
+}
+
+.prose {
+  max-width: var(--measure);
+  color: var(--ink-soft);
+}
+.prose p + p {
+  margin-top: 1rem;
+}
+
+.muted {
+  color: var(--ink-soft);
+}
+.faint {
+  color: var(--ink-faint);
+}
+
+/*
+ * The one all-caps step: section eyebrows and nothing else. Uppercase is
+ * hard to read at length, so it is confined to two or three words.
+ */
+.eyebrow {
+  font-size: 0.75rem;
+  font-weight: 640;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+
+/* ── controls ───────────────────────────────────────────────────────── */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  /* 48px minimum target: this is used from a phone in the field. */
+  min-height: 2.875rem;
+  padding: 0.6rem 1.15rem;
+  border-radius: var(--radius);
+  border: 1px solid transparent;
+  font: inherit;
+  font-weight: 560;
+  line-height: 1.2;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease,
+    transform 140ms ease;
+}
+.btn:active {
+  transform: translateY(1px);
+}
+.btn[disabled],
+.btn[aria-disabled='true'] {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.btn-primary:hover {
+  background: #126b33;
+}
+@media (prefers-color-scheme: dark) {
+  .btn-primary:hover {
+    background: #1cb954;
+  }
+}
+
+.btn-secondary {
+  background: var(--surface);
+  color: var(--ink);
+  border-color: var(--line-strong);
+}
+.btn-secondary:hover {
+  border-color: var(--ink-faint);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--ink);
+  padding-inline: 0.5rem;
+}
+.btn-ghost:hover {
+  background: var(--bg-soft);
+}
+
+.btn-danger {
+  background: var(--danger-bg);
+  color: var(--danger);
+  border-color: transparent;
+}
+
+.btn-lg {
+  min-height: 3.25rem;
+  padding: 0.85rem 1.6rem;
+  font-size: 1.0625rem;
+}
+.btn-sm {
+  min-height: 2.25rem;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.875rem;
+}
+.btn-block {
+  width: 100%;
+}
+
+/* ── forms ──────────────────────────────────────────────────────────── */
+
+.field {
+  display: block;
+}
+.field + .field {
+  margin-top: 1rem;
+}
+
+.label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 560;
+  margin-bottom: 0.35rem;
+}
+
+.hint {
+  font-size: 0.8125rem;
+  color: var(--ink-faint);
+  margin-top: 0.3rem;
+}
+
+.input,
+.select,
+.textarea {
+  width: 100%;
+  min-height: 2.875rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+}
+.textarea {
+  min-height: 7rem;
+  resize: vertical;
+  line-height: 1.55;
+}
+.input:hover,
+.select:hover,
+.textarea:hover {
+  border-color: var(--ink-faint);
+}
+.input::placeholder,
+.textarea::placeholder {
+  color: var(--ink-faint);
+}
+
+.select {
+  appearance: none;
+  padding-right: 2.25rem;
+  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%),
+    linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position:
+    calc(100% - 1.1rem) 1.25rem,
+    calc(100% - 0.75rem) 1.25rem;
+  background-size:
+    5px 5px,
+    5px 5px;
+  background-repeat: no-repeat;
+}
+
+fieldset {
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+legend {
+  padding: 0;
+  font-size: 0.875rem;
+  font-weight: 560;
+  margin-bottom: 0.5rem;
+}
+
+/* A radio group rendered as selectable cards — bigger targets, clearer state. */
+.choice-group {
+  display: grid;
+  gap: 0.5rem;
+}
+@media (min-width: 30rem) {
+  .choice-group-2 {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+.choice {
+  display: flex;
+  gap: 0.65rem;
+  align-items: flex-start;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  cursor: pointer;
+  background: var(--surface);
+}
+.choice:hover {
+  border-color: var(--ink-faint);
+}
+.choice input {
+  margin-top: 0.2rem;
+  accent-color: var(--accent);
+  width: 1rem;
+  height: 1rem;
+  flex: none;
+}
+.choice:has(input:checked) {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.choice-title {
+  font-weight: 560;
+  display: block;
+}
+.choice-note {
+  font-size: 0.8125rem;
+  color: var(--ink-soft);
+}
+
+/* ── surfaces ───────────────────────────────────────────────────────── */
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 1.25rem;
+}
+.card-flush {
+  padding: 0;
+  overflow: hidden;
+}
+
+.panel {
+  background: var(--bg-soft);
+  border-radius: var(--radius-lg);
+  padding: 1.25rem;
+}
+
+.divider {
+  height: 1px;
+  background: var(--line);
+  border: 0;
+  margin: 1.5rem 0;
+}
+
+/* ── badges ─────────────────────────────────────────────────────────── */
+
+/*
+ * One badge shape, four tones, and a rule: a badge always carries a WORD.
+ * A bare coloured dot is meaningless to anyone who cannot distinguish the
+ * hues, and meaningless to everyone on first encounter.
+ */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  background: var(--bg-sunk);
+  color: var(--ink-soft);
+}
+.badge-ok {
+  background: var(--ok-bg);
+  color: var(--ok);
+}
+.badge-warn {
+  background: var(--warn-bg);
+  color: var(--warn);
+}
+.badge-danger {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+.badge-dot::before {
+  content: '';
+  width: 0.375rem;
+  height: 0.375rem;
+  border-radius: 999px;
+  background: currentColor;
+  flex: none;
+}
+
+/* ── site chrome ────────────────────────────────────────────────────── */
+
+.site-head {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: saturate(1.4) blur(10px);
+  border-bottom: 1px solid var(--line);
+}
+.site-head-inner {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  min-height: 4rem;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  font-weight: 640;
+  letter-spacing: -0.02em;
+  text-decoration: none;
+  color: var(--ink);
+  flex: none;
+}
+.brand-mark {
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 7px;
+  flex: none;
+}
+.brand-sub {
+  font-weight: 460;
+  color: var(--ink-faint);
+}
+
+.site-nav {
+  display: none;
+  align-items: center;
+  gap: 0.25rem;
+  margin-left: auto;
+}
+.site-nav a {
+  padding: 0.45rem 0.7rem;
+  border-radius: var(--radius-sm);
+  text-decoration: none;
+  color: var(--ink-soft);
+  font-size: 0.9375rem;
+  font-weight: 500;
+}
+.site-nav a:hover {
+  color: var(--ink);
+  background: var(--bg-soft);
+}
+.site-nav a[aria-current='page'] {
+  color: var(--ink);
+  font-weight: 580;
+}
+.site-actions-desktop {
+  display: none;
+  gap: 0.5rem;
+  align-items: center;
+  margin-left: auto;
+}
+@media (min-width: 62rem) {
+  .site-nav {
+    display: flex;
+  }
+  .site-actions-desktop {
+    display: flex;
+    margin-left: 0.75rem;
+  }
+}
+.site-actions-desktop form {
+  display: inline-flex;
+}
+
+/*
+ * The small-screen menu is a `<details>` element: no JavaScript, no
+ * hydration, and it works before the bundle loads — which on a slow
+ * connection is the only moment that matters.
+ */
+.menu {
+  margin-left: auto;
+}
+@media (min-width: 62rem) {
+  .menu {
+    display: none;
+  }
+}
+.menu > summary {
+  list-style: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--line-strong);
+}
+.menu > summary::-webkit-details-marker {
+  display: none;
+}
+.menu-panel {
+  position: absolute;
+  left: 0;
+  right: 0;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+  box-shadow: var(--shadow-lg);
+  padding: 0.75rem 1.25rem 1.25rem;
+  display: grid;
+  gap: 0.25rem;
+}
+.menu-panel a {
+  padding: 0.7rem 0.5rem;
+  border-radius: var(--radius-sm);
+  text-decoration: none;
+  color: var(--ink);
+  font-weight: 500;
+}
+.menu-panel a:hover {
+  background: var(--bg-soft);
+}
+.menu-panel hr {
+  border: 0;
+  border-top: 1px solid var(--line);
+  margin: 0.4rem 0;
+}
+
+.site-foot {
+  border-top: 1px solid var(--line);
+  background: var(--bg-soft);
+  padding: 3rem 0 2.5rem;
+  margin-top: 4rem;
+  font-size: 0.9375rem;
+}
+.foot-grid {
+  display: grid;
+  gap: 2rem;
+}
+@media (min-width: 48rem) {
+  .foot-grid {
+    grid-template-columns: 1.4fr repeat(3, 1fr);
+  }
+}
+.foot-col h3 {
+  font-size: 0.8125rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-faint);
+  margin-bottom: 0.75rem;
+  font-weight: 620;
+}
+.foot-col a {
+  display: block;
+  padding: 0.25rem 0;
+  color: var(--ink-soft);
+  text-decoration: none;
+}
+.foot-col a:hover {
+  color: var(--ink);
+  text-decoration: underline;
+}
+.foot-legal {
+  margin-top: 2.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--line);
+  color: var(--ink-faint);
+  font-size: 0.875rem;
+}
+
+/* ── property media ─────────────────────────────────────────────────── */
+
+/*
+ * ── The honest empty frame ──
+ * A listing with no photograph does NOT get a stock photo of somebody
+ * else's house. It gets this: a plain field in the brand surface that says
+ * what is true — no officer photography yet. The platform's whole claim is
+ * that the picture was taken in that room by our officer, and a placeholder
+ * that pretends otherwise sells the one thing we cannot sell.
+ */
+.media {
+  position: relative;
+  background: var(--bg-sunk);
+  overflow: hidden;
+  aspect-ratio: 3 / 2;
+}
+.media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.media-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  height: 100%;
+  padding: 1rem;
+  text-align: center;
+  color: var(--ink-faint);
+  font-size: 0.8125rem;
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--bg-sunk),
+    var(--bg-sunk) 10px,
+    var(--bg-soft) 10px,
+    var(--bg-soft) 20px
+  );
+}
+
+/*
+ * Fixture imagery is labelled ON the image, not in a caption below it. A
+ * label a screenshot can crop out is not a label.
+ */
+.media-fixture {
+  position: absolute;
+  left: 0.5rem;
+  bottom: 0.5rem;
+  background: rgba(14, 20, 18, 0.82);
+  color: #f4f7f6;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  padding: 0.2rem 0.45rem;
+  border-radius: var(--radius-sm);
+}
+
+.media-count {
+  position: absolute;
+  right: 0.5rem;
+  bottom: 0.5rem;
+  background: rgba(14, 20, 18, 0.82);
+  color: #f4f7f6;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.2rem 0.5rem;
+  border-radius: var(--radius-sm);
+}
+
+/* ── property cards ─────────────────────────────────────────────────── */
+
+.grid-cards {
+  display: grid;
+  gap: 1.25rem;
+  grid-template-columns: 1fr;
+}
+@media (min-width: 38rem) {
+  .grid-cards {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+@media (min-width: 68rem) {
+  .grid-cards {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.pcard {
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  text-decoration: none;
+  color: inherit;
+  transition:
+    border-color 160ms ease,
+    transform 160ms ease,
+    box-shadow 160ms ease;
+}
+.pcard:hover {
+  border-color: var(--line-strong);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+}
+.pcard .media img {
+  transition: transform 400ms ease;
+}
+.pcard:hover .media img {
+  transform: scale(1.03);
+}
+
+.pcard-body {
+  padding: 1rem 1.1rem 1.15rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  flex: 1;
+}
+.pcard-price {
+  font-size: 1.15rem;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+.pcard-price span {
+  font-size: 0.8125rem;
+  font-weight: 460;
+  color: var(--ink-faint);
+  letter-spacing: 0;
+}
+.pcard-where {
+  font-weight: 560;
+}
+.pcard-land {
+  font-size: 0.875rem;
+  color: var(--ink-soft);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.pcard-facts {
+  font-size: 0.875rem;
+  color: var(--ink-soft);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: auto;
+  padding-top: 0.6rem;
+}
+.pcard-facts span + span::before {
+  content: '·';
+  margin-right: 0.4rem;
+  color: var(--ink-faint);
+}
+
+/* ── property detail ────────────────────────────────────────────────── */
+
+.gallery {
+  display: grid;
+  gap: 0.4rem;
+  grid-template-columns: 1fr;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+@media (min-width: 48rem) {
+  .gallery-multi {
+    grid-template-columns: 2fr 1fr;
+    grid-template-rows: repeat(2, 1fr);
+  }
+  .gallery-multi > :first-child {
+    grid-row: span 2;
+  }
+  .gallery-multi > .media {
+    aspect-ratio: auto;
+    min-height: 0;
+  }
+  .gallery-multi {
+    height: min(60vh, 30rem);
+  }
+}
+
+.detail-grid {
+  display: grid;
+  gap: 2rem;
+}
+@media (min-width: 62rem) {
+  .detail-grid {
+    grid-template-columns: minmax(0, 1fr) 21rem;
+    gap: 3rem;
+    align-items: start;
+  }
+  .detail-aside {
+    position: sticky;
+    top: 5.5rem;
+  }
+}
+
+.spec {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+  background: var(--line);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+@media (min-width: 34rem) {
+  .spec {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+.spec > div {
+  background: var(--surface);
+  padding: 0.85rem 1rem;
+}
+.spec dt {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-faint);
+  font-weight: 620;
+}
+.spec dd {
+  margin: 0.15rem 0 0;
+  font-weight: 560;
+}
+
+.terms {
+  display: grid;
+  gap: 0.6rem;
+}
+.terms-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: baseline;
+}
+.terms-row dt {
+  color: var(--ink-soft);
+  font-size: 0.9375rem;
+}
+.terms-row dd {
+  margin: 0;
+  font-weight: 580;
+  text-align: right;
+}
+.terms-total {
+  border-top: 1px solid var(--line);
+  padding-top: 0.7rem;
+  margin-top: 0.2rem;
+}
+.terms-total dd {
+  font-size: 1.15rem;
+  font-weight: 650;
+}
+
+/* ── trust marks ────────────────────────────────────────────────────── */
+
+.trust {
+  border: 1px solid var(--accent-line);
+  background: var(--accent-soft);
+  border-radius: var(--radius);
+  padding: 1rem 1.1rem;
+}
+.trust h3 {
+  font-size: 0.9375rem;
+  margin-bottom: 0.4rem;
+}
+.trust-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.4rem;
+  font-size: 0.9375rem;
+}
+.trust-list li {
+  display: flex;
+  gap: 0.55rem;
+  align-items: flex-start;
+}
+.trust-list svg {
+  flex: none;
+  margin-top: 0.2rem;
+  color: var(--accent);
+}
+
+/* ── steps ──────────────────────────────────────────────────────────── */
+
+.steps {
+  counter-reset: step;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 1.75rem;
+}
+@media (min-width: 52rem) {
+  .steps-across {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 2rem;
+  }
+}
+.steps > li {
+  counter-increment: step;
+  padding-top: 1.15rem;
+  border-top: 2px solid var(--line);
+}
+.steps > li::before {
+  content: counter(step, decimal-leading-zero);
+  display: block;
+  font-size: 0.8125rem;
+  font-weight: 680;
+  color: var(--accent);
+  letter-spacing: 0.06em;
+  margin-bottom: 0.5rem;
+}
+.steps h3 {
+  margin-bottom: 0.4rem;
+}
+.steps p {
+  color: var(--ink-soft);
+  font-size: 0.9375rem;
+}
+
+/* ── search controls ────────────────────────────────────────────────── */
+
+.filters {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: 1fr;
+  align-items: end;
+}
+@media (min-width: 44rem) {
+  .filters {
+    grid-template-columns: 2fr 1fr 1fr auto;
+  }
+}
+@media (min-width: 68rem) {
+  .filters {
+    grid-template-columns: 2fr 1fr 1fr 1fr 1fr auto;
+  }
+}
+/* Type and furnishing are the least-used filters; on a narrow screen they
+   fold away rather than pushing the search box off the first screen. */
+.filters-wide {
+  display: none;
+}
+@media (min-width: 68rem) {
+  .filters-wide {
+    display: block;
+  }
+}
+.filters .label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink-faint);
+}
+
+.chiprow {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  font-size: 0.875rem;
+  text-decoration: none;
+  color: var(--ink-soft);
+}
+.chip:hover {
+  border-color: var(--ink-faint);
+  color: var(--ink);
+}
+.chip[aria-pressed='true'],
+.chip-active {
+  background: var(--accent-soft);
+  border-color: var(--accent-line);
+  color: var(--accent);
+  font-weight: 560;
+}
+
+.pager {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  justify-content: center;
+  margin-top: 2.5rem;
+}
+
+/* ── states ─────────────────────────────────────────────────────────── */
+
+.empty {
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius-lg);
+  padding: 2.5rem 1.5rem;
+  text-align: center;
+  color: var(--ink-soft);
+  display: grid;
+  gap: 0.6rem;
+  justify-items: center;
+}
+.empty-title {
+  font-weight: 620;
+  color: var(--ink);
+  font-size: 1.0625rem;
+}
+.empty p {
+  max-width: 30rem;
+}
+
+.notice {
+  border-radius: var(--radius);
+  padding: 0.85rem 1rem;
+  font-size: 0.9375rem;
+  border: 1px solid transparent;
+}
+.notice-error {
+  background: var(--danger-bg);
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 30%, transparent);
+}
+.notice-warn {
+  background: var(--warn-bg);
+  color: var(--warn);
+  border-color: color-mix(in srgb, var(--warn) 30%, transparent);
+}
+.notice-ok {
+  background: var(--ok-bg);
+  color: var(--ok);
+  border-color: color-mix(in srgb, var(--ok) 30%, transparent);
+}
+.notice-info {
+  background: var(--bg-soft);
+  color: var(--ink-soft);
+  border-color: var(--line);
+}
+
+/*
+ * Skeletons, not spinners. A spinner says "something is happening"; a
+ * skeleton says "a card is arriving, and here is its shape", which keeps
+ * the layout from jumping when it does.
+ */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--bg-sunk) 25%,
+    var(--bg-soft) 37%,
+    var(--bg-sunk) 63%
+  );
+  background-size: 400% 100%;
+  animation: shimmer 1.4s ease infinite;
+  border-radius: var(--radius);
+}
+@keyframes shimmer {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: 0 0;
+  }
+}
+.skeleton-card {
+  height: 20rem;
+  border-radius: var(--radius-lg);
+}
+.skeleton-line {
+  height: 0.85rem;
+}
+
+/* Entrances are 8px and 200ms — enough to feel deliberate, short of theatre. */
+.enter {
+  animation: enter 220ms ease both;
+}
+@keyframes enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+/* ── tables & lists (shared with ops) ───────────────────────────────── */
+
+.table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9375rem;
+}
+th,
+td {
+  text-align: left;
+  padding: 0.65rem 0.85rem;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+th {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink-faint);
+  font-weight: 620;
+  white-space: nowrap;
+}
+tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+.list-item {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  padding: 1rem 1.1rem;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  text-decoration: none;
+  color: inherit;
+}
+a.list-item:hover {
+  border-color: var(--line-strong);
+}
+
+/* A vertical progress trail: where a deal or a listing has got to. */
+.trail {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0;
+}
+.trail li {
+  display: grid;
+  grid-template-columns: 1.5rem 1fr;
+  gap: 0.75rem;
+  padding-bottom: 1.1rem;
+  position: relative;
+}
+.trail li::before {
+  content: '';
+  grid-column: 1;
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 999px;
+  border: 2px solid var(--line-strong);
+  background: var(--bg);
+  margin-top: 0.4rem;
+  z-index: 1;
+}
+.trail li:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  left: 0.29rem;
+  top: 1.1rem;
+  bottom: 0;
+  width: 2px;
+  background: var(--line);
+}
+.trail li.is-done::before {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+.trail li.is-now::before {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.trail-title {
+  font-weight: 560;
+}
+.trail-note {
+  font-size: 0.875rem;
+  color: var(--ink-soft);
+}
+
+/* ── the operations console ─────────────────────────────────────────── */
+
+/*
+ * Same tokens, tighter measure. An officer standing in a stairwell wants
+ * density and speed; a landlord on a laptop wants room to think. This is
+ * the only place the two registers diverge.
+ */
+.ops-shell {
+  max-width: 62rem;
+  margin: 0 auto;
+  padding: 1.5rem 1.25rem 5rem;
+}
+.ops-head {
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+  position: sticky;
+  top: 0;
+  z-index: 30;
+}
+.ops-head-inner {
+  max-width: 62rem;
+  margin: 0 auto;
+  padding: 0.5rem 1.25rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.ops-nav {
+  display: flex;
+  gap: 0.15rem;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-left: auto;
+}
+.ops-nav a,
+.ops-nav button {
+  padding: 0.4rem 0.6rem;
+  border-radius: var(--radius-sm);
+  text-decoration: none;
+  color: var(--ink-soft);
+  font-size: 0.875rem;
+  font-weight: 520;
+  background: none;
+  border: 0;
+  font-family: inherit;
+  cursor: pointer;
+}
+.ops-nav a:hover,
+.ops-nav button:hover {
+  background: var(--bg-soft);
+  color: var(--ink);
+}
+.ops-nav form {
+  display: inline;
+}
+
+.ops h1 {
+  font-size: 1.5rem;
+}
+.ops h2 {
+  font-size: 1.15rem;
+}
+.ops .card {
+  padding: 1rem;
+  border-radius: var(--radius);
+}
+
+.kv {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.35rem 1rem;
+  font-size: 0.9375rem;
+}
+.kv dt {
+  color: var(--ink-soft);
+}
+.kv dd {
+  margin: 0;
+  font-weight: 540;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.metrics {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+}
+.metric {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.85rem 1rem;
+  background: var(--surface);
+}
+.metric-label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink-faint);
+  font-weight: 620;
+}
+.metric-value {
+  font-size: 1.5rem;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  margin-top: 0.1rem;
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+}
+
+/* ── auth pages ─────────────────────────────────────────────────────── */
+
+.auth-wrap {
+  min-height: 100dvh;
+  display: grid;
+  grid-template-columns: 1fr;
+}
+@media (min-width: 62rem) {
+  .auth-wrap {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+.auth-panel {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 2rem 1.25rem 4rem;
+}
+.auth-form {
+  width: 100%;
+  max-width: 24rem;
+  margin: 0 auto;
+}
+.auth-aside {
+  display: none;
+  background: var(--brand-ink);
+  color: #f4f7f6;
+  padding: 3rem;
+  flex-direction: column;
+  justify-content: space-between;
+}
+@media (min-width: 62rem) {
+  .auth-aside {
+    display: flex;
+  }
+}
+.auth-aside .eyebrow {
+  color: var(--brand-green);
+}
+.auth-aside .trust-list svg {
+  color: var(--brand-green);
+}
+.auth-aside .muted {
+  color: #a5aeaa;
+}
+
+
+/* ── magnitude bars (ops) ───────────────────────────────────────────── */
+
+.bars {
+  display: grid;
+  gap: 0.4rem;
+  font-size: 0.875rem;
+}
+.bar-row {
+  display: grid;
+  grid-template-columns: 9rem 1fr 2.5rem;
+  gap: 0.75rem;
+  align-items: center;
+}
+.bar-track {
+  height: 0.5rem;
+  background: var(--bg-sunk);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.bar-fill {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: 999px;
+}
+.bar-value {
+  text-align: right;
+  color: var(--ink-soft);
+}
+
+/*
+ * A status dot ALWAYS sits beside its label. See `Status` in ui.tsx: colour
+ * never carries meaning on its own.
+ */
+.dot {
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 999px;
+  margin-right: 0.4rem;
+  background: var(--ink-faint);
+}
+.dot-good {
+  background: var(--ok);
+}
+.dot-warning {
+  background: var(--warn);
+}
+.dot-critical {
+  background: var(--danger);
+}
+
+/* ── home page ──────────────────────────────────────────────────────── */
+
+.hero {
+  display: grid;
+  gap: 2.5rem;
+  align-items: center;
+}
+@media (min-width: 62rem) {
+  .hero {
+    grid-template-columns: 1.05fr 0.95fr;
+    gap: 4rem;
+  }
+}
+.hero-copy {
+  max-width: 36rem;
+}
+.hero-media {
+  /* On a phone the headline has to come first; the card follows it rather
+     than pushing it below the fold. */
+  order: 2;
+}
+
+.hero-search {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  max-width: 30rem;
+  margin-top: 0.5rem;
+}
+.hero-search .input {
+  flex: 1 1 14rem;
+}
+
+.promise-grid {
+  display: grid;
+  gap: 2rem;
+}
+@media (min-width: 40rem) {
+  .promise-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+@media (min-width: 72rem) {
+  .promise-grid {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 2.5rem;
+  }
+}
+.promise-grid svg {
+  color: var(--accent);
+}
+
+.cta {
+  background: var(--brand-ink);
+  color: #f4f7f6;
+  border-radius: var(--radius-lg);
+  padding: 2.5rem 1.75rem;
+}
+@media (min-width: 52rem) {
+  .cta {
+    padding: 4rem 3.5rem;
+  }
+}
+.cta .lede {
+  color: #a5aeaa;
+  max-width: 40rem;
+}
+.cta .eyebrow {
+  color: var(--brand-green);
+}
+.cta .btn-secondary {
+  background: transparent;
+  color: #f4f7f6;
+  border-color: #354039;
+}
+.cta .btn-secondary:hover {
+  border-color: #6b7570;
+}
+.cta .btn-primary {
+  background: var(--brand-green);
+}
+.cta .btn-primary:hover {
+  background: #1cb954;
+}
+
+/* ── operations console components ──────────────────────────────────── */
+
+/*
+ * These class names predate the marketplace and are used across the ops
+ * pages. They are kept — renaming twenty files to align vocabulary would be
+ * churn — but they are re-expressed in the shared tokens above, so the two
+ * halves of the product cannot disagree about what the brand colour is.
+ */
+
+.ops .lede {
+  font-size: 1rem;
+  color: var(--ink-soft);
+  max-width: 44rem;
+}
+
+.alert {
+  border-radius: var(--radius);
+  padding: 0.7rem 0.9rem;
+  font-size: 0.9375rem;
+  margin: 0.75rem 0;
+  border: 1px solid transparent;
+}
+.alert-error {
+  background: var(--danger-bg);
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 30%, transparent);
+}
+.alert-ok {
+  background: var(--ok-bg);
+  color: var(--ok);
+  border-color: color-mix(in srgb, var(--ok) 30%, transparent);
+}
+.alert-note {
+  background: var(--warn-bg);
+  color: var(--warn);
+  border-color: color-mix(in srgb, var(--warn) 30%, transparent);
+}
+.alert code {
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  opacity: 0.85;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: var(--bg-sunk);
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+.pill-ok {
+  background: var(--ok-bg);
+  color: var(--ok);
+}
+.pill-warn {
+  background: var(--warn-bg);
+  color: var(--warn);
+}
+.pill-danger {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.card-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.5rem;
+}
+.card-title {
+  font-weight: 620;
+  font-size: 1rem;
+}
+a.card-link {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+}
+a.card-link:hover .card-title {
+  color: var(--accent);
+}
+
+/* Bare form controls inside the console, which does not class every input. */
+.ops .field label,
+.field > label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 560;
+  margin-bottom: 0.3rem;
+}
+.ops input[type='text'],
+.ops input[type='tel'],
+.ops input[type='password'],
+.ops input[type='search'],
+.ops input[type='number'],
+.ops input[type='datetime-local'],
+.ops input[type='date'],
+.ops select,
+.ops textarea {
+  width: 100%;
+  min-height: 2.5rem;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+}
+.ops textarea {
+  min-height: 5rem;
+  resize: vertical;
+}
+
+/*
+ * A bare `<button>` in the console gets the primary treatment. The console
+ * has exactly one kind of button per form — the one that submits it — so
+ * requiring a class on each would be ceremony without a decision behind it.
+ */
+.ops button:not(.btn):not(.chip) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.5rem;
+  padding: 0.45rem 1rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font: inherit;
+  font-weight: 560;
+  cursor: pointer;
+}
+.ops button:not(.btn):not(.chip):disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.ops .ops-nav button {
+  background: none;
+  color: var(--ink-soft);
+  min-height: auto;
+}
+.ops button.btn-danger:not(.btn) {
+  background: var(--danger);
+  color: #fff;
+}
+
+.btn-row {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-top: 0.75rem;
+}
+
+.backlink {
+  display: inline-block;
+  margin-bottom: 1rem;
+  color: var(--ink-soft);
+  text-decoration: none;
+  font-size: 0.9375rem;
+}
+.backlink:hover {
+  color: var(--ink);
+}
+
+.deal-action {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 1rem;
+  margin-bottom: 0.75rem;
+  background: var(--surface);
+}
+.confirm-field {
+  background: var(--warn-bg);
+  border-radius: var(--radius-sm);
+  padding: 0.7rem 0.85rem;
+  margin: 0.75rem 0;
+}
+.confirm-label {
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-start;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  cursor: pointer;
+  color: var(--warn);
+}
+.confirm-label input {
+  margin-top: 0.25rem;
+  width: 1.05rem;
+  height: 1.05rem;
+  flex: none;
+  accent-color: var(--warn);
+}
+
+.dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.3rem 1rem;
+  font-size: 0.9375rem;
+  margin: 0;
+}
+.dl dt {
+  color: var(--ink-soft);
+}
+.dl dd {
+  margin: 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.kpis {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  margin: 1rem 0;
+}
+.kpi {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.8rem 0.9rem;
+  background: var(--surface);
+}
+.kpi-label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink-faint);
+  font-weight: 620;
+}
+.kpi-value {
+  font-size: 1.4rem;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.kpi-state {
+  font-size: 0.8125rem;
+  color: var(--ink-soft);
+}
+
+.hero-unit {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 1rem;
+  background: var(--surface);
+}
+
+.meter {
+  height: 0.5rem;
+  background: var(--bg-sunk);
+  border-radius: 999px;
+  overflow: hidden;
+  margin: 0.5rem 0;
+}
+.meter > span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+
+.table-scroll {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.table-scroll table {
+  border: 0;
+}
+
+.tags {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.choices {
+  display: grid;
+  gap: 0.4rem;
+}
+.ops .choice {
+  padding: 0.6rem 0.8rem;
+}
+
+.filter-form,
+.assign-form {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+.filter-form .field,
+.assign-form .field {
+  margin: 0;
+  min-width: 11rem;
+  flex: 1 1 11rem;
+}
+
+/* ── landlord listing management ────────────────────────────────────── */
+
+.photo-grid {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+}
+.photo-tile .media {
+  border-radius: var(--radius);
+  aspect-ratio: 4 / 3;
+}
+.photo-tile p {
+  margin-top: 0.3rem;
+}
+
+.agreement-clause {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 0.6rem 0.8rem;
+  font-size: 0.9375rem;
+}
+.agreement-clause > summary {
+  cursor: pointer;
+  font-weight: 560;
+}
+.agreement-clause > p {
+  margin-top: 0.6rem;
+  color: var(--ink-soft);
+}
+
+/* ── landlord listing management ────────────────────────────────────── */
+
+.photo-grid {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+}
+.photo-tile .media {
+  border-radius: var(--radius);
+  aspect-ratio: 4 / 3;
+}
+.photo-tile p {
+  margin-top: 0.3rem;
+}
+
+.agreement-clause {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 0.6rem 0.8rem;
+  font-size: 0.9375rem;
+}
+.agreement-clause > summary {
+  cursor: pointer;
+  font-weight: 560;
+}
+.agreement-clause > p {
+  margin-top: 0.6rem;
+  color: var(--ink-soft);
+}

@@ -45,7 +45,15 @@ export type AuditEventType =
   | 'config_version_created'
   | 'commission_rate_version_created'
   // agreements (FR-9.1)
-  | 'listing_agreement_accepted';
+  | 'listing_agreement_accepted'
+  // service-area taxonomy (FR-2.5) — corridor membership decides what the
+  // public feed may contain, so opening or closing one is a business event.
+  | 'neighbourhood_created'
+  | 'neighbourhood_service_area_changed'
+  // listing photography (FR-4.2) — a photograph's provenance is the claim
+  // "our officer stood in that room", so who attached one is auditable.
+  | 'listing_photo_added'
+  | 'listing_photo_removed';
 
 export interface AuditRecord {
   eventType: AuditEventType;

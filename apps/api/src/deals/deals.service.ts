@@ -10,6 +10,11 @@ import {
   TERMINAL_STATUSES,
 } from './deal-state-machine';
 import { computeCommission } from './commission';
+// Reused rather than redefined: a deal that cannot find its landlord's
+// accepted agreement is refused for exactly the same reason a listing
+// cannot publish without one (FR-9.1), and two error types for one rule
+// would eventually be mapped to two different status codes.
+import { MissingListingAgreementError } from '../listings/listings.service';
 import { AuditService, type AuditEventType } from '../audit/audit.service';
 
 /**
@@ -336,7 +341,8 @@ export class DealsService {
   async signAgreement(params: {
     dealId: string;
     actorPartyId: string;
-    agreementId: string;
+    /** Optional (F-014) — derived from the deal's listing when absent. */
+    agreementId?: string;
     reason?: string;
   }): Promise<Deal> {
     return this.prisma.$transaction(async (tx) => {
@@ -350,10 +356,27 @@ export class DealsService {
         throw new SnapshotImmutableError(params.dealId);
       }
 
-      const agreement = await tx.listingAgreement.findUniqueOrThrow({
-        where: { id: params.agreementId },
+      /**
+       * ── Resolving the agreement (F-014) ──
+       * Scoped to THIS DEAL'S LISTING in both branches. A supplied id that
+       * belongs to another listing is refused rather than honoured: it
+       * would freeze a different landlord's commission terms onto this
+       * deal, which is the one thing this transition must never get wrong.
+       */
+      const agreement = await tx.listingAgreement.findFirst({
+        where: {
+          listingId: deal.listingId,
+          accepted: true,
+          ...(params.agreementId ? { id: params.agreementId } : {}),
+        },
+        // Newest accepted, when a listing has been re-agreed over time.
+        orderBy: { acceptedAt: 'desc' },
         include: { commissionRateVersion: true },
       });
+
+      if (!agreement) {
+        throw new MissingListingAgreementError(deal.listingId);
+      }
 
       return this.applyTransition(
         {
@@ -1036,13 +1059,62 @@ export class DealsService {
    * asking the caller which they "are" would be asking a question the data
    * does not have a single answer to.
    */
-  async findForParty(partyId: string): Promise<Deal[]> {
-    return this.prisma.deal.findMany({
+  /**
+   * Every deal the caller is a party to, WITH the property behind it.
+   *
+   * ── Why this returns more than the row ──
+   * It used to return bare `Deal` records — an id, a status, and three
+   * foreign keys. A tenant reading that cannot tell which home it is about,
+   * and the only ways to find out were for the client to fetch each deal
+   * individually or to keep its own copy of the listing. Widening the
+   * contract is the right fix.
+   *
+   * `whichSide` is derived from the SESSION party, not sent by the caller:
+   * the same deal is "your tenancy" to one party and "your letting" to the
+   * other, and which one you are is not something a client should assert.
+   */
+  async findForParty(partyId: string) {
+    const deals = await this.prisma.deal.findMany({
       where: {
         OR: [{ tenantPartyId: partyId }, { landlordPartyId: partyId }],
       },
       orderBy: { createdAt: 'desc' },
+      include: {
+        listing: {
+          include: { property: { include: { neighbourhood: true } } },
+        },
+        tenantParty: { select: { displayName: true } },
+        landlordParty: { select: { displayName: true } },
+      },
     });
+
+    return deals.map((deal) => ({
+      id: deal.id,
+      status: deal.status,
+      listingId: deal.listingId,
+      createdAt: deal.createdAt,
+      updatedAt: deal.updatedAt,
+      whichSide: deal.tenantPartyId === partyId ? 'tenant' : 'landlord',
+      counterpartyName:
+        deal.tenantPartyId === partyId
+          ? deal.landlordParty.displayName
+          : deal.tenantParty.displayName,
+      listing: {
+        monthlyRent: deal.listing.monthlyRent,
+        bedrooms: deal.listing.property.bedrooms,
+        propertyType: deal.listing.property.propertyType,
+        neighbourhoodName: deal.listing.property.neighbourhood.name,
+        landmarkText: deal.listing.property.landmarkText,
+      },
+      /**
+       * The rent frozen onto this deal at signing, when it has been signed.
+       * Null before that, and deliberately NOT filled in from the listing —
+       * "not yet agreed" and "agreed at this figure" are different facts and
+       * a surface must be able to tell them apart.
+       */
+      monthlyRentSnapshot: deal.monthlyRentSnapshot,
+      commissionAmount: deal.commissionAmount,
+    }));
   }
 
   /**

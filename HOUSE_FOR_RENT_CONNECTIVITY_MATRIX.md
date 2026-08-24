@@ -1,3 +1,30 @@
+> **Stale as of 2026-08-24 — retraced only in part.**
+>
+> This matrix was traced against `apps/console` and `apps/mobile`. The Expo
+> client has been removed and the console became `apps/web`, absorbing the
+> public marketplace and both user portals, so the *client* half of every
+> row below needs re-tracing before the numbers here can be trusted again.
+>
+> What is known to have changed since:
+>
+> - **The full journey is now connected end to end through HTTP**, proven
+>   by `apps/api/scripts/journey-http.mjs` — 56/56 steps, no database
+>   connection held. That script is a better connectivity check than this
+>   document, because it cannot pass by inspection.
+> - **Newly connected:** the taxonomy routes (F-015), listing photography,
+>   `GET /v1/commission-rate`, the identity endpoints (F-017),
+>   `sign-agreement` (F-014), and the whole landlord authoring path
+>   (`POST /properties`, `POST /listings`, agreement accept, publish,
+>   withdraw) which now has a real surface in `/landlord`.
+> - **Still INERT:** mandate submission and decision — brokers and
+>   management companies cannot publish, which is the remaining half of
+>   F-003. Password reset, staff provisioning and device-session
+>   management (F-004, F-005, F-006) also still have no UI.
+>
+> Retrace before quoting the headline number.
+
+---
+
 # House For Rent — Connectivity Matrix
 
 Traced by enumerating controller routes and grepping actual call sites in

@@ -16,6 +16,8 @@ import { ViewingsModule } from './viewings/viewings.module';
 import { AuditModule } from './audit/audit.module';
 import { AgreementsModule } from './agreements/agreements.module';
 import { AdminModule } from './admin/admin.module';
+import { TaxonomyModule } from './taxonomy/taxonomy.module';
+import { PhotosModule } from './photos/photos.module';
 import { AuthModule } from './auth/auth.module';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { RolesGuard } from './auth/guards/roles.guard';
@@ -39,6 +41,8 @@ import { DomainExceptionFilter } from './common/domain-exception.filter';
     ViewingsModule,
     AgreementsModule,
     AdminModule,
+    TaxonomyModule,
+    PhotosModule,
   ],
   controllers: [AppController],
   providers: [

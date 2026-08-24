@@ -24,9 +24,20 @@ import {
   ListingNotFoundError,
   MissingListingAgreementError,
   MissingMandateError,
+  NotThePropertyOwnerError,
   OutsideServiceAreaError,
+  PropertyNotFoundError,
   UnverifiedListingError,
 } from '../listings/listings.service';
+import {
+  DuplicateNeighbourhoodError,
+  NeighbourhoodNotFoundError,
+} from '../taxonomy/taxonomy.service';
+import {
+  PhotoNotFoundError,
+  PhotoTooLargeError,
+  UnsupportedPhotoTypeError,
+} from '../photos/photos.service';
 import {
   AgreementAlreadyAcceptedError,
   NoCommissionRateInForceError,
@@ -134,6 +145,13 @@ export class DomainExceptionFilter implements ExceptionFilter {
     if (error instanceof NotTheListerError) {
       return { status: 403, code: 'NOT_THE_LISTER' };
     }
+    // 403 rather than 404 (F-016): the caller holds the lister role and the
+    // resource is one they were told exists by the id they already have.
+    // Hiding it would not conceal anything, and a landlord mistyping their
+    // own id deserves the real reason.
+    if (error instanceof NotThePropertyOwnerError) {
+      return { status: 403, code: 'NOT_THE_PROPERTY_OWNER' };
+    }
     // Staff only, and they were told the record exists by the visit they
     // were dispatched to — so naming the constraint discloses nothing they
     // did not already hold.
@@ -148,6 +166,9 @@ export class DomainExceptionFilter implements ExceptionFilter {
       error instanceof ListingNotFoundError ||
       error instanceof ViewingNotFoundError ||
       error instanceof MediaAssetNotFoundError ||
+      error instanceof PropertyNotFoundError ||
+      error instanceof NeighbourhoodNotFoundError ||
+      error instanceof PhotoNotFoundError ||
       error instanceof UnknownConfigKeyError
     ) {
       return { status: 404, code: 'NOT_FOUND' };
@@ -157,7 +178,13 @@ export class DomainExceptionFilter implements ExceptionFilter {
     if (error instanceof MediaTooLargeError) {
       return { status: 413, code: 'MEDIA_TOO_LARGE' };
     }
+    if (error instanceof PhotoTooLargeError) {
+      return { status: 413, code: 'PHOTO_TOO_LARGE' };
+    }
     if (error instanceof UnsupportedMediaTypeError) {
+      return { status: 415, code: 'UNSUPPORTED_MEDIA_TYPE' };
+    }
+    if (error instanceof UnsupportedPhotoTypeError) {
       return { status: 415, code: 'UNSUPPORTED_MEDIA_TYPE' };
     }
 
@@ -228,6 +255,9 @@ export class DomainExceptionFilter implements ExceptionFilter {
     }
     if (error instanceof ConfigNotSetError) {
       return { status: 422, code: 'CONFIG_NOT_SET' };
+    }
+    if (error instanceof DuplicateNeighbourhoodError) {
+      return { status: 409, code: 'DUPLICATE_NEIGHBOURHOOD' };
     }
 
     // 502 — an external provider declined or misbehaved
