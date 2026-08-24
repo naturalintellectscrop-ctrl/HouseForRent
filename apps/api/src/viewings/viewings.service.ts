@@ -5,6 +5,7 @@ import {
   IntroductionRecord,
   Prisma,
   Viewing,
+  ViewingStatus,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { IdentityService } from '../identity/identity.service';
@@ -115,6 +116,28 @@ export interface ConductedViewing {
  * change. There is no ordering in which a `conducted` row can be observed
  * without both artefacts, and no second code path to that status.
  */
+/**
+ * What the tenant is waiting for, per status.
+ *
+ * ── Why this lives on the server ──
+ * It is a statement about what the platform will do next, which is a fact
+ * about the state machine rather than about presentation. A client holding
+ * its own map would be a second, quieter copy of the viewing lifecycle —
+ * and the one that keeps saying "an officer is being assigned" after the
+ * transition graph changed.
+ */
+const WHAT_HAPPENS_NEXT: Record<ViewingStatus, string> = {
+  requested:
+    'Our operations desk is assigning a field officer. We will confirm the time with you.',
+  scheduled:
+    'An officer is booked to meet you at the property. Come at the confirmed time.',
+  conducted:
+    'The visit is done and your introduction to the landlord is recorded. If you want the property, we take it from here.',
+  no_show:
+    'This visit was recorded as a no-show. Request another time if you still want to see the property.',
+  cancelled: 'This viewing was cancelled.',
+};
+
 @Injectable()
 export class ViewingsService {
   constructor(
@@ -432,11 +455,52 @@ export class ViewingsService {
    * "the officer marked you as a no-show" is exactly the outcome a tenant
    * needs to be able to see.
    */
-  async findForTenant(tenantPartyId: string): Promise<Viewing[]> {
-    return this.prisma.viewing.findMany({
+  /**
+   * A tenant's own viewings, WITH enough of the property to recognise them.
+   *
+   * ── Why this returns more than the row ──
+   * It used to return bare `Viewing` records: an id, a listing id, a status
+   * and a time. A tenant looking at that has no way to tell which of three
+   * requests is the flat in Ntinda — the surface would have to fetch every
+   * listing separately, or worse, hold its own copy of the listing data.
+   * Widening the contract is the right fix; making the client do joins is
+   * not.
+   *
+   * `whatHappensNext` is written HERE, server-side, from the viewing's own
+   * status. The client renders the sentence rather than switching on the
+   * status itself, so there is one place that knows what "requested" means
+   * to the person waiting.
+   */
+  async findForTenant(tenantPartyId: string) {
+    const viewings = await this.prisma.viewing.findMany({
       where: { tenantPartyId },
       orderBy: { scheduledFor: 'desc' },
+      include: {
+        listing: {
+          include: { property: { include: { neighbourhood: true } } },
+        },
+      },
     });
+
+    return viewings.map((v) => ({
+      id: v.id,
+      listingId: v.listingId,
+      status: v.status,
+      scheduledFor: v.scheduledFor,
+      createdAt: v.createdAt,
+      /** Null until dispatch assigns one — never a placeholder name. */
+      officerAssigned: v.conductedByPartyId !== null,
+      listing: {
+        monthlyRent: v.listing.monthlyRent,
+        bedrooms: v.listing.property.bedrooms,
+        bathrooms: v.listing.property.bathrooms,
+        propertyType: v.listing.property.propertyType,
+        neighbourhoodName: v.listing.property.neighbourhood.name,
+        landmarkText: v.listing.property.landmarkText,
+        publicationState: v.listing.publicationState,
+      },
+      whatHappensNext: WHAT_HAPPENS_NEXT[v.status],
+    }));
   }
 
   /** The dispatch board for an officer (FR-5.2). */

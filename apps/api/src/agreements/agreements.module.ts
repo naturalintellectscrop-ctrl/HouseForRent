@@ -1,6 +1,9 @@
 import { Module } from '@nestjs/common';
 import { AgreementsService } from './agreements.service';
-import { AgreementsController } from './agreements.controller';
+import {
+  AgreementsController,
+  CommissionRateController,
+} from './agreements.controller';
 import { AuditModule } from '../audit/audit.module';
 
 /**
@@ -9,7 +12,7 @@ import { AuditModule } from '../audit/audit.module';
  */
 @Module({
   imports: [AuditModule],
-  controllers: [AgreementsController],
+  controllers: [AgreementsController, CommissionRateController],
   providers: [AgreementsService],
   exports: [AgreementsService],
 })

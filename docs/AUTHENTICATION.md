@@ -152,8 +152,14 @@ which surfaces the compromise instead of letting it persist silently.
 > **If you write a client, collapse concurrent refreshes into one call.**
 > Several requests 401-ing at the same moment and each refreshing means the
 > first rotates the token and the rest present a spent one — which the
-> server treats as compromise. `apps/mobile/lib/session.tsx` shows the
-> pattern.
+> server treats as compromise. The Expo client that demonstrated the
+> collapsing pattern has been removed, and **no client currently implements
+> it**: `apps/web` attaches the access token server-side per request and
+> surfaces a 401 as a redirect to sign-in rather than refreshing in the
+> background. That is correct for a server-rendered client — there are no
+> concurrent in-flight requests from one page to collide — but it means the
+> pattern will have to be rebuilt if anything here ever refreshes from the
+> browser.
 
 **Hashes, not tokens, are stored.** SHA-256 rather than bcrypt because
 these are high-entropy random values with nothing to brute-force. A

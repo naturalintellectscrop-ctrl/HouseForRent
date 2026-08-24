@@ -40,9 +40,24 @@ export class ListingsController {
     return this.listings.findForLister(caller.partyId);
   }
 
+  /**
+   * Terms for a property the caller OWNS (F-016).
+   *
+   * The ownership check is not decoration: without it any registered lister
+   * could publish terms against a stranger's property, and a landlord would
+   * discover it only when a tenant arrived. Admin is exempt because ops
+   * legitimately author on a landlord's behalf, and every such act is
+   * already attributable through the audit trail.
+   */
   @Roles('lister', 'admin')
   @Post('listings')
-  async createListing(@Body() dto: CreateListingDto) {
+  async createListing(
+    @Caller() caller: AuthenticatedCaller,
+    @Body() dto: CreateListingDto,
+  ) {
+    if (caller.role === 'lister') {
+      await this.listings.assertOwnsProperty(dto.propertyId, caller.partyId);
+    }
     return this.listings.createListing({
       propertyId: dto.propertyId,
       monthlyRent: BigInt(dto.monthlyRent),
@@ -60,13 +75,29 @@ export class ListingsController {
    */
   @Roles('lister', 'admin')
   @Post('listings/:id/publish')
-  async publish(@Param('id') id: string) {
+  async publish(
+    @Param('id') id: string,
+    @Caller() caller: AuthenticatedCaller,
+  ) {
+    if (caller.role === 'lister') {
+      await this.listings.assertOwnsListing(id, caller.partyId);
+    }
     return this.listings.publish(id);
   }
 
+  /**
+   * Withdrawing was the sharpest edge of F-016: a lister who knew a
+   * competitor's listing id could take their live inventory off the market.
+   */
   @Roles('lister', 'admin')
   @Post('listings/:id/withdraw')
-  async withdraw(@Param('id') id: string) {
+  async withdraw(
+    @Param('id') id: string,
+    @Caller() caller: AuthenticatedCaller,
+  ) {
+    if (caller.role === 'lister') {
+      await this.listings.assertOwnsListing(id, caller.partyId);
+    }
     return this.listings.withdraw(id);
   }
 

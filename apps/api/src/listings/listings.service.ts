@@ -61,6 +61,34 @@ export class OutsideServiceAreaError extends Error {
   }
 }
 
+export class PropertyNotFoundError extends Error {
+  constructor(propertyId: string) {
+    super(`property ${propertyId} not found`);
+    this.name = 'PropertyNotFoundError';
+  }
+}
+
+/**
+ * The caller holds the `lister` role but does not own this property.
+ *
+ * ── Why this exists (F-016) ──
+ * `@Roles('lister')` answers "is this caller a landlord?" It does not
+ * answer "is this caller THIS landlord?", and the two were being conflated:
+ * any registered lister could create a listing on someone else's property,
+ * publish it, or withdraw a competitor's live inventory, simply by knowing
+ * an id. Role membership is not ownership, and the API — not the UI that
+ * happens not to offer the button — is where that distinction has to hold.
+ */
+export class NotThePropertyOwnerError extends Error {
+  constructor(propertyId: string) {
+    super(
+      `you are not the owner of property ${propertyId}. Holding the lister ` +
+        'role is not the same as owning this property (API Spec §7.3).',
+    );
+    this.name = 'NotThePropertyOwnerError';
+  }
+}
+
 /** A listing plus its computed trust signals (FR-4.2). */
 export interface ListingWithFreshness {
   listing: Listing;
@@ -106,6 +134,48 @@ export class ListingsService {
         // transactionType defaults to 'rental'; V1 has no other value
       },
     });
+  }
+
+  /**
+   * The listing, or a 404. Used wherever a caller supplies an id.
+   */
+  async getListingOrThrow(listingId: string) {
+    const listing = await this.prisma.listing.findUnique({
+      where: { id: listingId },
+    });
+    if (!listing) throw new ListingNotFoundError(listingId);
+    return listing;
+  }
+
+  /**
+   * Asserts the caller owns the property behind a listing (F-016).
+   *
+   * Every lister-callable mutation runs through this. It is deliberately
+   * NOT a guard decorator: a guard is opt-in, and the failure mode of this
+   * particular check is silent — an endpoint written without it looks
+   * exactly like one written with it, and works, for the owner.
+   */
+  async assertOwnsListing(listingId: string, callerPartyId: string) {
+    const listing = await this.prisma.listing.findUnique({
+      where: { id: listingId },
+      include: { property: { select: { id: true, ownerPartyId: true } } },
+    });
+    if (!listing) throw new ListingNotFoundError(listingId);
+    if (listing.property.ownerPartyId !== callerPartyId) {
+      throw new NotThePropertyOwnerError(listing.property.id);
+    }
+    return listing;
+  }
+
+  async assertOwnsProperty(propertyId: string, callerPartyId: string) {
+    const property = await this.prisma.property.findUnique({
+      where: { id: propertyId },
+    });
+    if (!property) throw new PropertyNotFoundError(propertyId);
+    if (property.ownerPartyId !== callerPartyId) {
+      throw new NotThePropertyOwnerError(propertyId);
+    }
+    return property;
   }
 
   /** Money is bigint shillings throughout (FR-2.1). */

@@ -2,25 +2,25 @@
   "name": "house-for-rent",
   "version": "1.0.0",
   "private": true,
-  "description": "House For Rent — a trust-first residential rental marketplace for Natural Intellects Ltd (Uganda).",
+  "description": "House For Rent \u2014 a trust-first residential rental marketplace for Natural Intellects Ltd (Uganda).",
   "license": "UNLICENSED",
   "workspaces": [
     "apps/api",
-    "apps/console",
-    "apps/mobile"
+    "apps/web"
   ],
   "scripts": {
     "api": "npm run start:dev --workspace @hfr/api",
     "api:build": "npm run build --workspace @hfr/api",
     "api:test": "npm run test --workspace @hfr/api",
-    "console": "npm run dev --workspace @hfr/console",
-    "console:build": "npm run build --workspace @hfr/console",
-    "mobile": "npm run start --workspace @hfr/mobile",
-    "mobile:android": "npm run android --workspace @hfr/mobile",
+    "web": "npm run dev --workspace @hfr/web",
+    "web:build": "npm run build --workspace @hfr/web",
+    "web:start": "npm run start --workspace @hfr/web",
+    "web:e2e": "npm run test:e2e --workspace @hfr/web",
+    "seed:demo": "npm run seed:demo --workspace @hfr/api",
     "migrate": "npm run migrate --workspace @hfr/api",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "npm run test --workspace @hfr/api",
-    "build": "npm run console:build"
+    "build": "npm run web:build"
   },
   "engines": {
     "node": ">=20"

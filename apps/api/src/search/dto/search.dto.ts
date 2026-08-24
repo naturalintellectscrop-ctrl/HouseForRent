@@ -1,11 +1,5 @@
 import { Transform } from 'class-transformer';
-import {
-  IsBooleanString,
-  IsInt,
-  IsOptional,
-  IsString,
-  Matches,
-} from 'class-validator';
+import { IsIn, IsInt, IsOptional, IsString, Matches, Min } from 'class-validator';
 
 const SHILLINGS = /^[0-9]+$/;
 
@@ -35,4 +29,31 @@ export class SearchQueryDto {
   @IsOptional()
   @Transform(({ value }) => value === 'true' || value === true)
   includeStale?: boolean;
+
+  @IsOptional()
+  @IsIn(['furnished', 'semi_furnished', 'unfurnished'])
+  furnished?: 'furnished' | 'semi_furnished' | 'unfurnished';
+
+  @IsOptional()
+  @IsIn(['apartment', 'house', 'room', 'other'])
+  propertyType?: 'apartment' | 'house' | 'room' | 'other';
+
+  /** Matched against neighbourhood and landmark only — see SearchFilters. */
+  @IsOptional() @IsString() q?: string;
+
+  @IsOptional()
+  @IsIn(['fresh', 'rent_asc', 'rent_desc', 'newest'])
+  sort?: 'fresh' | 'rent_asc' | 'rent_desc' | 'newest';
+
+  @IsOptional()
+  @Transform(({ value }) => (value === undefined ? undefined : Number(value)))
+  @IsInt()
+  @Min(1)
+  limit?: number;
+
+  @IsOptional()
+  @Transform(({ value }) => (value === undefined ? undefined : Number(value)))
+  @IsInt()
+  @Min(0)
+  offset?: number;
 }

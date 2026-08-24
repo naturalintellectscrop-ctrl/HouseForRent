@@ -46,10 +46,32 @@ export class CreateDealDto {
   introductionRecordId!: string;
 }
 
+/**
+ * Signing. The agreement is DERIVED, not required (F-014).
+ *
+ * ── Why this became optional ──
+ * `agreementId` was mandatory and no client could obtain one. There is no
+ * route that lists a listing's agreements; the id existed only in the
+ * database and in test fixtures, so the one transition that freezes the
+ * commission snapshot was unreachable from any real surface — the same
+ * shape of defect as F-001 and F-002.
+ *
+ * It is derivable without ambiguity: a listing cannot be published without
+ * exactly one ACCEPTED agreement (the publish gate enforces that), and a
+ * deal is created from an introduction on one listing. So the server looks
+ * it up rather than asking a client to know something it cannot know.
+ *
+ * It remains ACCEPTED but optional, for the operations console: an admin
+ * acting on a listing that has more than one accepted agreement in its
+ * history can name which. A supplied id is verified to belong to this
+ * deal's listing before anything is frozen — it narrows the choice, it can
+ * never widen it to another landlord's terms.
+ */
 export class SignAgreementDto extends TransitionDto {
+  @IsOptional()
   @IsString()
   @IsNotEmpty()
-  agreementId!: string;
+  agreementId?: string;
 }
 
 export class PaymentAccountDto {

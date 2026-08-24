@@ -21,44 +21,59 @@ The counter-force is **team scale and delivery**: Natural Intellects is a small 
 
 ## 2. System context
 
-Three client surfaces, one backend, external providers behind abstractions.
+> **[Architectural Decision, revised 2026-08-24] One web client, not three
+> native surfaces.** The original design in this section put tenants and
+> landlords on mobile apps and staff on a web console. That was reversed:
+> House For Rent is a WEBSITE. See §7 for why, and what it cost to change.
+
+One responsive web client, one backend, external providers behind
+abstractions.
 
 ```
-        ┌─────────────────┐   ┌─────────────────┐   ┌──────────────────────┐
-        │  Tenant app     │   │ Landlord/Lister │   │ FOO + Admin surface  │
-        │  (mobile)       │   │ app (mobile)    │   │ (web console, V1)    │
-        └────────┬────────┘   └────────┬────────┘   └──────────┬───────────┘
-                 │                     │                        │
-                 └──────────── HTTPS / REST (+ auth) ───────────┘
-                                       │
-                          ┌────────────▼─────────────┐
-                          │   House For Rent Backend  │
-                          │  (modular monolith, V1)   │
-                          │                           │
-                          │  Product modules:         │
-                          │   listings, search,       │
-                          │   viewings/fieldops,      │
-                          │   deals+guarantee,        │
-                          │   agreements, admin/ops   │
-                          │                           │
-                          │  Shared (company) svcs:   │
-                          │   Identity/Verification,  │
-                          │   Payments (ledger+PSP    │
-                          │   abstraction),           │
-                          │   Notifications,          │
-                          │   Media, Audit, Config    │
-                          └───┬───────────┬───────┬───┘
-                              │           │       │
-                   ┌──────────▼──┐  ┌─────▼────┐  ▼ (other providers behind
-                   │ PostgreSQL  │  │ Object    │  interfaces: NIN/liveness,
-                   │ (ACID core) │  │ storage   │  SMS/push, map/geo)
-                   └─────────────┘  │ (media)   │
-                                    └───────────┘
-                                          │
-                              ┌───────────▼────────────┐
-                              │  External licensed PSP  │  ← holds client funds
-                              │  (Bank of Uganda-lic.)  │     (custodian)
-                              └─────────────────────────┘
+      ┌──────────────────────────────────────────────────────────────┐
+      │                    HOUSE FOR RENT WEB                        │
+      │                 (Next.js, one deployment)                    │
+      │                                                              │
+      │   PUBLIC MARKETPLACE      USER PORTALS        OPS CONSOLE    │
+      │   /                       /account  (tenant) /ops            │
+      │   /properties             /landlord (lister) /ops/dispatch   │
+      │   /properties/[id]                           /ops/deals      │
+      │   /how-it-works                              /ops/viewings   │
+      │   /for-landlords                             /ops/queue      │
+      │   /about  /contact                           /ops/audit      │
+      │   /login  /register                          /ops/config     │
+      └───────────────────────────┬──────────────────────────────────┘
+                                  │
+                    HTTPS / REST (+ role-scoped auth)
+                                  │
+                     ┌────────────▼─────────────┐
+                     │   House For Rent Backend  │
+                     │  (modular monolith, V1)   │
+                     │                           │
+                     │  Product modules:         │
+                     │   listings, search,       │
+                     │   taxonomy, photos,       │
+                     │   viewings/fieldops,      │
+                     │   deals+guarantee,        │
+                     │   agreements, admin/ops   │
+                     │                           │
+                     │  Shared (company) svcs:   │
+                     │   Identity/Verification,  │
+                     │   Screening, Payments     │
+                     │   (ledger + PSP abstr.),  │
+                     │   Media, Audit, Config    │
+                     └───┬───────────┬───────┬───┘
+                         │           │       │
+              ┌──────────▼──┐  ┌─────▼────┐  ▼ (other providers behind
+              │ PostgreSQL  │  │ Object    │  interfaces: NIN/liveness,
+              │ (ACID core) │  │ storage   │  SMS/push, map/geo)
+              └─────────────┘  │ (media)   │
+                               └───────────┘
+                                     │
+                         ┌───────────▼────────────┐
+                         │  External licensed PSP  │  ← holds client funds
+                         │  (Bank of Uganda-lic.)  │     (custodian)
+                         └─────────────────────────┘
 ```
 
 **Key fact restated as architecture:** the PSP is the fund custodian. House For Rent's backend holds only the *ledger* (its mirror of custody state) and the *orchestration logic*. No House For Rent component ever holds client money.
@@ -188,17 +203,61 @@ The deal is the spine that composes shared services. One authoritative status; e
 
 ---
 
-## 7. Client architecture (three surfaces)
+## 7. Client architecture (one surface)
 
-**[Architectural Decision] The apps are thin clients; all money, state, verification, and commission logic is server-side.** The mobile app never computes commission, never holds authoritative deal state, never contacts the PSP. It renders server state and issues intent. This is a security and correctness boundary, not just a layering preference — money logic on a client is money logic an attacker can rewrite.
+**[Architectural Decision] The client is a thin client; all money, state,
+verification, and commission logic is server-side.** It never computes a
+commission, never holds authoritative deal state, never contacts the PSP. It
+renders server state and issues intent. This is a security and correctness
+boundary, not a layering preference — money logic on a client is money logic
+an attacker can rewrite.
 
-- **Tenant app (mobile):** search, detail, viewing request, escrow payment, move-in confirmation. Framework TBD (Flutter recommended; RN acceptable) — see Section 9.
-- **Landlord/Lister app (mobile, or a mode):** onboarding+tier, mandate proof (brokers), listing creation, agreement acceptance, dashboard/settlement view.
-- **FOO + Admin (web console, V1):** [Architectural Decision] web, not mobile, for V1 — it's an internal ops tool where clarity, form density, and speed beat native polish, and a responsive web console is faster to build and iterate. The FOO field-capture parts must work on a phone browser with low bandwidth; a dedicated FOO mobile app is a post-V1 option if field use demands it.
+**[Architectural Decision, 2026-08-24] The product is a web application, not
+a set of mobile apps.**
 
-All three speak REST over HTTPS with role-scoped auth (document 4 defines contracts).
+The original architecture specified a tenant mobile app, a landlord mobile
+app, and a staff web console. An Expo/React Native client was built against
+it and has been REMOVED. The reasoning for the reversal:
 
----
+- **Distribution.** A landlord being shown this product for the first time
+  will be shown it on a laptop, in their office. A rental marketplace whose
+  front door is an app-store install has a front door most first-time
+  visitors will not walk through.
+- **Discovery.** A property listing that cannot be opened from a link, or
+  indexed, or shared into a WhatsApp group, is invisible to the way people
+  actually find homes here.
+- **One surface, three registers.** Tenants, landlords and field officers
+  need different information architecture, not different runtimes. One
+  responsive web client serves all three, and an officer works from a phone
+  browser with nothing to install (NFR-5).
+- **Cost of the mistake.** The mobile app also carried a copy of the deal
+  state machine (F-013) — a defect class that a thin web client rendering
+  server-provided `availableActions` cannot have.
+
+What the single client contains:
+
+- **Public marketplace** (`/`, `/properties`, `/properties/[id]`,
+  `/how-it-works`, `/for-landlords`, `/about`, `/contact`): browsable with
+  no account, because tenants pay nothing and browsing requires no sign-up
+  (Decision 3). Server-rendered; a shared link must open for anyone.
+- **Tenant portal** (`/account/**`): identity verification, viewing
+  requests, viewing status, the deal, escrow, move-in confirmation,
+  transaction history.
+- **Landlord portal** (`/landlord/**`): property creation, neighbourhood
+  selection, photographs, listing terms, the agreement, publication,
+  viewing activity, deal progression, settlement.
+- **Operations console** (`/ops/**`): the verification queue, dispatch,
+  field reports, introductions, the deal queue, financial transitions,
+  reconciliation, config and audit. Deliberately DENSER than the rest of the
+  product — an officer in a stairwell needs form density and speed over
+  breathing room — but built from the same design tokens, so the two halves
+  cannot disagree about what the brand colour is.
+
+**Session handling.** Tokens live in `httpOnly` cookies the browser cannot
+script-read, and are attached to backend calls server-side, so they never
+enter the client bundle. A non-httpOnly `role` cookie exists solely to decide
+which links render; the server re-reads the real role from the database on
+every request, so rewriting it changes the menu and nothing else.
 
 ## 8. Cross-cutting concerns
 
@@ -225,7 +284,7 @@ All three speak REST over HTTPS with role-scoped auth (document 4 defines contra
 - Shared services behind product-agnostic interfaces; external providers (PSP, NIN, SMS/push, geo) behind mockable interfaces.
 
 **Open (must be locked before Stage 1 of the build):**
-- **Mobile framework** — Flutter recommended (single codebase, low-bandwidth resilience, fewer native-bridge surprises for a small team); React Native acceptable if team skill is JS/TS. Locks the client stack but nothing server-side.
+- **Client framework — RESOLVED 2026-08-24.** Next.js (App Router), server components by default, no component library and no web fonts. The open question in this row was "which mobile framework"; the answer turned out to be that the premise was wrong. See §7.
 - **Backend language/framework** — a typed, transaction-safe stack (NestJS/TypeScript, Django, or Go). Choose for team skill; the architecture is stack-agnostic above this line.
 - **Object storage** provider for media.
 - **PSP partner** — external dependency in the parallel procurement workstream; the interface is built regardless, so this does not block coding.

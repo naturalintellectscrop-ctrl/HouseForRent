@@ -5,6 +5,7 @@ import { IdentityScreeningModule } from './modules/identity-screening.module';
 import { EmploymentStubModule } from './modules/employment-stub.module';
 import { SCREENING_MODULES } from './screening-module.interface';
 import { IdentityModule } from '../identity/identity.module';
+import { ScreeningController } from './screening.controller';
 
 /**
  * Screening & tenant onboarding.
@@ -17,6 +18,7 @@ import { IdentityModule } from '../identity/identity.module';
  */
 @Module({
   imports: [IdentityModule],
+  controllers: [ScreeningController],
   providers: [
     ScreeningService,
     OnboardingService,

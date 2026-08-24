@@ -1,3 +1,18 @@
+> **Superseded 2026-08-24 — read [`DEPLOYMENT.md`](./DEPLOYMENT.md) instead.**
+>
+> This document was written when the repository had three deployables: a
+> staff console on Vercel, an API on Render, and an Expo mobile app on EAS.
+> The Expo client has been removed and `apps/console` is now `apps/web`,
+> carrying the public marketplace, both user portals and the operations
+> console in one Next.js deployment (Technical Architecture §7).
+>
+> It is kept rather than deleted because the parts below that are still
+> accurate — why the API cannot be serverless, and the order of operations — have not been repeated in the new document, and a reader
+> arriving from an old link deserves to be told where to go rather than
+> silently given stale instructions.
+
+---
+
 # Deploying House For Rent
 
 Three surfaces, three different targets. Only one of them belongs on Vercel.

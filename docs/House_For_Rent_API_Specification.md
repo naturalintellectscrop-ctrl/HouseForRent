@@ -156,8 +156,90 @@ enough; being *this deal's* tenant is required.
 | `POST /mandates/{id}/decide` | — | — | ✅ | ✅ |
 | `GET /listings/{id}/agreement` | — | ✅ | — | ✅ |
 | `POST /listings/{id}/agreement/accept` | — | ✅¹ | — | — |
+| `GET /neighbourhoods` | public | public | public | public |
+| `GET /amenities` | public | public | public | public |
+| `POST /neighbourhoods` | — | — | — | ✅ |
+| `POST /neighbourhoods/{id}/service-area` | — | — | — | ✅ |
+| `GET /commission-rate` | public | public | public | public |
+| `GET /media/{mediaAssetId}` | public | public | public | public |
+| `GET /listings/{id}/photos` | public | public | public | public |
+| `POST /listings/{id}/photos` | — | ✅¹ | ✅ | ✅ |
+| `POST /listings/{id}/photos/{photoId}/remove` | — | ✅¹ | ✅ | ✅ |
 
 ¹ and must be the lister who owns that listing.
+
+#### Amendment A4 — ¹ was aspirational until 2026-08-24 (F-016)
+
+The footnote above has always read "and must be the lister who owns that
+listing". For `POST /listings`, `publish` and `withdraw` it was **not
+implemented**: the handlers carried `@Roles('lister', 'admin')` and nothing
+more, so any registered lister could create terms against a stranger's
+property, publish it, or withdraw a competitor's live inventory by knowing
+an id.
+
+`ListingsService.assertOwnsListing()` / `assertOwnsProperty()` now enforce
+it on every lister-callable mutation, returning **403
+`NOT_THE_PROPERTY_OWNER`**. 403 rather than 404 because the caller already
+holds the role and already possesses the id — hiding the resource would
+conceal nothing and would deny a landlord who mistyped their own id the real
+reason.
+
+Admin is exempt: operations legitimately author on a landlord's behalf, and
+every such act is already attributable through the audit trail.
+
+#### Amendment A5 — the taxonomy is now discoverable (2026-08-24, F-015)
+
+`POST /properties` requires a `neighbourhoodId` and `GET /listings` accepts
+one as a filter, but **no route returned any**. A client was expected to
+know identifiers it had no way to obtain, so every seed and test reached
+past the API with `prisma.neighbourhood.create`, and no landlord could
+author a property from any surface.
+
+`GET /v1/neighbourhoods` is **public**, for the same reason `GET /listings`
+is: the taxonomy IS the search vocabulary (FR-2.2), and a filter whose
+values cannot be discovered is not a filter. It defaults to the service area
+only, because a neighbourhood outside the corridor can never carry a live
+listing (FR-2.5) and offering one in a picker sets a landlord up to publish
+into a void. `liveListingCount` applies the same predicate the search does,
+freshness included — a count that says 3 where the search returns 2 is a
+small dishonesty on a page whose job is being believed.
+
+Creation is **admin-only**: `inServiceArea` decides what the public feed may
+contain, and a lister able to mint an in-service neighbourhood would have
+routed around corridor scoping entirely.
+
+`GET /v1/commission-rate` is public because it is a PUBLISHED commercial
+term. The marketing pages state what we charge landlords; serving it from
+the same `rateInForce()` an agreement snapshots means the website cannot
+advertise a rate the system would not honour.
+
+#### Amendment A6 — listing photography (2026-08-24)
+
+The public marketplace makes the property the visual hero, which requires
+images the API can serve. `media_asset` existed but held only an opaque
+`storage_ref` from the V1 mock capture provider — no MIME type, no bytes.
+
+`listing_photo` carries **provenance as a first-class field**, not a flag:
+`field_officer`, `lister`, or `development_fixture`. A tenant is entitled to
+know whether the photograph was taken by our officer, supplied by the person
+letting the property, or seeded for a demonstration.
+
+> **[API Decision] Provenance is derived from the caller's role, never from
+> the request body.** `POST /listings/{id}/photos` accepts no `source`. A
+> lister able to send `source: 'field_officer'` could label their own
+> snapshot as evidence that our officer stood in the room — the single claim
+> this platform sells, and the one a lister has every incentive to make
+> falsely. `development_fixture` is reachable from no HTTP route at all.
+
+Browser uploads do **not** pass through the FOO compression ladder
+(`MediaService`, NFR-5). That ladder's post-condition genuinely checks each
+rung's ceiling, and satisfying it for browser uploads would require a
+server-side encoder; without one the only way to pass would be to weaken the
+check, and that check is the low-bandwidth guarantee. Browser photography
+takes an honest separate path: the client downscales, the server enforces a
+hard 1.5MB ceiling at the boundary (**413 `PHOTO_TOO_LARGE`**), and the
+bytes are stored once. The ladder is left intact for the field app it was
+built for.
 
 #### Amendment A3 — agreement endpoints and `GET /auth/me` added (2026-07-31)
 
@@ -245,6 +327,39 @@ status enum, but §4.3 lists no operation reaching it; adding one is a scope
 change requiring an SSOT amendment, not an API iteration (§11).
 
 ### 4.4 Screening, onboarding, config, admin
+
+#### Amendment A7 — tenant identity verification became reachable (2026-08-24, F-017)
+
+`POST /viewings` refuses a tenant who is not identity-verified (**422
+`TENANT_NOT_VERIFIED`**), and that rule is correct: a landlord accepts our
+terms partly because the person walking into their property has been
+identified. But **nothing in the API could make a tenant verified.**
+`OnboardingService` and `IdentityService` existed, were tested, and were
+reachable only from spec files and seed scripts writing to Prisma directly.
+
+The practical effect was that the tenant journey ended at registration for
+every real user while every suite stayed green — the tests obtained through
+the database a state no client could obtain (the F-011 pattern). A step only
+a seed script can perform is not a step in the product.
+
+| Endpoint | tenant | lister | foo | admin |
+|---|:--:|:--:|:--:|:--:|
+| `GET /identity/me` | ✅ | ✅ | ✅ | ✅ |
+| `POST /identity/consent` | ✅ | — | — | ✅ |
+| `POST /identity/verify` | ✅ | — | — | ✅ |
+| `POST /identity/screen` | ✅ | — | — | ✅ |
+
+**The subject is always the caller.** No endpoint here accepts a party id,
+so none can be pointed at somebody else. Consent is a separate call made
+FIRST, and `IdentityService` independently refuses to verify a party with no
+consent record — the ordering is enforced, not merely intended (NFR-3, DPA
+2019).
+
+The NIN, phone and selfie reference cross the `IdentityProvider` boundary
+and are **never persisted**: only a verification state and an opaque
+provider reference remain. V1 runs a mock provider, and every surface that
+calls this says so rather than implying a check against the national
+register.
 
 | Endpoint | tenant | lister | foo | admin |
 |---|:--:|:--:|:--:|:--:|
@@ -422,38 +537,78 @@ rather than a second event (Stage 4).
 ### 9.1 Tenant search and detail
 
 ```http
-GET /v1/listings?neighbourhoodId=…&minRent=…&maxRent=…&bedrooms=…&amenityId=…
+GET /v1/listings?q=&neighbourhoodId=&minRent=&maxRent=&bedrooms=
+                &amenityId=&propertyType=&furnished=&sort=&limit=&offset=
 ```
 
-Always constrained to `live` + `verified` + in-service-area. `includeStale`
-is opt-in. Filters narrow only — a client cannot widen past the public-feed
-definition.
+Always constrained to `live` + `verified` + in-service-area + available.
+`includeStale` is opt-in. **Filters narrow only** — a caller cannot widen
+past the public-feed definition, and the property-level narrowing is merged
+into the base predicate rather than reassigning it, so a later filter cannot
+quietly drop `neighbourhood.inServiceArea`.
+
+`q` matches **neighbourhood and landmark only**, deliberately not the
+description: a lister writing their own copy must not be able to buy
+relevance by stuffing it with the names of neighbourhoods the property is
+not in.
+
+`sort` defaults to `fresh` — most recently confirmed available first,
+because a wasted trip is the failure this product exists to prevent.
 
 ```json
 {
   "results": [
     {
       "listingId": "…",
-      "monthlyRent": "1000000",
+      "propertyId": "…",
+      "monthlyRent": "1400000",
       "bedrooms": 2,
+      "bathrooms": 1,
+      "propertyType": "apartment",
+      "furnished": "furnished",
       "neighbourhoodName": "Ntinda",
-      "landmarkText": "past the blue kiosk",
+      "landmarkText": "Two minutes off Kimera Road, behind the Total station",
       "isVerified": true,
       "isStale": false,
       "daysSinceConfirmed": 2,
+      "photos": [
+        {
+          "id": "…",
+          "mediaAssetId": "…",
+          "url": "/v1/media/…",
+          "caption": null,
+          "sortOrder": 0,
+          "source": "field_officer",
+          "isFieldVerified": true,
+          "isDevelopmentFixture": false
+        }
+      ],
       "freeForTenants": true
     }
   ],
-  "totalCount": 1,
+  "totalCount": 12,
+  "limit": 24,
+  "offset": 0,
   "emptyStateMessage": null
 }
 ```
 
-`GET /v1/listings/{id}` adds the field-confirmed summary (FR-4.3), projected
-from the structured `field_report` — never free text:
+`totalCount` is the matches BEFORE the page window, and `emptyStateMessage`
+is keyed off that total rather than off the page — page 3 of 80 results is
+not an empty state, and saying so would be a lie of omission.
+
+`GET /v1/listings/{id}` adds the full terms, the amenities, the photographs,
+and the field-confirmed summary (FR-4.3), projected from the structured
+`field_report` — never free text:
 
 ```json
 {
+  "depositAmount": "700000",
+  "requiredMonthsUpfront": 2,
+  "expectedUpfront": "3500000",
+  "descriptionText": "…",
+  "neighbourhoodId": "…",
+  "amenities": [{ "id": "…", "name": "Borehole" }],
   "fieldConfirmed": {
     "conditionRating": "good",
     "matchesListing": true,
@@ -463,8 +618,25 @@ from the structured `field_report` — never free text:
 }
 ```
 
-`null` when no report exists. **Never a fabricated placeholder** — an unread
-property must not look inspected.
+`fieldConfirmed` is `null` when no report exists. **Never a fabricated
+placeholder** — an unvisited property must not look inspected.
+
+> **[API Decision, 2026-08-24] `expectedUpfront` is served, not computed by
+> the client.** It is the figure a tenant funds at agreement, derived here
+> from the listing's own published terms — the same basis `fund-escrow`
+> derives its authoritative amount from (F-012). The website displays it and
+> never recomputes it. A client multiplying rent by months would hold a
+> second copy of the number somebody is about to pay, on the least
+> trustworthy side of the boundary, which is precisely the defect class that
+> finding was about.
+
+Detail is scoped **by id**, not scanned out of the feed. The feed is
+paginated; finding a listing by paging through it would have made deep links
+work only for whatever happened to land on page one.
+
+A listing outside the public feed — unverified, withdrawn, or out of
+corridor — returns **404, not 403**. A 403 would confirm it exists, which is
+how an unpublished address becomes discoverable by probing.
 
 ### 9.2 Deal reads
 `GET /v1/deals/{id}` — parties and admin only (§7.4). Includes status,
