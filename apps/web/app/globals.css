@@ -79,10 +79,8 @@
    * download and a layout shift on every cold start; the identity is
    * carried by colour, spacing and hierarchy, which cost nothing.
    */
-  --font: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto,
-    'Helvetica Neue', Arial, sans-serif;
-  --font-mono: ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, Consolas,
-    monospace;
+  --font: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
 
   --measure: 34rem;
   --page: 74rem;

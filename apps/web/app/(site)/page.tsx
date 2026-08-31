@@ -108,6 +108,14 @@ export default async function HomePage() {
         </div>
       </section>
 
+      <section className="proof-strip" aria-label="House For Rent promise">
+        <div className="page proof-grid">
+          <div><strong>Visited in person</strong><span>Every live home has a field report.</span></div>
+          <div><strong>Free for tenants</strong><span>No search, viewing, or rental fee.</span></div>
+          <div><strong>Built for Kampala</strong><span>Local neighbourhood knowledge, not scraped listings.</span></div>
+        </div>
+      </section>
+
       {/* ── the promise ──────────────────────────────────────────────── */}
       <section className="section section-sunk">
         <div className="page">
