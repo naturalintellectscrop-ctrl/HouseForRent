@@ -11,14 +11,7 @@ import { resolveJwtSecret } from './jwt-secret';
 @Module({
   imports: [
     JwtModule.registerAsync({
-      // Async so the secret is resolved when the module is instantiated
-      // rather than when this file is imported — otherwise a bad secret
-      // would throw during module loading, where the stack trace says
-      // nothing useful about what is wrong.
-      useFactory: () => ({
-        secret: resolveJwtSecret(),
-        signOptions: { expiresIn: '15m' },
-      }),
+      useFactory: () => ({ secret: resolveJwtSecret(), signOptions: { expiresIn: '15m' } }),
     }),
   ],
   providers: [AuthService, JwtAuthGuard, RolesGuard, DealPartyGuard],

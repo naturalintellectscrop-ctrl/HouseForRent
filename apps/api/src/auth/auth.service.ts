@@ -9,6 +9,7 @@ import * as bcrypt from 'bcryptjs';
 import { createHash, randomBytes } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { canRefresh, canSignIn, refusalReason } from './account-status';
+import { supabaseAdmin } from './supabase-admin';
 
 /** Roles a caller may self-register as (API Spec §3). */
 export type SelfServiceRole = Extract<AuthRole, 'tenant' | 'lister'>;
@@ -73,7 +74,15 @@ export class AuthService {
     password: string;
     role: AuthRole;
   }) {
-    const passwordHash = await bcrypt.hash(params.password, 10);
+    const { data: authData, error: authError } = await supabaseAdmin().auth.admin.createUser({
+      phone: params.primaryPhone,
+      password: params.password,
+      phone_confirm: true,
+      user_metadata: { display_name: params.displayName, role: params.role },
+    });
+    if (authError || !authData.user) {
+      throw new UnauthorizedException('could not create account');
+    }
 
     return this.prisma.$transaction(async (tx) => {
       const party = await tx.party.create({
@@ -83,12 +92,8 @@ export class AuthService {
         },
       });
       const account = await tx.userAccount.create({
-        data: { partyId: party.id, authRole: params.role },
+        data: { partyId: party.id, authRole: params.role, supabaseUserId: authData.user.id },
       });
-      await tx.userCredential.create({
-        data: { userAccountId: account.id, passwordHash },
-      });
-
       return { partyId: party.id, userAccountId: account.id };
     });
   }
@@ -97,12 +102,22 @@ export class AuthService {
     primaryPhone: string;
     password: string;
   }): Promise<AuthTokens> {
+    const { data, error } = await supabaseAdmin().auth.signInWithPassword({
+      phone: params.primaryPhone,
+      password: params.password,
+    });
+    if (error || !data.session || !data.user) {
+      throw new UnauthorizedException('invalid credentials');
+    }
     const party = await this.prisma.party.findUnique({
       where: { primaryPhone: params.primaryPhone },
       include: { userAccounts: { include: { credential: true } } },
     });
 
     const account = party?.userAccounts[0];
+    if (!account || account.supabaseUserId !== data.user.id) {
+      throw new UnauthorizedException('invalid credentials');
+    }
 
     // Compare against a dummy hash when the account is absent, so a missing
     // phone number and a wrong password take indistinguishable time. Without
@@ -132,11 +147,10 @@ export class AuthService {
       });
     }
 
-    const tokens = await this.issueTokens(
-      account.id,
-      account.partyId,
-      account.authRole,
-    );
+    const tokens: AuthTokens = {
+      accessToken: data.session.access_token,
+      refreshToken: data.session.refresh_token,
+    };
 
     // Recorded after the tokens are issued, so a failed issue does not
     // report a login that did not happen.

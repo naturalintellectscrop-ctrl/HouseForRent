@@ -5,7 +5,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { JwtService } from '@nestjs/jwt';
+import { verifySupabaseToken } from '../supabase-admin';
 import { Request } from 'express';
 import { AuthService, AuthenticatedCaller } from '../auth.service';
 import { IS_PUBLIC } from '../public.decorator';
@@ -26,7 +26,6 @@ export interface AuthenticatedRequest extends Request {
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
   constructor(
-    private readonly jwt: JwtService,
     private readonly auth: AuthService,
     private readonly reflector: Reflector,
   ) {}
@@ -47,17 +46,11 @@ export class JwtAuthGuard implements CanActivate {
       throw new UnauthorizedException('missing bearer token');
     }
 
-    let payload: { sub: string };
-    try {
-      payload = await this.jwt.verifyAsync<{ sub: string }>(header.slice(7));
-    } catch {
-      throw new UnauthorizedException('invalid or expired token');
-    }
+    const user = await verifySupabaseToken(header.slice(7));
+    if (!user) throw new UnauthorizedException('invalid or expired token');
 
-    // Role and party are re-read from the database here, never taken from
-    // the token body — a suspended account stops working immediately
-    // rather than at token expiry.
-    const caller = await this.auth.resolveCaller(payload);
+    // Role and party are re-read from the application database.
+    const caller = await this.auth.resolveCaller({ sub: user.id });
     if (!caller) {
       throw new UnauthorizedException('account not active');
     }
