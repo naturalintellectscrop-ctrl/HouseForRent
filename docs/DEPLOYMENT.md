@@ -114,11 +114,9 @@ See `apps/api/.env.example` for the full annotated list.
 > guard still passes and nothing looks wrong. A service that will not start
 > is an outage; one signing with a public secret is a breach.
 
-`dotenv` is loaded as the **first import** in `src/main.ts`, because
-`auth/better-auth/auth.ts` reads `DATABASE_URL` at module scope and throws
-if it is absent. In a deployed environment there is no `.env` file and the
-platform's variables are used — which is exactly right: it fills gaps, it
-does not override.
+`dotenv` is loaded before the Nest bootstrap so local development and deployed
+runtime variables are available consistently. In production, platform-managed
+variables are used directly.
 
 ### 2.2 CORS
 
