@@ -312,36 +312,13 @@ release escrow before move-in, because no such edge exists.
 
 ---
 
-## 7. Better Auth
+## 7. Supabase Auth
 
-`better-auth` is installed, configured, and **not load-bearing**.
-
-It lives at `apps/api/src/auth/better-auth/`, is mounted at `/api/auth/*`,
-and owns four tables namespaced `ba_`. The namespace exists because Better
-Auth's defaults collide head-on: it wants a table called `session`, and
-`Data_Model.md` §2.3 already defines one with a completely different shape.
-Taking the default would have dropped the table every signed-in user
-depends on.
-
-Nothing in the API trusts a Better Auth session today. `JwtAuthGuard` still
-resolves the existing `session` table, and every authorisation decision
-still runs through the guards above.
-
-**Before it can become load-bearing:**
-
-1. Reconcile its schema with `user_account` / `user_credential` /
-   `session`, which the deal guards join against by `partyId`.
-2. Migrate credentials. Existing passwords are bcrypt; Better Auth defaults
-   to scrypt, so either configure its hasher or every user resets.
-3. Re-point `JwtAuthGuard`, keeping `AuthenticatedCaller`
-   (`{ userAccountId, partyId, role }`) intact — every guard and controller
-   destructures it.
-4. Re-run the full authorisation matrix **and re-verify it is still
-   load-bearing**.
-
-Do that as its own change. Swapping the credential store under the layer
-that protects every money endpoint is not something to ship alongside
-anything else.
+Supabase Auth is the only authentication provider for this application.
+The API keeps its existing `AuthenticatedCaller` shape and resolves the
+application role and party from the database rather than trusting client
+metadata. Supabase-managed `auth.*` tables are not part of the Prisma schema
+and must not be deleted by application migrations.
 
 ---
 
