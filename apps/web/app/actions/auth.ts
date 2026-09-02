@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import { cookies } from 'next/headers';
 import { API_BASE, ApiError, apiPublic, REFRESH_COOKIE } from '@/lib/api';
 import { clearSession, homeFor, setSession, type Role } from '@/lib/session';
+import { createClient as createSupabaseClient } from '@/lib/supabase/server';
 
 /**
  * `ActionState` is a TYPE, so it is erased and re-exporting it from a
@@ -33,19 +34,21 @@ export async function loginAction(
 
   let role: Role;
   try {
-    const tokens = await apiPublic<{
-      accessToken: string;
-      refreshToken: string;
-    }>('/v1/auth/login', { primaryPhone, password });
-
-    // The access token carries only `sub` — the backend re-reads role and
-    // party from the database on every request, so a role change or
-    // suspension takes effect immediately rather than lingering until the
-    // token expires. We therefore ASK the server who we are rather than
-    // decoding a claim that deliberately is not there.
-    const me = await meWithToken(tokens.accessToken);
+    const supabase = await createSupabaseClient();
+    const { data, error } = await supabase.auth.signInWithPassword({
+      phone: primaryPhone,
+      password,
+    });
+    if (error || !data.session) {
+      throw new ApiError(401, 'INVALID_CREDENTIALS', 'invalid credentials');
+    }
+    const me = await meWithToken(data.session.access_token);
     role = me.role;
-    await setSession({ ...tokens, role });
+    await setSession({
+      accessToken: data.session.access_token,
+      refreshToken: data.session.refresh_token,
+      role,
+    });
   } catch (err) {
     if (err instanceof ApiError) {
       // The backend compares against a dummy hash for a missing account, so
@@ -143,6 +146,8 @@ export async function registerAction(
 }
 
 export async function logoutAction() {
+  const supabase = await createSupabaseClient();
+  await supabase.auth.signOut();
   const jar = await cookies();
   const refreshToken = jar.get(REFRESH_COOKIE)?.value;
 
