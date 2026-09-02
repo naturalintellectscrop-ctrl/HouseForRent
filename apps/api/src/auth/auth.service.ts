@@ -111,23 +111,11 @@ export class AuthService {
     }
     const party = await this.prisma.party.findUnique({
       where: { primaryPhone: params.primaryPhone },
-      include: { userAccounts: { include: { credential: true } } },
+      include: { userAccounts: true },
     });
 
     const account = party?.userAccounts[0];
     if (!account || account.supabaseUserId !== data.user.id) {
-      throw new UnauthorizedException('invalid credentials');
-    }
-
-    // Compare against a dummy hash when the account is absent, so a missing
-    // phone number and a wrong password take indistinguishable time. Without
-    // this, response timing enumerates registered numbers.
-    const hash =
-      account?.credential?.passwordHash ??
-      '$2b$10$invalidinvalidinvalidinvalidinvalidinvalidinvalidinvalidinv';
-    const ok = await bcrypt.compare(params.password, hash);
-
-    if (!account || !ok) {
       throw new UnauthorizedException('invalid credentials');
     }
 
@@ -254,7 +242,7 @@ export class AuthService {
     sub: string;
   }): Promise<AuthenticatedCaller | null> {
     const account = await this.prisma.userAccount.findUnique({
-      where: { id: payload.sub },
+      where: { supabaseUserId: payload.sub },
       include: { party: true },
     });
 
