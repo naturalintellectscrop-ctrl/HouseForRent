@@ -114,8 +114,9 @@ enum AuthRole {
 /// (e.g. a landlord created by ops) before self-service credentials. V1: one
 /// primary role per account (Data_Model.md §2.2).
 model UserAccount {
-  id        String   @id @default(uuid())
-  partyId   String   @map("party_id")
+  id             String   @id @default(uuid())
+  supabaseUserId String?  @unique @map("supabase_user_id")
+  partyId        String   @map("party_id")
   authRole  AuthRole @map("auth_role")
   /// Set on each successful login. Nullable because an account that has
   /// never signed in genuinely has no value — a sentinel date would make
