@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { apiGet } from '@/lib/api';
-import { Icon } from '@/app/ui';
+import { Icon, PageIntro } from '@/app/ui';
 
 export const metadata = {
   title: 'For landlords',
@@ -53,11 +53,10 @@ export default async function ForLandlordsPage() {
     <>
       <section className="section-lg">
         <div className="page">
-          <div className="stack" style={{ maxWidth: '44rem' }}>
-            <p className="eyebrow">For landlords</p>
-            <h1 className="display">
-              Let your property to a tenant we have already checked.
-            </h1>
+          <PageIntro
+            eyebrow="For landlords"
+            title="Let your property to a tenant we have already checked."
+          >
             <p className="lede">
               You do not pay us to list. You do not pay us monthly. We are paid
               once, {rate ? describeRate(rate.rateBpOfMonth) : 'a fixed share'},
@@ -71,7 +70,7 @@ export default async function ForLandlordsPage() {
                 Talk to someone first
               </Link>
             </div>
-          </div>
+          </PageIntro>
         </div>
       </section>
 

@@ -163,6 +163,64 @@ export function Brand({ sub, href = '/' }: { sub?: string; href?: string }) {
   );
 }
 
+/**
+ * The opening block of a public page: eyebrow, display heading, intro.
+ *
+ * Before this existed, every public page hand-rolled the same three lines
+ * and drifted: `maxWidth` was 44rem on one page, 38rem on another, missing
+ * on a third, and /areas paired its eyebrow with the wrong heading size —
+ * the only page on the site whose hero read smaller than the home page's
+ * secondary headings. One component is the fix for both the duplication and
+ * the drift: the rhythm a visitor learns on one page now holds on all of
+ * them.
+ */
+export function PageIntro({
+  eyebrow,
+  title,
+  children,
+}: {
+  eyebrow?: string;
+  title: string;
+  children?: React.ReactNode;
+}) {
+  return (
+    <div className="stack" style={{ maxWidth: '44rem' }}>
+      {eyebrow ? <p className="eyebrow">{eyebrow}</p> : null}
+      <h1 className="display">{title}</h1>
+      {children}
+    </div>
+  );
+}
+
+/**
+ * A section heading row: eyebrow + heading on the left, one action on the
+ * right. The homepage feed and the portal lists were building this row by
+ * hand with the same two classes; this is the generalised form. The heading
+ * step stays a choice of the caller because the marketplace reads "h1"
+ * while a card inside a portal list should not.
+ */
+export function SectionHeader({
+  eyebrow,
+  title,
+  size = 'h2',
+  action,
+}: {
+  eyebrow?: string;
+  title: string;
+  size?: 'h1' | 'h2';
+  action?: React.ReactNode;
+}) {
+  return (
+    <div className="row-between">
+      <div className="stack-sm">
+        {eyebrow ? <p className="eyebrow">{eyebrow}</p> : null}
+        <h2 className={size}>{title}</h2>
+      </div>
+      {action}
+    </div>
+  );
+}
+
 /* ── money and dates ────────────────────────────────────────────────── */
 
 /**

@@ -1,6 +1,38 @@
 import Link from 'next/link';
-import { Brand } from '@/app/ui';
+import { Brand, Icon } from '@/app/ui';
+import { SiteFooter } from '@/app/site-chrome';
 import { currentRole, homeFor, requireRole } from '@/lib/session';
+
+/*
+ * The portal's link set lives here once. It used to exist twice (desktop
+ * nav + mobile menu panel), which is how the two copies drift — a link
+ * added to one and not the other is a bug the second role notices. The
+ * admin variant is the tenant list minus the tenant-only pages.
+ */
+const LANDLORD_NAV = [
+  { href: '/landlord', label: 'Portfolio' },
+  { href: '/landlord/properties/new', label: 'Add a property' },
+  { href: '/landlord/deals', label: 'Lettings' },
+  { href: '/landlord/earnings', label: 'Earnings' },
+  { href: '/landlord/security', label: 'Security' },
+];
+
+const TENANT_NAV = [
+  { href: '/account', label: 'Overview' },
+  { href: '/account/saved', label: 'Saved homes' },
+  { href: '/account/viewings', label: 'Viewings' },
+  { href: '/account/deals', label: 'My tenancy' },
+  { href: '/account/security', label: 'Security' },
+  { href: '/properties', label: 'Browse homes' },
+];
+
+const ADMIN_NAV = [
+  { href: '/account', label: 'Overview' },
+  { href: '/account/viewings', label: 'Viewings' },
+  { href: '/account/deals', label: 'My tenancy' },
+  { href: '/account/security', label: 'Security' },
+  { href: '/properties', label: 'Browse homes' },
+];
 
 /**
  * The signed-in shell for tenants and landlords.
@@ -23,36 +55,23 @@ export default async function PortalLayout({
 }) {
   await requireRole(['tenant', 'lister', 'admin']);
   const role = await currentRole();
-  const isLandlord = role === 'lister';
-  const isTenant = role === 'tenant';
+  const nav =
+    role === 'lister' ? LANDLORD_NAV : role === 'admin' ? ADMIN_NAV : TENANT_NAV;
 
   return (
     <>
       <header className="site-head">
         <div className="page site-head-inner">
           <Brand
-            sub={isLandlord ? 'Landlord' : 'My account'}
+            sub={role === 'lister' ? 'Landlord' : 'My account'}
             href={role ? homeFor(role) : '/'}
           />
           <nav className="site-nav" aria-label="Account">
-            {isLandlord ? (
-              <>
-                <Link href="/landlord">Portfolio</Link>
-                <Link href="/landlord/properties/new">Add a property</Link>
-                <Link href="/landlord/deals">Lettings</Link>
-                <Link href="/landlord/earnings">Earnings</Link>
-                <Link href="/landlord/security">Security</Link>
-              </>
-            ) : (
-              <>
-                <Link href="/account">Overview</Link>
-                <Link href="/account/saved">Saved homes</Link>
-                <Link href="/account/viewings">Viewings</Link>
-                <Link href="/account/deals">My tenancy</Link>
-                <Link href="/account/security">Security</Link>
-                <Link href="/properties">Browse homes</Link>
-              </>
-            )}
+            {nav.map((item) => (
+              <Link key={item.href} href={item.href}>
+                {item.label}
+              </Link>
+            ))}
           </nav>
           <div className="site-actions-desktop">
             {/* Sign-out is a plain HTML form to the API, which revokes the
@@ -67,46 +86,14 @@ export default async function PortalLayout({
 
           <details className="menu">
             <summary aria-label="Menu">
-              <svg
-                width={22}
-                height={22}
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={1.6}
-                strokeLinecap="round"
-                aria-hidden="true"
-              >
-                <path d="M4 7h16M4 12h16M4 17h16" />
-              </svg>
+              <Icon.menu />
             </summary>
             <div className="menu-panel page">
-              {isLandlord ? (
-                <>
-                  <Link href="/landlord">Portfolio</Link>
-                  <Link href="/landlord/properties/new">Add a property</Link>
-                  <Link href="/landlord/deals">Lettings</Link>
-                  <Link href="/landlord/earnings">Earnings</Link>
-                  <Link href="/landlord/security">Security</Link>
-                </>
-              ) : isTenant ? (
-                <>
-                  <Link href="/account">Overview</Link>
-                  <Link href="/account/saved">Saved homes</Link>
-                  <Link href="/account/viewings">Viewings</Link>
-                  <Link href="/account/deals">My tenancy</Link>
-                  <Link href="/account/security">Security</Link>
-                  <Link href="/properties">Browse homes</Link>
-                </>
-              ) : (
-                <>
-                  <Link href="/account">Overview</Link>
-                  <Link href="/account/viewings">Viewings</Link>
-                  <Link href="/account/deals">My tenancy</Link>
-                  <Link href="/account/security">Security</Link>
-                  <Link href="/properties">Browse homes</Link>
-                </>
-              )}
+              {nav.map((item) => (
+                <Link key={item.href} href={item.href}>
+                  {item.label}
+                </Link>
+              ))}
               <hr />
               <form action="/api/v1/auth/logout" method="post">
                 <button type="submit" className="btn btn-secondary btn-block">
@@ -121,6 +108,12 @@ export default async function PortalLayout({
       <main id="main" className="page section">
         {children}
       </main>
+
+      {/* The portals end on the same ink the public site ends on. They are
+          parts of one product; the footer is where that is cheapest and
+          most visible to prove. Its links are public routes, so it is safe
+          to render for any signed-in role. */}
+      <SiteFooter />
     </>
   );
 }
