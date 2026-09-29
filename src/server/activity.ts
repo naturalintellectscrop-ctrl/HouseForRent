@@ -104,19 +104,27 @@ function dealEventLine(toStatus: string, side: 'tenant' | 'landlord'): string {
   return (side === 'tenant' ? tenant : landlord)[toStatus] ?? toStatus.replace(/_/g, ' ');
 }
 
-function viewingEventLine(status: string): string {
-  switch (status) {
-    case 'requested':
-      return 'You asked for a viewing. Our operations desk will confirm a time.';
-    case 'scheduled':
-      return 'A field officer was assigned and a time confirmed.';
-    case 'conducted':
-      return 'The visit happened. The introduction to the landlord is on record.';
-    case 'no_show':
-      return 'The officer could not reach you at the scheduled time.';
-    default:
-      return 'This viewing is closed.';
-  }
+/**
+ * Viewing sentences, per side. The landlord's feed is NOT the tenant's
+ * feed re-rendered — "You asked for a viewing" addressed to a landlord
+ * was wrong, and D-1 says status→copy decisions live here, one place.
+ */
+function viewingEventLine(status: string, side: 'tenant' | 'landlord'): string {
+  const tenant: Record<string, string> = {
+    requested: 'You asked for a viewing. Our operations desk will confirm a time.',
+    scheduled: 'A field officer was assigned and a time confirmed.',
+    conducted: 'The visit happened. The introduction to the landlord is on record.',
+    no_show: 'The officer could not reach you at the scheduled time.',
+    cancelled: 'You cancelled this viewing.',
+  };
+  const landlord: Record<string, string> = {
+    requested: 'A prospective tenant asked for a viewing of this home.',
+    scheduled: 'A field officer was assigned; the visit has a confirmed time.',
+    conducted: 'The visit happened. The introduction record is on file.',
+    no_show: 'The tenant did not attend the scheduled visit.',
+    cancelled: 'This viewing was cancelled before the visit.',
+  };
+  return (side === 'tenant' ? tenant : landlord)[status] ?? 'This viewing is closed.';
 }
 
 const LIMIT = 8;
@@ -186,7 +194,7 @@ export async function recentActivity(
       id: `viewing-${v.id}`,
       kind: 'viewing' as const,
       title: `${l.property.bedrooms}-bed ${l.property.propertyType} in ${l.property.neighbourhood.name}`,
-      line: viewingEventLine(v.status),
+      line: viewingEventLine(v.status, side),
       at: (v.scheduledFor ?? v.updatedAt).toISOString(),
       statusLabel: viewingLabel(v.status),
       tone: viewingTone(v.status),

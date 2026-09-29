@@ -541,6 +541,14 @@ export async function findForLister(listerPartyId: string) {
 
   const tier = (await db.listerProfile.findUnique({ where: { partyId: listerPartyId } }))?.tier;
 
+  // The mandate state each listing's publish panel needs — one read for the
+  // whole inventory, mapped per property. Null means "no mandate on file",
+  // which is itself the state the panel must render for a non-owner tier.
+  const mandates = await db.propertyMandate.findMany({
+    where: { listerPartyId },
+    orderBy: { createdAt: 'desc' },
+  });
+
   return Promise.all(
     listings.map(async (listing) => {
       const tierCast = tier as ListerTier | undefined;
@@ -570,6 +578,7 @@ export async function findForLister(listerPartyId: string) {
         publicationState: listing.publicationState,
         availabilityStatus: listing.availabilityStatus,
         availabilityConfirmedAt: listing.availabilityConfirmedAt,
+        mandateState: mandates.find((m) => m.propertyId === listing.propertyId)?.state ?? null,
         hasAcceptedAgreement: Boolean(accepted),
         agreementId: accepted?.id ?? null,
         agreementAcceptedAt: accepted?.acceptedAt ?? null,

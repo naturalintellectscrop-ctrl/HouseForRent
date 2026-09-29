@@ -44,6 +44,7 @@ export default async function OpsLayout({
             <Link href="/ops">Ops</Link>
             {role === 'admin' && <Link href="/ops/dispatch">Dispatch</Link>}
             {role === 'admin' && <Link href="/ops/deals">Deals</Link>}
+            {role === 'admin' && <Link href="/ops/mandates">Mandates</Link>}
             {role === 'admin' && <Link href="/ops/users">Users</Link>}
             {role === 'admin' && <Link href="/ops/config">Config</Link>}
             {role === 'admin' && <Link href="/ops/audit">Audit</Link>}

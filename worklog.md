@@ -306,3 +306,33 @@ Stage Summary:
 - Brand identity now derives from the ORIGINAL logo file end-to-end: favicon set, header mark, about-page lockup, OG cover, tagline copy, and the two sampled colours. No fabricated claims introduced anywhere.
 - Cron: job 423452 (every 15 min) LIVE — replaces stopped 423191.
 - Next steps unchanged from Task 9 backlog (mandate submission route for real repo, ops bulk actions, neighbourhood admin), plus: when NEXT_PUBLIC_SITE_URL is known, set it so OG URLs are absolute in production.
+
+---
+Task ID: 11
+Agent: cron webDevReview (autonomous round)
+Task: Status assessment + QA, then two features: tenant viewing cancellation; finish the mandate UI (ops decision page + landlord submission)
+
+Work Log:
+- ASSESSMENT: server had died again (session env — restart pattern documented in Task 9). After restart: all 9 public routes 200, tsc 0, ESLint 0, dev.log 0 errors. Ops dispatch queue correctly drained (0 waiting), 1 officer with 1 assigned.
+- FEATURE A — tenant viewing cancellation (backlog item 1 from Task 9; state machine already allowed requested/scheduled → cancelled):
+  - src/server/viewings.ts: NotYourViewingError + cancelViewing() — ownership check, frozen-graph transition assert, status update + `viewing_cancelled` AuditEvent (actorRole tenant, detail carries from/listingId) in one transaction. nextStepFor gained a cancelled sentence.
+  - HTTP: POST /api/v1/viewings/[id]/cancel (tenant role; service owns every rule). http.ts ALREADY had the NotYourViewingError→403 mapping pre-provisioned — the new class completes the circuit.
+  - src/server/activity.ts: viewingEventLine was NOT side-aware (landlord feed read "You asked for a viewing…" — tenant voice). Now side-aware like dealEventLine, with proper landlord phrasings + cancelled lines ("You cancelled this viewing." / "This viewing was cancelled before the visit.").
+  - UI: /account/viewings rows show a CancelViewingButton (two-step inline confirm: "Cancel this viewing? The landlord sees it as cancelled." → Yes/Keep) ONLY on requested|scheduled rows — the server's status decides; conducted/cancelled rows never grow the control. Confirm-step (not typed checkbox) because no money is at stake; error surfaced with API code.
+  - REAL HTTP MATRIX (all as designed): anon 401 · wrong-tenant 403 NOT_YOUR_VIEWING · owner 200 cancelled · re-cancel 409 ILLEGAL_VIEWING_TRANSITION ("cancelled → cancelled is not permitted") · landlord role 403. Audit row verified in DB (actorRole=tenant, from=requested). Both activity feeds verified over HTTP with correct side phrasing.
+  - BROWSER: full journey — request from property page → list shows Cancel button → two-step confirm → row flips to cancelled with server sentence. Mobile 412px: no overflow.
+  - QA-tooling trap (recurring): `document.querySelector('form')` grabs the header SIGN-OUT form on portal pages — always target the specific form.
+- FEATURE B — mandate UI completed (F-003 decision half; HTTP + service + adapter resolver all pre-existed, but src/app/ops/mandates/ was an EMPTY interrupted dir and no landlord submit surface existed):
+  - ops: /ops/mandates page (state tabs pending/verified/rejected with shareable URLs, table: submitted/lister+tier/property/registered owner/submission note/decision; invalid ?state handled; AdminOnly fallback; honest empty states). mandate-actions.tsx client: Verify/Reject → confirm step with consequence sentence + optional decision note → POST /v1/admin/mandates/[id]/decision; 409 from a colleague's decision renders verbatim. Nav link added (admin only).
+  - landlord: findForLister now returns mandateState per listing (one extra query, mapped per property; additive). Listing page renders MandatePanel ONLY when the server's blockedBy contains 'mandate' (property owners never see it; verified makes it disappear). Panel: no-mandate → submit with optional note; pending → "Awaiting verification"; rejected → "The last submission was rejected" + resubmit (service resets the same row to pending). POST /v1/landlord/mandates.
+  - NEW QA tool: scripts/qa-set-lister-tier.mjs (F-009: refuses without QA_PASSWORD; refuses the two named demo landlords) because registration always creates property_owner and no tier surface exists yet.
+  - FULL BROKER JOURNEY (real HTTP + browser): register +256700100098 → tier broker_agent → create 2 properties → blockedBy shows 'mandate' → submit via UI → "Awaiting verification" → admin queue shows row (lister+tier+property+owner) → Reject with note via UI → queue drains → Rejected tab has the row (submission note column; decision note deliberately audit-only) → landlord card flips to rejected + resubmit. First property: verified via HTTP → blockedBy drops 'mandate', mandateState=verified, card gone. Decision matrix: FOO 403 · invalid decision 422 INVALID_MANDATE_DECISION · admin 200 · re-decide 409 MANDATE_ALREADY_DECIDED. Audit rows mandate_submitted (lister) + mandate_decided (admin, note in payload) verified.
+- STYLING DETAIL PASS: ops state tabs (aria-current + muted inactive), table-scroll verified scrollable at 412px with no page overflow; mandate card typography matches portal cards; cancel button stack right-aligned with the price column (span-carrying stack pattern from Task 9).
+- Ops consoles redirect non-staff correctly (broker → /landlord on /ops/*).
+
+Stage Summary:
+- Tenant viewing cancellation is live end-to-end (service/HTTP/UI/activity/audit) and the landlord feed now speaks in the landlord's voice.
+- The mandate flow (F-003 second half) is COMPLETE product surface: submit (landlord) → decide (ops) → resubmit loop, all server-authoritative, audit-carried, zero DB changes (mandateState on MyListing is additive JSON).
+- Known gap found, deferred deliberately: no admin surface to SET a lister tier (registration is always property_owner) — the QA script bridges it for sandbox rounds; /ops/users tier management is the natural next feature.
+- tsc 0 / ESLint 0 / dev.log 0 errors; demo data grew by: 2 QA listings + 2 mandates + 3 cancelled viewings (all labelled QA in landmark/identity where visible).
+- Next steps: /ops/users tier management; ops viewing-detail cancel (landlord-reported case); journey-http script update to cover cancel + mandate endpoints; external items unchanged (PSP, identity provider, API host, Vercel).

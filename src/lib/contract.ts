@@ -132,6 +132,8 @@ export interface MyListing {
     | 'withdrawn';
   availabilityStatus: 'available' | 'unavailable';
   availabilityConfirmedAt: string | null;
+  /** The mandate row for this property, if the account ever submitted one. */
+  mandateState: string | null;
   hasAcceptedAgreement: boolean;
   agreementId?: string | null;
   agreementAcceptedAt?: string | null;

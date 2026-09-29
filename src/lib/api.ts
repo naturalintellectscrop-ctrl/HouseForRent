@@ -471,7 +471,12 @@ export interface MandateRow {
   note: string | null;
   createdAt: string;
   decidedAt: string | null;
-  property: { id: string; landmarkText: string; neighbourhoodName: string };
+  property: {
+    id: string;
+    landmarkText: string;
+    neighbourhoodName: string;
+    ownerName: string | null;
+  };
   listerName: string | null;
   listerTier: string | null;
 }
