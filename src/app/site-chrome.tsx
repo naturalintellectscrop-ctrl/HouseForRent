@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Brand, Icon } from '@/app/ui';
+import { Brand, Icon, TAGLINE } from '@/app/ui';
 import { isSignedIn, currentRole, homeFor } from '@/lib/session';
 
 const NAV = [
@@ -111,6 +111,10 @@ export function SiteFooter() {
         <div className="foot-grid">
           <div>
             <Brand />
+            {/* The tagline, exactly as painted on the logo, with the red rule
+                it sits between there — the one place the logo's red has a
+                genuine job in the interface. */}
+            <p className="brand-tagline">{TAGLINE}</p>
             <p className="muted" style={{ marginTop: '0.75rem', maxWidth: '22rem' }}>
               A rental marketplace where every home is visited and confirmed by
               one of our field officers before it reaches you.

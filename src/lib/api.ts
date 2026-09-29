@@ -25,13 +25,15 @@ import {
   effectiveCommissionRate,
   freshnessWindowDays,
   listServiceAreaNeighbourhoods,
+  adminVerificationQueue,
   type PhotoView,
 } from '@/server/listings';
 import { findForTenant, findForOfficer, dispatchQueue, getViewingDetail, findIntroductions } from '@/server/viewings';
+import { findMandatesForLister, findMandatesForOps } from '@/server/mandates';
 import { findForParty, getDealForCaller, listDealsForOps, landlordFinancials } from '@/server/deals';
 import { isSaved, listSaved } from '@/server/saved';
 import { recentActivity } from '@/server/activity';
-import { adminUserDirectory, recentAuditEvents, recentReconciliationChecks, verificationQueue } from '@/server/ops';
+import { adminUserDirectory, recentAuditEvents, recentReconciliationChecks } from '@/server/ops';
 import { everyPostingBalances } from '@/server/ledger';
 import { resolveSession } from '@/server/auth';
 import type { SearchResponse } from './contract';
@@ -142,10 +144,12 @@ export interface QueueRow {
   listingId: string;
   propertyId: string;
   listerPartyId: string;
+  listerName: string;
   listerTier: string | null;
   neighbourhood: string;
   inServiceArea: boolean;
   verificationState: string;
+  publicationState: string;
   mandateState: string | null;
   hasAcceptedAgreement: boolean;
   blockedBy: string[];
@@ -452,6 +456,42 @@ async function resolveActivityMine() {
   if (caller.role === 'tenant') return recentActivity(caller.partyId, 'tenant');
   if (caller.role === 'lister') return recentActivity(caller.partyId, 'landlord');
   throw new ApiError(403, 'FORBIDDEN', 'activity is a tenant and landlord surface');
+}
+
+/**
+ * One mandate row, shared by the lister panel and the ops queue (Task 10-b,
+ * F-003 second half). Dates are ISO strings; `listerName`/`listerTier` are
+ * filled for the ops queue and null on a lister's own rows (they know who
+ * they are). The DECISION note is not on this shape — it lives in the audit
+ * trail.
+ */
+export interface MandateRow {
+  id: string;
+  state: string;
+  note: string | null;
+  createdAt: string;
+  decidedAt: string | null;
+  property: { id: string; landmarkText: string; neighbourhoodName: string };
+  listerName: string | null;
+  listerTier: string | null;
+}
+
+/** The signed-in lister's mandates (Task 10-b: the listing page's panel). */
+async function resolveLandlordMandates() {
+  const caller = await requireCaller();
+  if (caller.role !== 'lister') throw new ApiError(403, 'FORBIDDEN', 'landlord surface');
+  return findMandatesForLister(caller.partyId);
+}
+
+/** The ops mandate queue for one state (Task 10-b: /ops/mandates). */
+async function resolveAdminMandates(sp: URLSearchParams) {
+  const caller = await requireCaller();
+  if (caller.role !== 'admin') throw new ApiError(403, 'FORBIDDEN', 'admin surface');
+  const state = sp.get('state') ?? 'pending';
+  if (state !== 'pending' && state !== 'verified' && state !== 'rejected') {
+    throw new ApiError(400, 'VALIDATION', 'state must be pending, verified or rejected');
+  }
+  return findMandatesForOps({ state });
 }
 
 /** The admin's account directory (QA round: /ops/users). */
@@ -849,31 +889,10 @@ async function resolveLaunchGate(): Promise<LaunchGate> {
 }
 
 async function resolveVerificationQueue(): Promise<VerificationQueue> {
-  const rows = await verificationQueue();
-  return {
-    total: rows.length,
-    rows: await Promise.all(rows.map(async (r) => {
-      const property = await db.property.findUnique({
-        where: { id: r.propertyId },
-        include: { neighbourhood: true, owner: { include: { listerProfile: true } } },
-      });
-      const blockedBy: string[] = [];
-      if (property && !property.neighbourhood.inServiceArea) blockedBy.push('outside_service_area');
-      return {
-        listingId: r.id,
-        propertyId: r.propertyId,
-        listerPartyId: '',
-        listerTier: property?.owner.listerProfile?.tier ?? null,
-        neighbourhood: r.neighbourhood,
-        inServiceArea: property?.neighbourhood.inServiceArea ?? false,
-        verificationState: 'unverified',
-        mandateState: null,
-        hasAcceptedAgreement: false,
-        blockedBy,
-        createdAt: r.createdAt.toISOString(),
-      };
-    })),
-  };
+  const caller = await requireCaller();
+  if (caller.role !== 'admin') throw new ApiError(403, 'FORBIDDEN', 'admin surface');
+  const rows = await adminVerificationQueue();
+  return { total: rows.length, rows };
 }
 
 async function resolveDealStates(): Promise<DealStates> {
@@ -988,6 +1007,11 @@ function resolverFor(path: string, authenticated: boolean): Resolver {
   if (parts[1] === 'deals' && parts.length === 2) return () => resolvePartyDeals();
   if (parts[1] === 'deals' && parts.length === 3) return () => resolveDealDetail(parts[2]);
   if (parts[1] === 'landlord' && parts[2] === 'financials') return () => resolveLandlordFinancials();
+  // Task 10-b (additive): the mandate flow's reads. The decision POST is a
+  // mutation and belongs to its route handler (which calls the service
+  // directly), never to this GET-only dispatcher.
+  if (parts[1] === 'landlord' && parts[2] === 'mandates') return () => resolveLandlordMandates();
+  if (parts[1] === 'admin' && parts[2] === 'mandates') return () => resolveAdminMandates(u.searchParams);
   if (parts[1] === 'admin' && parts[2] === 'launch-gate') return () => resolveLaunchGate();
   if (parts[1] === 'admin' && parts[2] === 'verification-queue') return () => resolveVerificationQueue();
   if (parts[1] === 'admin' && parts[2] === 'users') return () => resolveAdminUsers(u.searchParams);

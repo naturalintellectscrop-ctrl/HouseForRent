@@ -1,0 +1,671 @@
+     1→/**
+     2→ * Properties, listings, the publish gate and the public search feed.
+     3→ *
+     4→ * Ported from apps/api/src/{listings,search,taxonomy}. The non-negotiables
+     5→ * carry over unchanged:
+     6→ *  - The public feed means: publicationState=live, verificationState=
+     7→ *    verified, neighbourhood.inServiceArea. Filters only ever narrow.
+     8→ *  - Publication requires ALL FOUR gates: field verification, corridor,
+     9→ *    accepted agreement, verified mandate for non-owner tiers.
+    10→ *  - Staleness is COMPUTED against the configured window, never stored.
+    11→ *  - `blockedBy` for a lister's inventory is computed HERE, so the landlord
+    12→ *    UI cannot hold its own opinion of what publishing requires.
+    13→ *  - Search free-text covers neighbourhood + landmark ONLY — a lister
+    14→ *    cannot buy relevance by stuffing their description.
+    15→ */
+    16→import { db } from '@/lib/db';
+    17→import type { Prisma } from '@prisma/client';
+    18→import { LISTER_TIERS, type ListerTier, type PropertyType } from './domain';
+    19→
+    20→// ── config (freshness window) ────────────────────────────────────────────
+    21→
+    22→const DEFAULT_FRESHNESS_DAYS = 14;
+    23→
+    24→export async function freshnessWindowDays(): Promise<number> {
+    25→  const row = await db.configParameter.findUnique({ where: { key: 'freshness_window_days' } });
+    26→  const parsed = row ? parseInt(row.value, 10) : NaN;
+    27→  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_FRESHNESS_DAYS;
+    28→}
+    29→
+    30→export async function setConfigParameter(params: { key: string; value: string; valueType: string; changedBy: string }) {
+    31→  const existing = await db.configParameter.findUnique({ where: { key: params.key } });
+    32→  if (existing) {
+    33→    const [updated] = await db.$transaction([
+    34→      db.configParameter.update({ where: { key: params.key }, data: { value: params.value, valueType: params.valueType } }),
+    35→      db.configVersion.create({
+    36→        data: { parameterId: existing.id, value: params.value, changedBy: params.changedBy },
+    37→      }),
+    38→    ]);
+    39→    return updated;
+    40→  }
+    41→  const created = await db.configParameter.create({
+    42→    data: { key: params.key, value: params.value, valueType: params.valueType },
+    43→  });
+    44→  await db.configVersion.create({
+    45→    data: { parameterId: created.id, value: params.value, changedBy: params.changedBy },
+    46→  });
+    47→  return created;
+    48→}
+    49→
+    50→// ── freshness ────────────────────────────────────────────────────────────
+    51→
+    52→export interface WithFreshness<T extends { availabilityConfirmedAt: Date | null }> {
+    53→  item: T;
+    54→  isStale: boolean;
+    55→  daysSinceConfirmed: number | null;
+    56→}
+    57→
+    58→/**
+    59→ * Staleness is computed, not stored (FR-2.3). A listing whose availability
+    60→ * was never confirmed is treated as stale — absence of evidence is not
+    61→ * evidence of availability.
+    62→ */
+    63→export function withFreshness<T extends { availabilityConfirmedAt: Date | null }>(
+    64→  listing: T,
+    65→  windowDays: number,
+    66→  asOf: Date = new Date(),
+    67→): WithFreshness<T> {
+    68→  if (!listing.availabilityConfirmedAt) {
+    69→    return { item: listing, isStale: true, daysSinceConfirmed: null };
+    70→  }
+    71→  const elapsedMs = asOf.getTime() - listing.availabilityConfirmedAt.getTime();
+    72→  const daysSinceConfirmed = Math.floor(elapsedMs / (24 * 60 * 60 * 1000));
+    73→  return { item: listing, isStale: daysSinceConfirmed > windowDays, daysSinceConfirmed };
+    74→}
+    75→
+    76→// ── photos ───────────────────────────────────────────────────────────────
+    77→
+    78→export interface PhotoView {
+    79→  id: string;
+    80→  mediaAssetId: string;
+    81→  url: string;
+    82→  caption: string | null;
+    83→  sortOrder: number;
+    84→  /** Server-asserted provenance. The client renders the label; it never decides it. */
+    85→  source: string;
+    86→  isFieldVerified: boolean;
+    87→  isDevelopmentFixture: boolean;
+    88→}
+    89→
+    90→/** Same-origin media route (sandbox); the real deployment serves from the API host. */
+    91→export function photoToView(p: { id: string; mediaAssetId: string; position: number; asset: { source: string } }): PhotoView {
+    92→  return {
+    93→    id: p.id,
+    94→    mediaAssetId: p.mediaAssetId,
+    95→    url: `/api/v1/media/${p.mediaAssetId}`,
+    96→    caption: null,
+    97→    sortOrder: p.position,
+    98→    source: p.asset.source,
+    99→    isFieldVerified: p.asset.source === 'field_officer',
+   100→    isDevelopmentFixture: p.asset.source === 'development_fixture',
+   101→  };
+   102→}
+   103→
+   104→// ── public search ────────────────────────────────────────────────────────
+   105→
+   106→export interface SearchFilters {
+   107→  neighbourhoodIds?: string[];
+   108→  minRent?: bigint;
+   109→  maxRent?: bigint;
+   110→  bedrooms?: number;
+   111→  furnished?: string;
+   112→  propertyType?: PropertyType;
+   113→  q?: string;
+   114→  includeStale?: boolean;
+   115→  sort?: 'fresh' | 'rent_asc' | 'rent_desc' | 'newest';
+   116→  limit?: number;
+   117→  offset?: number;
+   118→}
+   119→
+   120→export interface SearchResult {
+   121→  listingId: string;
+   122→  propertyId: string;
+   123→  monthlyRent: string;
+   124→  requiredMonthsUpfront: number;
+   125→  depositAmount: string;
+   126→  bedrooms: number;
+   127→  bathrooms: number;
+   128→  propertyType: string;
+   129→  furnished: string;
+   130→  neighbourhoodName: string;
+   131→  landmarkText: string;
+   132→  isVerified: boolean;
+   133→  isStale: boolean;
+   134→  daysSinceConfirmed: number | null;
+   135→  photos: PhotoView[];
+   136→  /** Always true in V1 — tenants never pay (Decision 3). */
+   137→  freeForTenants: boolean;
+   138→}
+   139→
+   140→export interface SearchResponse {
+   141→  results: SearchResult[];
+   142→  totalCount: number;
+   143→  limit: number;
+   144→  offset: number;
+   145→  /** An honest message when there is little or nothing to show (FR-4.4). */
+   146→  emptyStateMessage: string | null;
+   147→}
+   148→
+   149→const DEFAULT_LIMIT = 24;
+   150→const MAX_LIMIT = 60;
+   151→
+   152→/**
+   153→ * Corridor-scoped tenant search (FR-4.1). The three NON-NEGOTIABLE
+   154→ * constraints are applied regardless of filters — they are what the public
+   155→ * feed MEANS. `filters` only narrows.
+   156→ */
+   157→export async function publicSearch(filters: SearchFilters = {}, asOf: Date = new Date()): Promise<SearchResponse> {
+   158→  const now = asOf;
+   159→  const windowDays = await freshnessWindowDays();
+   160→  const staleCutoff = new Date(now.getTime() - windowDays * 24 * 60 * 60 * 1000);
+   161→
+   162→  const where: Prisma.ListingWhereInput = {
+   163→    publicationState: 'live',
+   164→    verificationState: 'verified',
+   165→    property: { neighbourhood: { inServiceArea: true } },
+   166→    // Stale listings leave search rather than quietly becoming a wasted trip.
+   167→    availabilityConfirmedAt: filters.includeStale ? undefined : { gte: staleCutoff },
+   168→    availabilityStatus: 'available',
+   169→    ...(filters.neighbourhoodIds?.length
+   170→      ? { property: { neighbourhood: { inServiceArea: true, id: { in: filters.neighbourhoodIds } } } }
+   171→      : {}),
+   172→    ...(filters.minRent !== undefined || filters.maxRent !== undefined
+   173→      ? { monthlyRent: { gte: filters.minRent, lte: filters.maxRent } }
+   174→      : {}),
+   175→    ...(filters.bedrooms !== undefined ? { property: { bedrooms: filters.bedrooms } } : {}),
+   176→    ...(filters.furnished ? { property: { furnished: filters.furnished } } : {}),
+   177→    ...(filters.propertyType ? { property: { propertyType: filters.propertyType } } : {}),
+   178→  };
+   179→
+   180→  if (filters.q) {
+   181→    const q = filters.q.trim();
+   182→    if (q) {
+   183→      where.OR = [
+   184→        { property: { neighbourhood: { name: { contains: q } } } },
+   185→        { property: { neighbourhood: { district: { contains: q } } } },
+   186→        { property: { landmarkText: { contains: q } } },
+   187→      ];
+   188→    }
+   189→  }
+   190→
+   191→  const limit = Math.min(filters.limit ?? DEFAULT_LIMIT, MAX_LIMIT);
+   192→  const offset = filters.offset ?? 0;
+   193→
+   194→  const orderBy: Prisma.ListingOrderByWithRelationInput =
+   195→    filters.sort === 'rent_asc'
+   196→      ? { monthlyRent: 'asc' }
+   197→      : filters.sort === 'rent_desc'
+   198→        ? { monthlyRent: 'desc' }
+   199→        : filters.sort === 'newest'
+   200→          ? { createdAt: 'desc' }
+   201→          : { availabilityConfirmedAt: 'desc' }; // fresh first — a wasted trip is THE failure
+   202→
+   203→  const [rows, totalCount] = await Promise.all([
+   204→    db.listing.findMany({
+   205→      where,
+   206→      orderBy,
+   207→      take: limit,
+   208→      skip: offset,
+   209→      include: {
+   210→        property: { include: { neighbourhood: true } },
+   211→        photos: { orderBy: { position: 'asc' }, include: { asset: true } },
+   212→      },
+   213→    }),
+   214→    db.listing.count({ where }),
+   215→  ]);
+   216→
+   217→  const results: SearchResult[] = rows.map((l) => {
+   218→    const f = withFreshness(l, windowDays, now);
+   219→    return {
+   220→      listingId: l.id,
+   221→      propertyId: l.propertyId,
+   222→      monthlyRent: l.monthlyRent.toString(),
+   223→      requiredMonthsUpfront: l.requiredMonthsUpfront,
+   224→      depositAmount: l.depositAmount.toString(),
+   225→      bedrooms: l.property.bedrooms,
+   226→      bathrooms: l.property.bathrooms,
+   227→      propertyType: l.property.propertyType,
+   228→      furnished: l.property.furnished,
+   229→      neighbourhoodName: l.property.neighbourhood.name,
+   230→      landmarkText: l.property.landmarkText,
+   231→      isVerified: l.verificationState === 'verified',
+   232→      isStale: f.isStale,
+   233→      daysSinceConfirmed: f.daysSinceConfirmed,
+   234→      photos: l.photos.map(photoToView),
+   235→      freeForTenants: true,
+   236→    };
+   237→  });
+   238→
+   239→  const emptyStateMessage =
+   240→    totalCount === 0
+   241→      ? 'No homes match this search right now. House For Rent publishes only homes our officers have visited and confirmed available — a short list somebody stood inside is the product. New verified homes appear as field visits are completed.'
+   242→      : totalCount < 5
+   243→        ? 'Only a few homes are live in this corridor at the moment. Every one of them has been visited and confirmed by a field officer — that verification is what takes time.'
+   244→        : null;
+   245→
+   246→  return { results, totalCount, limit, offset, emptyStateMessage };
+   247→}
+   248→
+   249→/** Public detail. Reuses the feed's visibility rules — no separate opinion. */
+   250→export async function publicDetail(listingId: string, asOf: Date = new Date()) {
+   251→  const windowDays = await freshnessWindowDays();
+   252→  const l = await db.listing.findUnique({
+   253→    where: { id: listingId },
+   254→    include: {
+   255→      property: { include: { neighbourhood: true, owner: { select: { displayName: true } } } },
+   256→      photos: { orderBy: { position: 'asc' }, include: { asset: true } },
+   257→      listingAmenities: { include: { amenity: true } },
+   258→    },
+   259→  });
+   260→  if (!l) return null;
+   261→  if (l.publicationState !== 'live' || l.verificationState !== 'verified') return null;
+   262→  if (!l.property.neighbourhood.inServiceArea) return null;
+   263→
+   264→  const f = withFreshness(l, windowDays, asOf);
+   265→  return {
+   266→    listingId: l.id,
+   267→    propertyId: l.propertyId,
+   268→    monthlyRent: l.monthlyRent.toString(),
+   269→    requiredMonthsUpfront: l.requiredMonthsUpfront,
+   270→    depositAmount: l.depositAmount.toString(),
+   271→    /** The server-stated total a tenant will be asked to fund — derived from
+   272→     * the same terms fund-escrow derives its authoritative amount from (F-012). */
+   273→    expectedUpfront: (l.monthlyRent * BigInt(l.requiredMonthsUpfront) + l.depositAmount).toString(),
+   274→    bedrooms: l.property.bedrooms,
+   275→    bathrooms: l.property.bathrooms,
+   276→    propertyType: l.property.propertyType,
+   277→    furnished: l.property.furnished,
+   278→    neighbourhoodName: l.property.neighbourhood.name,
+   279→    neighbourhoodDistrict: l.property.neighbourhood.district,
+   280→    landmarkText: l.property.landmarkText,
+   281→    streetAddress: l.property.streetAddress,
+   282→    descriptionText: l.descriptionText,
+   283→    isVerified: l.verificationState === 'verified',
+   284→    isStale: f.isStale,
+   285→    daysSinceConfirmed: f.daysSinceConfirmed,
+   286→    availabilityConfirmedAt: l.availabilityConfirmedAt,
+   287→    amenities: l.listingAmenities.map((a) => a.amenity.name),
+   288→    photos: l.photos.map(photoToView),
+   289→    listerDisplayName: l.property.owner.displayName,
+   290→    freeForTenants: true,
+   291→  };
+   292→}
+   293→
+   294→// ── landlord authorship (F-003) ──────────────────────────────────────────
+   295→
+   296→export class NeighbourhoodNotFoundError extends Error {
+   297→  constructor(id: string) {
+   298→    super(`neighbourhood ${id} not found`);
+   299→    this.name = 'NeighbourhoodNotFoundError';
+   300→  }
+   301→}
+   302→
+   303→/** Creates the property + its first listing terms, authored by the landlord. */
+   304→export async function createPropertyWithListing(params: {
+   305→  ownerPartyId: string;
+   306→  propertyType: PropertyType;
+   307→  bedrooms: number;
+   308→  bathrooms: number;
+   309→  furnished: string;
+   310→  neighbourhoodId: string;
+   311→  landmarkText: string;
+   312→  streetAddress?: string;
+   313→  monthlyRent: bigint;
+   314→  requiredMonthsUpfront: number;
+   315→  depositAmount: bigint;
+   316→  descriptionText?: string;
+   317→}) {
+   318→  const neighbourhood = await db.neighbourhood.findUnique({ where: { id: params.neighbourhoodId } });
+   319→  if (!neighbourhood) throw new NeighbourhoodNotFoundError(params.neighbourhoodId);
+   320→
+   321→  return db.$transaction(async (tx) => {
+   322→    const property = await tx.property.create({
+   323→      data: {
+   324→        ownerPartyId: params.ownerPartyId,
+   325→        propertyType: params.propertyType,
+   326→        bedrooms: params.bedrooms,
+   327→        bathrooms: params.bathrooms,
+   328→        furnished: params.furnished,
+   329→        neighbourhoodId: params.neighbourhoodId,
+   330→        landmarkText: params.landmarkText,
+   331→        streetAddress: params.streetAddress,
+   332→      },
+   333→    });
+   334→    const listing = await tx.listing.create({
+   335→      data: {
+   336→        propertyId: property.id,
+   337→        monthlyRent: params.monthlyRent,
+   338→        requiredMonthsUpfront: params.requiredMonthsUpfront,
+   339→        depositAmount: params.depositAmount,
+   340→        descriptionText: params.descriptionText,
+   341→      },
+   342→    });
+   343→    // Drafting the listing also drafts its agreement for acceptance.
+   344→    await draftAgreement(tx, listing.id, params.ownerPartyId, params.monthlyRent);
+   345→    return { property, listing };
+   346→  });
+   347→}
+   348→
+   349→/** Drafts the listing agreement at the currently-effective commission rate. */
+   350→async function draftAgreement(
+   351→  tx: Parameters<Parameters<typeof db.$transaction>[0]>[0],
+   352→  listingId: string,
+   353→  listerPartyId: string,
+   354→  monthlyRent: bigint,
+   355→) {
+   356→  const rate = await effectiveCommissionRate();
+   357→  return tx.listingAgreement.create({
+   358→    data: {
+   359→      listingId,
+   360→      listerPartyId,
+   361→      commissionRateVersionId: rate.id,
+   362→      monthlyRentAtSigning: monthlyRent,
+   363→    },
+   364→  });
+   365→}
+   366→
+   367→export async function effectiveCommissionRate(asOf: Date = new Date()) {
+   368→  const versions = await db.commissionRateVersion.findMany({
+   369→    orderBy: { effectiveFrom: 'desc' },
+   370→  });
+   371→  const current =
+   372→    versions.find((v) => v.effectiveFrom.getTime() <= asOf.getTime() && (!v.effectiveTo || v.effectiveTo.getTime() > asOf.getTime())) ??
+   373→    versions[0];
+   374→  if (!current) {
+   375→    return db.commissionRateVersion.create({
+   376→      data: { rateBp: 10000, effectiveFrom: new Date('2026-01-01') },
+   377→    });
+   378→  }
+   379→  return current;
+   380→}
+   381→
+   382→export class NotYourListingError extends Error {
+   383→  constructor() {
+   384→    super('you do not act on a listing you do not own (F-016: role membership is not ownership)');
+   385→    this.name = 'NotYourListingError';
+   386→  }
+   387→}
+   388→
+   389→/** The landlord accepts the agreement: commission terms + circumvention clause. */
+   390→export async function acceptAgreement(params: { listingId: string; listerPartyId: string }) {
+   391→  const listing = await db.listing.findUnique({ where: { id: params.listingId }, include: { property: true } });
+   392→  if (!listing) throw new Error('listing not found');
+   393→  if (listing.property.ownerPartyId !== params.listerPartyId) throw new NotYourListingError();
+   394→
+   395→  const agreement = await db.listingAgreement.findFirst({
+   396→    where: { listingId: params.listingId, listerPartyId: params.listerPartyId, accepted: false },
+   397→    orderBy: { createdAt: 'desc' },
+   398→  });
+   399→  if (!agreement) throw new Error('no draft agreement to accept');
+   400→
+   401→  return db.listingAgreement.update({
+   402→    where: { id: agreement.id },
+   403→    data: { accepted: true, acceptedAt: new Date() },
+   404→  });
+   405→}
+   406→
+   407→export class UnverifiedListingError extends Error {
+   408→  constructor(listingId: string) {
+   409→    super(`listing ${listingId} is not field-verified yet`);
+   410→    this.name = 'UnverifiedListingError';
+   411→  }
+   412→}
+   413→export class OutsideServiceAreaError extends Error {
+   414→  constructor(listingId: string) {
+   415→    super(`listing ${listingId}: the neighbourhood is outside the launch corridor`);
+   416→    this.name = 'OutsideServiceAreaError';
+   417→  }
+   418→}
+   419→export class MissingMandateError extends Error {
+   420→  constructor(listingId: string) {
+   421→    super(
+   422→      `listing ${listingId}: a broker or management company needs a verified ` +
+   423→        'mandate for this specific property before publishing',
+   424→    );
+   425→    this.name = 'MissingMandateError';
+   426→  }
+   427→}
+   428→
+   429→async function canPublish(params: { listerTier: ListerTier; listerPartyId: string; propertyId: string }) {
+   430→  if (params.listerTier === 'property_owner') return true;
+   431→  const mandate = await db.propertyMandate.findFirst({
+   432→    where: { propertyId: params.propertyId, listerPartyId: params.listerPartyId, state: 'verified' },
+   433→  });
+   434→  return Boolean(mandate);
+   435→}
+   436→
+   437→/**
+   438→ * The ONE implementation of "what stands between this listing and the live
+   439→ * feed" (the publish gate, expressed as blocker codes). evaluatePublish,
+   440→ * findForLister and the admin verification queue all call this — three
+   441→ * surfaces, one opinion. `mandateVerified` is resolved by the caller (it
+   442→ * needs a (lister, property) query only for non-owner tiers).
+   443→ */
+   444→function publishBlockers(input: {
+   445→  verificationState: string;
+   446→  inServiceArea: boolean;
+   447→  hasAcceptedAgreement: boolean;
+   448→  listerTier: ListerTier | undefined;
+   449→  mandateVerified: boolean;
+   450→}): string[] {
+   451→  const blockedBy: string[] = [];
+   452→  if (input.verificationState !== 'verified') blockedBy.push('field_verification');
+   453→  if (!input.inServiceArea) blockedBy.push('outside_service_area');
+   454→  if (input.listerTier && input.listerTier !== 'property_owner' && !input.mandateVerified) {
+   455→    blockedBy.push('mandate');
+   456→  }
+   457→  if (!input.hasAcceptedAgreement) blockedBy.push('listing_agreement');
+   458→  return blockedBy;
+   459→}
+   460→
+   461→/**
+   462→ * THE publish gate — all four preconditions enforced server-side (FR-2.5,
+   463→ * FR-3.1, FR-3.2, FR-9.1). `dryRun` produces the same evaluation without
+   464→ * flipping state, so the landlord UI can show what is still missing.
+   465→ */
+   466→export async function evaluatePublish(listingId: string, dryRun = true) {
+   467→  const listing = await db.listing.findUnique({
+   468→    where: { id: listingId },
+   469→    include: {
+   470→      property: { include: { neighbourhood: true, owner: { include: { listerProfile: true } } } },
+   471→      listingAgreements: { where: { accepted: true }, take: 1 },
+   472→    },
+   473→  });
+   474→  if (!listing) throw new Error('listing not found');
+   475→
+   476→  const tier = listing.property.owner.listerProfile?.tier as ListerTier | undefined;
+   477→  const mandateVerified = tier
+   478→    ? await canPublish({ listerTier: tier, listerPartyId: listing.property.ownerPartyId, propertyId: listing.propertyId })
+   479→    : true;
+   480→  const blockedBy = publishBlockers({
+   481→    verificationState: listing.verificationState,
+   482→    inServiceArea: listing.property.neighbourhood.inServiceArea,
+   483→    hasAcceptedAgreement: listing.listingAgreements.length > 0,
+   484→    listerTier: tier,
+   485→    mandateVerified,
+   486→  });
+   487→
+   488→  if (!dryRun && blockedBy.length === 0) {
+   489→    await db.$transaction(async (tx) => {
+   490→      await tx.listing.update({ where: { id: listingId }, data: { publicationState: 'live' } });
+   491→      await tx.auditEvent.create({
+   492→        data: {
+   493→          actorPartyId: listing.property.ownerPartyId,
+   494→          actorRole: 'lister',
+   495→          action: 'listing_published',
+   496→          entityType: 'listing',
+   497→          entityId: listing.id,
+   498→          detail: JSON.stringify({ publicationState: 'live', agreementId: listing.listingAgreements[0].id }),
+   499→        },
+   500→      });
+   501→    });
+   502→  }
+   503→
+   504→  return { blockedBy, canPublish: blockedBy.length === 0 };
+   505→}
+   506→
+   507→/** The landlord publishes (only after the gate passes). */
+   508→export async function publishListing(params: { listingId: string; listerPartyId: string }) {
+   509→  const listing = await db.listing.findUnique({ where: { id: params.listingId }, include: { property: true } });
+   510→  if (!listing) throw new Error('listing not found');
+   511→  if (listing.property.ownerPartyId !== params.listerPartyId) throw new NotYourListingError();
+   512→
+   513→  const result = await evaluatePublish(params.listingId, false);
+   514→  if (!result.canPublish) {
+   515→    throw new Error(`listing cannot be published: blocked by ${result.blockedBy.join(', ')}`);
+   516→  }
+   517→  return db.listing.findUnique({ where: { id: params.listingId } });
+   518→}
+   519→
+   520→export async function withdrawListing(params: { listingId: string; listerPartyId: string }) {
+   521→  const listing = await db.listing.findUnique({ where: { id: params.listingId }, include: { property: true } });
+   522→  if (!listing) throw new Error('listing not found');
+   523→  if (listing.property.ownerPartyId !== params.listerPartyId) throw new NotYourListingError();
+   524→  return db.listing.update({ where: { id: params.listingId }, data: { publicationState: 'withdrawn' } });
+   525→}
+   526→
+   527→/**
+   528→ * A lister's own inventory, with what each listing is waiting on.
+   529→ * `blockedBy` is computed HERE (see module header).
+   530→ */
+   531→export async function findForLister(listerPartyId: string) {
+   532→  const listings = await db.listing.findMany({
+   533→    where: { property: { ownerPartyId: listerPartyId } },
+   534→    include: {
+   535→      property: { include: { neighbourhood: true } },
+   536→      listingAgreements: { orderBy: { createdAt: 'desc' } },
+   537→      photos: { orderBy: { position: 'asc' }, include: { asset: true } },
+   538→    },
+   539→    orderBy: { createdAt: 'desc' },
+   540→  });
+   541→
+   542→  const tier = (await db.listerProfile.findUnique({ where: { partyId: listerPartyId } }))?.tier;
+   543→
+   544→  return Promise.all(
+   545→    listings.map(async (listing) => {
+   546→      const tierCast = tier as ListerTier | undefined;
+   547→      const mandateVerified = tierCast
+   548→        ? await canPublish({ listerTier: tierCast, listerPartyId, propertyId: listing.propertyId })
+   549→        : true;
+   550→      const blockedBy = publishBlockers({
+   551→        verificationState: listing.verificationState,
+   552→        inServiceArea: listing.property.neighbourhood.inServiceArea,
+   553→        hasAcceptedAgreement: listing.listingAgreements.some((a) => a.accepted),
+   554→        listerTier: tierCast,
+   555→        mandateVerified,
+   556→      });
+   557→      const accepted = listing.listingAgreements.find((a) => a.accepted);
+   558→
+   559→      return {
+   560→        id: listing.id,
+   561→        propertyId: listing.propertyId,
+   562→        monthlyRent: listing.monthlyRent.toString(),
+   563→        depositAmount: listing.depositAmount.toString(),
+   564→        requiredMonthsUpfront: listing.requiredMonthsUpfront,
+   565→        bedrooms: listing.property.bedrooms,
+   566→        bathrooms: listing.property.bathrooms,
+   567→        neighbourhoodName: listing.property.neighbourhood.name,
+   568→        landmarkText: listing.property.landmarkText,
+   569→        verificationState: listing.verificationState,
+   570→        publicationState: listing.publicationState,
+   571→        availabilityStatus: listing.availabilityStatus,
+   572→        availabilityConfirmedAt: listing.availabilityConfirmedAt,
+   573→        hasAcceptedAgreement: Boolean(accepted),
+   574→        agreementId: accepted?.id ?? null,
+   575→        agreementAcceptedAt: accepted?.acceptedAt ?? null,
+   576→        commissionRateBp: accepted?.commissionRateVersionId
+   577→          ? (await db.commissionRateVersion.findUnique({ where: { id: accepted.commissionRateVersionId } }))?.rateBp ?? null
+   578→          : null,
+   579→        photos: listing.photos.map(photoToView),
+   580→        blockedBy,
+   581→        canPublish: blockedBy.length === 0,
+   582→      };
+   583→    }),
+   584→  );
+   585→}
+   586→
+   587→/** Listing detail for the landlord console (their own only). */
+   588→export async function getListingForLister(listingId: string, listerPartyId: string) {
+   589→  const all = await findForLister(listerPartyId);
+   590→  return all.find((l) => l.id === listingId) ?? null;
+   591→}
+   592→
+   593→/**
+   594→ * FR-10.2 — the admin verification queue: every listing not yet live (and
+   595→ * not withdrawn), with what each is actually waiting on.
+   596→ *
+   597→ * The previous implementation hard-coded `verificationState: 'unverified'`,
+   598→ * `mandateState: null` and `hasAcceptedAgreement: false` — so the console
+   599→ * showed a mandate column that could never hold a value and a queue that
+   600→ * could never name its real blockers. This version reads the states and
+   601→ * computes `blockedBy` through the same `publishBlockers` gate the publish
+   602→ * endpoint enforces, so the console and the gate cannot disagree.
+   603→ */
+   604→export async function adminVerificationQueue() {
+   605→  const listings = await db.listing.findMany({
+   606→    where: { publicationState: { in: ['draft', 'awaiting_verification'] } },
+   607→    include: {
+   608→      property: { include: { neighbourhood: true, owner: { include: { listerProfile: true } } } },
+   609→      listingAgreements: { where: { accepted: true }, take: 1 },
+   610→    },
+   611→    orderBy: { createdAt: 'asc' },
+   612→  });
+   613→
+   614→  return Promise.all(
+   615→    listings.map(async (listing) => {
+   616→      const tier = listing.property.owner.listerProfile?.tier as ListerTier | undefined;
+   617→      const mandateVerified = tier
+   618→        ? await canPublish({ listerTier: tier, listerPartyId: listing.property.ownerPartyId, propertyId: listing.propertyId })
+   619→        : true;
+   620→      const blockedBy = publishBlockers({
+   621→        verificationState: listing.verificationState,
+   622→        inServiceArea: listing.property.neighbourhood.inServiceArea,
+   623→        hasAcceptedAgreement: listing.listingAgreements.length > 0,
+   624→        listerTier: tier,
+   625→        mandateVerified,
+   626→      });
+   627→      const mandate = tier && tier !== 'property_owner'
+   628→        ? await db.propertyMandate.findFirst({
+   629→            where: { propertyId: listing.propertyId, listerPartyId: listing.property.ownerPartyId },
+   630→            orderBy: { createdAt: 'desc' },
+   631→          })
+   632→        : null;
+   633→
+   634→      return {
+   635→        listingId: listing.id,
+   636→        propertyId: listing.propertyId,
+   637→        listerPartyId: listing.property.ownerPartyId,
+   638→        listerName: listing.property.owner.displayName,
+   639→        listerTier: tier ?? null,
+   640→        neighbourhood: listing.property.neighbourhood.name,
+   641→        inServiceArea: listing.property.neighbourhood.inServiceArea,
+   642→        verificationState: listing.verificationState,
+   643→        publicationState: listing.publicationState,
+   644→        mandateState: mandate?.state ?? null,
+   645→        hasAcceptedAgreement: listing.listingAgreements.length > 0,
+   646→        blockedBy,
+   647→        createdAt: listing.createdAt.toISOString(),
+   648→      };
+   649→    }),
+   650→  );
+   651→}
+   652→
+   653→// ── taxonomy ─────────────────────────────────────────────────────────────
+   654→
+   655→export async function listNeighbourhoods() {
+   656→  return db.neighbourhood.findMany({ orderBy: [{ district: 'asc' }, { name: 'asc' }] });
+   657→}
+   658→
+   659→export async function listServiceAreaNeighbourhoods() {
+   660→  return db.neighbourhood.findMany({ where: { inServiceArea: true }, orderBy: { name: 'asc' } });
+   661→}
+   662→
+   663→/** F-015: neighbourhoods are creatable through the API by staff. */
+   664→export async function createNeighbourhood(params: { name: string; district: string; inServiceArea?: boolean; latitude?: number; longitude?: number }) {
+   665→  return db.neighbourhood.create({ data: params });
+   666→}
+   667→
+   668→export async function listAmenities() {
+   669→  return db.amenity.findMany({ orderBy: { name: 'asc' } });
+   670→}
+   671→

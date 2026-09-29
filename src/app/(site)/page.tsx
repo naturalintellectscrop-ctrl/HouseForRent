@@ -5,7 +5,7 @@ import { Icon, PropertyCard } from '@/app/ui';
 export const metadata = {
   title: 'House For Rent — verified homes to rent in Kampala',
   description:
-    'Every home is visited and confirmed in person by a House For Rent field officer before it reaches you. Free for tenants, in Kampala and Wakiso.',
+    'Find your next home with ease — every home is visited and confirmed in person by a House For Rent field officer before it reaches you. Free for tenants, in Kampala and Wakiso.',
 };
 
 /**
