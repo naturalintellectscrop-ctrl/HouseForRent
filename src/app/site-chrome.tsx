@@ -120,6 +120,7 @@ export function SiteFooter() {
           <div className="foot-col">
             <h3>Tenants</h3>
             <Link href="/properties">Browse homes</Link>
+            <Link href="/areas">Areas we cover</Link>
             <Link href="/how-it-works">How it works</Link>
             <Link href="/register?role=tenant">Create an account</Link>
           </div>

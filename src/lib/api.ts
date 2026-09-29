@@ -28,7 +28,7 @@ import {
   type PhotoView,
 } from '@/server/listings';
 import { findForTenant, findForOfficer, dispatchQueue, getViewingDetail, findIntroductions } from '@/server/viewings';
-import { findForParty, getDealForCaller, listDealsForOps } from '@/server/deals';
+import { findForParty, getDealForCaller, listDealsForOps, landlordFinancials } from '@/server/deals';
 import { isSaved, listSaved } from '@/server/saved';
 import { recentActivity } from '@/server/activity';
 import { adminUserDirectory, recentAuditEvents, recentReconciliationChecks, verificationQueue } from '@/server/ops';
@@ -432,6 +432,18 @@ async function resolveSavedListings() {
   const caller = await requireCaller();
   if (caller.role !== 'tenant') throw new ApiError(403, 'FORBIDDEN', 'tenant surface');
   return listSaved(caller.partyId);
+}
+
+/**
+ * The signed-in landlord's money position (QA round: /landlord/earnings).
+ * The aggregation is the server's — the page renders what arrives and adds
+ * no arithmetic of its own (CLAUDE.md §5: the browser never computes
+ * business value).
+ */
+async function resolveLandlordFinancials() {
+  const caller = await requireCaller();
+  if (caller.role !== 'lister') throw new ApiError(403, 'FORBIDDEN', 'landlord surface');
+  return landlordFinancials(caller.partyId);
 }
 
 /** The signed-in party's recent real events (QA round: activity feed). */
@@ -975,6 +987,7 @@ function resolverFor(path: string, authenticated: boolean): Resolver {
   if (parts[1] === 'activity' && parts[2] === 'mine') return () => resolveActivityMine();
   if (parts[1] === 'deals' && parts.length === 2) return () => resolvePartyDeals();
   if (parts[1] === 'deals' && parts.length === 3) return () => resolveDealDetail(parts[2]);
+  if (parts[1] === 'landlord' && parts[2] === 'financials') return () => resolveLandlordFinancials();
   if (parts[1] === 'admin' && parts[2] === 'launch-gate') return () => resolveLaunchGate();
   if (parts[1] === 'admin' && parts[2] === 'verification-queue') return () => resolveVerificationQueue();
   if (parts[1] === 'admin' && parts[2] === 'users') return () => resolveAdminUsers(u.searchParams);

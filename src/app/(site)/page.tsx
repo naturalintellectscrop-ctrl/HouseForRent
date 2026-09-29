@@ -214,8 +214,19 @@ export default async function HomePage() {
                   <span className="faint num">{area.liveListingCount}</span>
                 </Link>
               ))}
+              <Link href="/areas" className="chip">
+                All areas
+                <Icon.arrow size={14} />
+              </Link>
             </div>
-          ) : null}
+          ) : (
+            <div className="chiprow">
+              <Link href="/areas" className="chip">
+                See the areas we cover
+                <Icon.arrow size={14} />
+              </Link>
+            </div>
+          )}
         </div>
       </section>
 

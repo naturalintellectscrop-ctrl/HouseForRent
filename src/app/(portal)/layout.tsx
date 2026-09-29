@@ -40,6 +40,8 @@ export default async function PortalLayout({
                 <Link href="/landlord">Portfolio</Link>
                 <Link href="/landlord/properties/new">Add a property</Link>
                 <Link href="/landlord/deals">Lettings</Link>
+                <Link href="/landlord/earnings">Earnings</Link>
+                <Link href="/landlord/security">Security</Link>
               </>
             ) : (
               <>
@@ -47,6 +49,7 @@ export default async function PortalLayout({
                 <Link href="/account/saved">Saved homes</Link>
                 <Link href="/account/viewings">Viewings</Link>
                 <Link href="/account/deals">My tenancy</Link>
+                <Link href="/account/security">Security</Link>
                 <Link href="/properties">Browse homes</Link>
               </>
             )}
@@ -83,6 +86,8 @@ export default async function PortalLayout({
                   <Link href="/landlord">Portfolio</Link>
                   <Link href="/landlord/properties/new">Add a property</Link>
                   <Link href="/landlord/deals">Lettings</Link>
+                  <Link href="/landlord/earnings">Earnings</Link>
+                  <Link href="/landlord/security">Security</Link>
                 </>
               ) : isTenant ? (
                 <>
@@ -90,6 +95,7 @@ export default async function PortalLayout({
                   <Link href="/account/saved">Saved homes</Link>
                   <Link href="/account/viewings">Viewings</Link>
                   <Link href="/account/deals">My tenancy</Link>
+                  <Link href="/account/security">Security</Link>
                   <Link href="/properties">Browse homes</Link>
                 </>
               ) : (
@@ -97,6 +103,7 @@ export default async function PortalLayout({
                   <Link href="/account">Overview</Link>
                   <Link href="/account/viewings">Viewings</Link>
                   <Link href="/account/deals">My tenancy</Link>
+                  <Link href="/account/security">Security</Link>
                   <Link href="/properties">Browse homes</Link>
                 </>
               )}
