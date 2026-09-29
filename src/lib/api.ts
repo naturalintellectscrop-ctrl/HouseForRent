@@ -398,7 +398,7 @@ async function resolveNeighbourhoods() {
 
 async function resolveCommissionRate() {
   const rate = await effectiveCommissionRate();
-  return { rateBp: rate.rateBp, effectiveFrom: rate.effectiveFrom.toISOString() };
+  return { rateBpOfMonth: rate.rateBp, effectiveFrom: rate.effectiveFrom.toISOString() };
 }
 
 async function resolveMyListings() {
@@ -696,6 +696,14 @@ async function resolveIntroductionsFiltered(sp: URLSearchParams) {
     }));
 }
 
+/** Viewing activity on the landlord's own listings (read-only; ops dispatches). */
+async function resolveListerViewings() {
+  const caller = await requireCaller();
+  if (caller.role !== 'lister') throw new ApiError(403, 'FORBIDDEN', 'landlord surface');
+  const { findViewingsForLister } = await import('@/server/viewings');
+  return findViewingsForLister(caller.partyId);
+}
+
 async function resolveIdentityMe() {
   const caller = await requireCaller();
   const consent = await db.consentRecord.findFirst({
@@ -910,6 +918,7 @@ function resolverFor(path: string, authenticated: boolean): Resolver {
   if (parts[1] === 'viewings' && parts[2] === 'mine') return () => resolveMyViewings();
   if (parts[1] === 'viewings' && parts[2] === 'assigned' && parts[3] === 'me') return () => resolveAssignedViewings();
   if (parts[1] === 'viewings' && parts[2] === 'dispatch-queue') return () => resolveDispatchQueue();
+  if (parts[1] === 'viewings' && parts[2] === 'for-lister') return () => resolveListerViewings();
   // TASK 7-b (additive): filtered evidence lookup — must precede the
   // unfiltered introductions route below.
   if (parts[1] === 'viewings' && parts[2] === 'introductions' && hasIntroductionFilters(u.searchParams)) {

@@ -413,3 +413,50 @@ export async function findIntroductions(filter: { fooPartyId?: string; listingId
     },
   });
 }
+
+/**
+ * Viewing activity on a LANDLORD's own listings (brief §6: "viewing
+ * activity", "prospective tenants").
+ *
+ * Read-only by design: scheduling and dispatch are House For Rent's
+ * operational work (Decision 9 — company-conducted viewings), so the
+ * landlord sees who is coming and what happened, and does not dispatch.
+ * No phone numbers: the officer mediates contact (data minimisation).
+ */
+export async function findViewingsForLister(listerPartyId: string) {
+  const rows = await db.viewing.findMany({
+    where: { listing: { property: { ownerPartyId: listerPartyId } } },
+    orderBy: { scheduledFor: 'desc' },
+    take: 30,
+    include: {
+      listing: { include: { property: { include: { neighbourhood: true } } } },
+      tenantParty: { select: { displayName: true } },
+      conductedBy: { select: { displayName: true } },
+      fieldReport: { select: { conditionRating: true, matchesListing: true, isAvailable: true } },
+    },
+  });
+
+  return rows.map((v) => ({
+    id: v.id,
+    status: v.status,
+    scheduledFor: v.scheduledFor.toISOString(),
+    requestedAt: v.createdAt.toISOString(),
+    tenantName: v.tenantParty.displayName,
+    officerName: v.conductedBy?.displayName ?? null,
+    listing: {
+      id: v.listing.id,
+      bedrooms: v.listing.property.bedrooms,
+      propertyType: v.listing.property.propertyType,
+      neighbourhoodName: v.listing.property.neighbourhood.name,
+      landmarkText: v.listing.property.landmarkText,
+      monthlyRent: v.listing.monthlyRent.toString(),
+    },
+    fieldReport: v.fieldReport
+      ? {
+          conditionRating: v.fieldReport.conditionRating,
+          matchesListing: v.fieldReport.matchesListing,
+          isAvailable: v.fieldReport.isAvailable,
+        }
+      : null,
+  }));
+}
