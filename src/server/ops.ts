@@ -28,29 +28,39 @@ export interface MockIdentityCheck {
 /**
  * The mock check: structural validation + a name match against the account.
  * It verifies NOTHING about the real world and says so.
+ *
+ * Task 14: the outcome logic now lives in ONE place (`mockIdentityOutcome`)
+ * because operations gained the ability to run the same check on an
+ * account's behalf — the two paths must never disagree about what passes.
  */
-export async function submitIdentityVerification(params: {
+function mockIdentityOutcome(nin: string, fullName: string, displayName: string): 'verified' | 'failed' {
+  const normalised = nin.trim().toUpperCase();
+  return /^(CM|CF)[0-9A-Z]{12}$/.test(normalised) &&
+    fullName.trim().toLowerCase() === displayName.trim().toLowerCase()
+    ? 'verified'
+    : 'failed';
+}
+
+async function recordIdentityCheck(params: {
   partyId: string;
   displayName: string;
   method: string;
   nin: string;
   fullName: string;
+  /** Audit actor: the subject themselves (self-service) or the admin (ops run). */
+  actorPartyId: string;
+  actorRole: AuthRole | null;
+  /** Set when operations ran the check, so the trail can tell the two apart forever. */
+  byOperations?: boolean;
 }) {
-  const nin = params.nin.trim().toUpperCase();
-  const ninPattern = /^(CM|CF)[0-9A-Z]{12}$/;
-
-  const state =
-    ninPattern.test(nin) &&
-    params.fullName.trim().toLowerCase() === params.displayName.trim().toLowerCase()
-      ? 'verified'
-      : 'failed';
+  const state = mockIdentityOutcome(params.nin, params.fullName, params.displayName);
 
   const record = await db.identityVerification.create({
     data: {
       partyId: params.partyId,
       method: params.method,
       state,
-      reference: createHash('sha256').update(nin).digest('hex').slice(0, 16),
+      reference: createHash('sha256').update(params.nin.trim().toUpperCase()).digest('hex').slice(0, 16),
       verifiedAt: state === 'verified' ? new Date() : null,
     },
   });
@@ -66,15 +76,93 @@ export async function submitIdentityVerification(params: {
 
   await db.auditEvent.create({
     data: {
-      actorPartyId: params.partyId,
+      actorPartyId: params.actorPartyId,
+      ...(params.actorRole ? { actorRole: params.actorRole } : {}),
       action: 'identity_verification',
       entityType: 'identity_verification',
       entityId: record.id,
-      detail: JSON.stringify({ state, method: params.method, provider: 'sandbox-mock' }),
+      detail: JSON.stringify({
+        state,
+        method: params.method,
+        provider: 'sandbox-mock',
+        ...(params.byOperations ? { by: 'operations' } : {}),
+      }),
     },
   });
 
   return record;
+}
+
+export async function submitIdentityVerification(params: {
+  partyId: string;
+  displayName: string;
+  method: string;
+  nin: string;
+  fullName: string;
+}) {
+  return recordIdentityCheck({
+    partyId: params.partyId,
+    displayName: params.displayName,
+    method: params.method,
+    nin: params.nin,
+    fullName: params.fullName,
+    actorPartyId: params.partyId,
+    actorRole: null,
+  });
+}
+
+export class IdentityCheckNotApplicableError extends Error {
+  constructor(role: string) {
+    super(`identity verification applies to tenant and lister accounts — this is a ${role} account`);
+    this.name = 'IdentityCheckNotApplicableError';
+  }
+}
+
+/**
+ * POST /v1/admin/users/:partyId/identity-check — operations runs the
+ * identity check for an account (Task 14).
+ *
+ * ── Why operations needs this at all ──
+ * The V1 check is self-service, but the phone still happens: an account
+ * holder whose check failed on a typo (or whose name on the account no
+ * longer matches their ID) calls in, and the honest options are to talk
+ * them through the same form or to run the same check for them with the
+ * details they give over the phone. This is the second option — the SAME
+ * mock outcome logic, never a manual "mark verified" shortcut, so the
+ * record stays one vocabulary.
+ *
+ * The audit row says by=operations with the admin as the acting actor, so
+ * "the account verified themselves" and "operations ran this check" stay
+ * distinguishable forever — the same distinction viewing cancellations
+ * already carry. A failed result is a true record, not an error: only an
+ * inapplicable account (staff) or a missing one is refused.
+ */
+export async function runIdentityCheckForParty(params: {
+  partyId: string;
+  adminPartyId: string;
+  method: string;
+  nin: string;
+  fullName: string;
+}) {
+  const party = await db.party.findUnique({
+    where: { id: params.partyId },
+    include: { account: true },
+  });
+  if (!party || !party.account) throw new PartyNotFoundError(params.partyId);
+  if (party.account.role !== 'tenant' && party.account.role !== 'lister') {
+    throw new IdentityCheckNotApplicableError(party.account.role);
+  }
+
+  return recordIdentityCheck({
+    partyId: party.id,
+    displayName: party.displayName,
+    method: params.method,
+    nin: params.nin,
+    fullName: params.fullName,
+    actorPartyId: params.adminPartyId,
+    actorRole: 'admin',
+    byOperations: true,
+  });
 }
 
 // ── staff provisioning ───────────────────────────────────────────────────
@@ -435,6 +523,12 @@ export async function adminPartyDetail(partyId: string): Promise<AdminPartyDetai
 
   const ownDealIds = [...new Set([...dealsAsTenant, ...dealsAsLandlord].map((d) => d.id))];
 
+  // Identity checks run BY OPERATIONS have the admin as their audit actor,
+  // so they would not match `actorPartyId: partyId` — but they are exactly
+  // what this trail exists to show. Their ids are already in hand from the
+  // include above, so the subject-scoping stays by construction.
+  const identityRecordIds = party.identityVerifications.map((i) => i.id);
+
   const auditRows = await db.auditEvent.findMany({
     where: {
       OR: [
@@ -445,6 +539,9 @@ export async function adminPartyDetail(partyId: string): Promise<AdminPartyDetai
         // about "my money" needs to see, and they stay subject-scoped by
         // construction (only ids from the queries above enter this list).
         ...(ownDealIds.length ? [{ entityType: 'deal', entityId: { in: ownDealIds } }] : []),
+        ...(identityRecordIds.length
+          ? [{ entityType: 'identity_verification', entityId: { in: identityRecordIds } }]
+          : []),
       ],
     },
     orderBy: { createdAt: 'desc' },

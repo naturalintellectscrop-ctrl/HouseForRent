@@ -394,3 +394,35 @@ Stage Summary:
 - tsc 0 / ESLint 0 / dev.log 0 errors; no schema change this round (both features are reads + the two audited writes); demo data net-unchanged (QA Test Area deleted; two `service_area_changed` audit rows for Mukono that net to no state change; they are true records and stay).
 - Backlog from Task 12 unchanged in part: journey-http.mjs equivalent covering cancel+tier+mandate remains open (script work, next round candidate); external blockers unchanged (real PSP, real identity provider, API host, Vercel + NEXT_PUBLIC_SITE_URL).
 - Next-step recommendations: (1) QA journey script (regression harness over real HTTP for cancel/tier/mandate/neighbourhood endpoints); (2) ops verification-queue links to the new party detail (rows reference listers); (3) consider identity-verification action on the party detail page if ops should be able to trigger a re-check; (4) external deployment chain per Task 0 checklist.
+
+---
+Task ID: 14
+Agent: cron webDevReview (autonomous round)
+Task: Assessment + QA, then ops-run identity checks (party detail), connected ops surfaces (mandates/queue → account detail), a real-HTTP regression harness, and a copy-dedup styling pass
+
+Work Log:
+- ASSESSMENT: server had died again (session env — restart pattern: `setsid nohup bun run dev >> dev.log 2>&1 < /dev/null &` from /home/z/my-project). After restart: tsc 0, ESLint 0, all public routes 200. Started from Task 13's backlog items (2) and (3).
+- FEATURE A — operations-run identity check on /ops/users/[partyId] (the phone-call path):
+  - src/server/ops.ts: the mock-check outcome logic now lives in ONE function (`mockIdentityOutcome`) inside a shared `recordIdentityCheck` — because operations now runs the SAME check the account holder runs, the two paths can never disagree about what passes. `submitIdentityVerification` (self path) is behaviour-identical (verified: actor=subject, actorRole=null, no `by` key in detail — Joan's historical rows unchanged). New `runIdentityCheckForParty`: party must exist + have an account (404), role must be tenant|lister (staff → IdentityCheckNotApplicableError → 422 IDENTITY_CHECK_NOT_APPLICABLE), audit `identity_verification` with actorRole=admin + detail.by='operations' — the same actor distinction viewing cancellations carry.
+  - NO manual "mark verified" shortcut exists by design: the product sells verification, so ops re-runs the check with phone-given details and a failed result is a true record (201, not an error).
+  - adminPartyDetail trail query gained a fourth OR clause — identity-record ids already loaded in the include — so ops-run checks (admin as actor) still land on the subject's trail. Subject-scoping stays by construction.
+  - HTTP: POST /v1/admin/users/[partyId]/identity-check (admin-only). FULL MATRIX over real HTTP: anon 401 · tenant 403 · staff 422 · bad id 404 PARTY_NOT_FOUND · missing field 400 · malformed NIN 201 failed · wrong name 201 failed · correct 201 verified + activation semantics unchanged.
+  - UI: IdentityCheckControl (client) — NIN + name (prefilled from the account), same 14-char client validation as the tenant form, two-step confirm stating the consequence ("pass or fail, the attempt stays on the trail, with operations as the acting party; a pass also activates an account still waiting on verification"), honest failed alert that stays correctable, verified notice. Card renders only for tenant/lister roles with identity.state !== 'verified'. auditSentence distinguishes: "Operations ran an identity check: failed." vs the self-service sentence.
+  - BROWSER journey (QA Broker Agent, unverified): malformed NIN → client validation · wrong name → confirm → failed alert · trail row "Operations ran an identity check: failed. by Operations Desk (admin)". Verified account hides the card (QA Second Tenant). Post-refactor self-service path re-tested over HTTP (failed check records, state stays verified).
+- FEATURE B — ops surfaces now LINK to the account detail (Task 13 backlog #2):
+  - findMandatesForOps rows carry listerPartyId (was implicit); findMandatesForLister mirrors it for shape parity. MandateRow type: listerPartyId + optional property.ownerId documented as ops-only.
+  - /ops/mandates: Lister cell (name + tier stacked) links to /ops/users/[listerPartyId]; Registered owner links when the id exists — matching the directory's link styling (fontWeight 600).
+  - /ops/queue: "Lister tier" column REPLACED by "Lister" (name linked + tier stacked beneath, the Task 13 stacked-column pattern) — the row data already carried listerPartyId/listerName; the UI just never used them. Column count unchanged, density unchanged, information up.
+  - BROWSER: both cells render anchors (verified in DOM on the rejected tab + queue); click-through queue → David Okello detail works; landlord mandate panel unaffected by the type change (QA broker's rejected listing still renders resubmit UI).
+- FEATURE C — scripts/qa-journey.mjs, the regression harness (Task 12 backlog, carried through 13):
+  - Real HTTP only (fetch + cookie jar, F-009 QA_PASSWORD gate, never Prisma directly): 38 assertions over party detail, ops identity check, lister tier, mandate queue/decision refusals, neighbourhoods/service-area, viewing-cancel refusals.
+  - Re-runnable by design: asserts refusals and idempotent no-ops wherever possible; the only records it creates are identity-check attempts on the QA-labelled tenant (bounded, true records). Directory-resolves account ids the way the UI does.
+  - FIRST RUN: 38 passed, 0 failed.
+- STYLING DETAIL PASS: the identity card originally rendered TWO nearly identical explanation paragraphs (card intro + control intro describing the same mechanic) — deduplicated: the card intro now carries attempts + the pass consequence ("A pass marks the account verified — this account is waiting on that."), the control keeps the provider-honesty line only. Queue/party pages re-screenshotted at 1440 and 412 (no page overflow; tables scroll in .table-scroll as designed).
+
+Stage Summary:
+- The account-detail page is now an OPERATING surface, not just a read: ops can resolve the "my check failed" phone call end-to-end (run the check, record the outcome honestly, see it in the trail) without any shortcut that could undermine the verification product.
+- Every ops queue row that names a person now leads to that person's account in one click (directory, mandates, verification queue).
+- The Tasks 11–14 endpoint generation is pinned by a re-runnable regression harness (38 checks) that runs against real HTTP.
+- tsc 0 / ESLint 0 / dev.log 0 errors. Demo data: QA Second Tenant became verified (true record); QA Broker Agent stays unverified with 1 failed ops-run attempt + the tier/mandate states from prior rounds — both still exercise the intended demo states.
+- Next steps: journey-http coverage could extend to FOO surfaces (dispatch/field-report) next round; /ops/users directory search already exists — a role filter is a small candidate; external items unchanged (real PSP, real identity provider, API host, Vercel + NEXT_PUBLIC_SITE_URL).

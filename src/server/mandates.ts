@@ -179,6 +179,7 @@ export async function findMandatesForLister(listerPartyId: string) {
       neighbourhoodName: m.property.neighbourhood.name,
       ownerName: null,
     },
+    listerPartyId,
     listerName: null,
     listerTier: null,
   }));
@@ -264,6 +265,9 @@ export async function findMandatesForOps(filter: { state?: 'pending' | 'verified
       ownerId: m.property.ownerPartyId,
       ownerName: m.property.owner.displayName,
     },
+    // Task 14: ops surfaces link rows to the account detail page, so the
+    // queue carries the ids (the landlord's own panel never needed them).
+    listerPartyId: m.listerPartyId,
     listerName: m.lister.displayName,
     listerTier: m.lister.listerProfile?.tier ?? null,
   }));

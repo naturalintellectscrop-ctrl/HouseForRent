@@ -71,6 +71,7 @@ export function jsonError(err: unknown): NextResponse {
     MandateNotFoundError: { status: 404, code: 'MANDATE_NOT_FOUND' },
     MandateAlreadyDecidedError: { status: 409, code: 'MANDATE_ALREADY_DECIDED' },
     InvalidMandateDecisionError: { status: 422, code: 'INVALID_MANDATE_DECISION' },
+    IdentityCheckNotApplicableError: { status: 422, code: 'IDENTITY_CHECK_NOT_APPLICABLE' },
     StaffRoleError: { status: 400, code: 'STAFF_ROLE_INVALID' },
     InvalidAmountError: { status: 400, code: 'INVALID_AMOUNT' },
     EmptyPostingError: { status: 500, code: 'EMPTY_POSTING' },

@@ -484,7 +484,11 @@ export interface MandateRow {
     landmarkText: string;
     neighbourhoodName: string;
     ownerName: string | null;
+    /** Ops rows only: links the owner cell to the account detail. */
+    ownerId?: string;
   };
+  /** Ops rows only: links the lister cell to the account detail. */
+  listerPartyId: string | null;
   listerName: string | null;
   listerTier: string | null;
 }

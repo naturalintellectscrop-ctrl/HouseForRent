@@ -60,7 +60,7 @@ export default async function QueuePage() {
               <tr>
                 <th scope="col">Listing</th>
                 <th scope="col">Neighbourhood</th>
-                <th scope="col">Lister tier</th>
+                <th scope="col">Lister</th>
                 <th scope="col">Verification</th>
                 <th scope="col">Mandate</th>
                 <th scope="col">Waiting on</th>
@@ -80,7 +80,14 @@ export default async function QueuePage() {
                       </>
                     )}
                   </td>
-                  <td>{(row.listerTier ?? 'unset').replace(/_/g, ' ')}</td>
+                  <td>
+                    <Link href={`/ops/users/${row.listerPartyId}`} style={{ fontWeight: 600 }}>
+                      {row.listerName}
+                    </Link>
+                    <span className="faint" style={{ display: 'block', fontSize: '0.8125rem' }}>
+                      {(row.listerTier ?? 'unset').replace(/_/g, ' ')}
+                    </span>
+                  </td>
                   <td>{row.verificationState}</td>
                   <td>{row.mandateState ?? '—'}</td>
                   <td>

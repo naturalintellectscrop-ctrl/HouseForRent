@@ -118,12 +118,23 @@ export default async function MandatesPage(props: {
                 <tr key={m.id}>
                   <td style={{ whiteSpace: 'nowrap' }}>{when(m.createdAt)}</td>
                   <td>
-                    {m.listerName ?? '—'}
-                    {m.listerTier ? (
-                      <span className="faint" style={{ display: 'block', fontSize: '0.8125rem' }}>
-                        {m.listerTier.replace(/_/g, ' ')}
-                      </span>
-                    ) : null}
+                    {m.listerPartyId ? (
+                      <>
+                        <Link
+                          href={`/ops/users/${m.listerPartyId}`}
+                          style={{ fontWeight: 600 }}
+                        >
+                          {m.listerName ?? '—'}
+                        </Link>
+                        {m.listerTier ? (
+                          <span className="faint" style={{ display: 'block', fontSize: '0.8125rem' }}>
+                            {m.listerTier.replace(/_/g, ' ')}
+                          </span>
+                        ) : null}
+                      </>
+                    ) : (
+                      m.listerName ?? '—'
+                    )}
                   </td>
                   <td>
                     {m.property.landmarkText}
@@ -131,7 +142,13 @@ export default async function MandatesPage(props: {
                       {m.property.neighbourhoodName}
                     </span>
                   </td>
-                  <td>{m.property.ownerName ?? '—'}</td>
+                  <td>
+                    {m.property.ownerId ? (
+                      <Link href={`/ops/users/${m.property.ownerId}`}>{m.property.ownerName ?? '—'}</Link>
+                    ) : (
+                      (m.property.ownerName ?? '—')
+                    )}
+                  </td>
                   <td style={{ maxWidth: '18rem' }}>
                     {m.note ?? (
                       <span className="faint">none given</span>

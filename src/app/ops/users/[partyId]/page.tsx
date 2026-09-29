@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { api, ApiError } from '@/lib/api';
 import { AdminOnly, Empty, onDay, shillings, when } from '@/app/ui';
 import { TierControl } from '../tier-control';
+import { IdentityCheckControl } from './identity-check';
 
 /**
  * The account detail (admin) — the depth behind a directory row.
@@ -101,7 +102,9 @@ function auditSentence(a: PartyDetail['audit'][number]): string {
     case 'viewing_cancelled':
       return d.by === 'operations' ? 'A viewing was cancelled by operations.' : 'Cancelled a viewing.';
     case 'identity_verification':
-      return `Identity check ${String(d.state ?? '')} (provider: ${String(d.provider ?? 'unknown')}).`;
+      return d.by === 'operations'
+        ? `Operations ran an identity check: ${String(d.state ?? '')}.`
+        : `Identity check ${String(d.state ?? '')} (provider: ${String(d.provider ?? 'unknown')}).`;
     case 'password_changed':
       return 'Changed the account password; other sessions signed out.';
     case 'staff_provisioned':
@@ -222,6 +225,25 @@ export default async function PartyPage(props: { params: Promise<{ partyId: stri
           </div>
         </div>
       </div>
+
+      {(d.role === 'tenant' || d.role === 'lister') && d.identity.state !== 'verified' ? (
+        <div className="card" style={{ marginBottom: '1.25rem' }}>
+          <div className="card-head">
+            <span className="card-title">Run an identity check</span>
+            <span className="muted">provider: {d.identity.provider ?? 'sandbox-mock'}</span>
+          </div>
+          <p className="faint" style={{ fontSize: '0.8125rem', marginTop: 0 }}>
+            {d.identity.attempts > 0
+              ? `${d.identity.attempts} attempt${d.identity.attempts === 1 ? '' : 's'} on file${d.identity.checkedAt ? `, last ${onDay(d.identity.checkedAt)}` : ''}. A pass marks the account verified${d.accountStatus === 'pending_verification' ? ' — this account is waiting on that' : ''}.`
+              : 'This account has never attempted a check. A pass marks the account verified' + (d.accountStatus === 'pending_verification' ? ' — this account is waiting on that.' : '.')}
+          </p>
+          <IdentityCheckControl
+            partyId={d.party.id}
+            displayName={d.party.displayName}
+            currentState={d.identity.state}
+          />
+        </div>
+      ) : null}
 
       {d.role === 'lister' ? (
         <div className="card" style={{ marginBottom: '1.25rem' }}>
