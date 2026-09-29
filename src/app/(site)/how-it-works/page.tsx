@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Icon } from '@/app/ui';
+import { Icon, PageIntro } from '@/app/ui';
 
 export const metadata = {
   title: 'How it works',
@@ -22,18 +22,14 @@ export default function HowItWorksPage() {
     <>
       <section className="section">
         <div className="page">
-          <div className="stack" style={{ maxWidth: '44rem' }}>
-            <p className="eyebrow">How it works</p>
-            <h1 className="display">
-              What happens between finding a home and getting the keys.
-            </h1>
+          <PageIntro eyebrow="How it works" title="What happens between finding a home and getting the keys.">
             <p className="lede">
               Renting in Kampala usually means paying several months upfront to
               someone you have just met, for a property you may have seen once.
               This is how we make that safe — and what we do, in order, at each
               stage.
             </p>
-          </div>
+          </PageIntro>
         </div>
       </section>
 

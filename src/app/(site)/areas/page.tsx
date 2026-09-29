@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { apiGet, type Neighbourhood } from '@/lib/api';
-import { Empty, Icon } from '@/app/ui';
+import { Empty, Icon, PageIntro } from '@/app/ui';
 
 export const metadata = {
   title: 'Areas we cover',
@@ -53,13 +53,13 @@ export default async function AreasPage() {
     <>
       <div className="page section" style={{ paddingBottom: '2rem' }}>
         <div className="stack">
-          <p className="eyebrow">Kampala &amp; Wakiso</p>
-          <h1 className="h1">Areas we cover</h1>
-          <p className="lede" style={{ maxWidth: '46rem' }}>
-            Every neighbourhood our field officers work in. The number next to
-            each area is how many verified homes are live there right now —
-            the same count search uses, not a figure we wrote by hand.
-          </p>
+          <PageIntro eyebrow="Kampala &amp; Wakiso" title="Areas we cover">
+            <p className="lede" style={{ maxWidth: '46rem' }}>
+              Every neighbourhood our field officers work in. The number next
+              to each area is how many verified homes are live there right
+              now — the same count search uses, not a figure we wrote by hand.
+            </p>
+          </PageIntro>
           <p className="faint" style={{ fontSize: '0.875rem' }}>
             {totalLive === 0
               ? 'No verified homes anywhere yet — the first visits are being scheduled.'

@@ -1,4 +1,6 @@
-/* Proof strip styles are imported by the public shell. */
+/* Proof strip styles are imported by the public shell — the homepage's
+   promise trio, and nothing else, so the ops console never ships it. */
+
 .proof-strip {
   border-block: 1px solid var(--line);
   background: var(--bg-soft);
@@ -21,9 +23,30 @@
   border-bottom: 0;
 }
 
+/*
+ * The reference puts each promise behind a round chip; the round chip is
+ * what makes three plain sentences read as a set. Ours carry the same
+ * thin-line icons the promise grid uses, in the accent tint, so the strip
+ * and the promises below it visibly belong to one system.
+ */
 .proof-grid strong {
-  font-size: 0.9375rem;
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  font-size: 1rem;
   letter-spacing: -0.01em;
+}
+
+.proof-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  flex: none;
 }
 
 .proof-grid span {

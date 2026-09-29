@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { PageIntro } from '@/app/ui';
 
 export const metadata = {
   title: 'Contact',
@@ -15,20 +16,22 @@ export const metadata = {
  */
 export default function ContactPage() {
   return (
-    <section className="section">
-      <div className="page">
-        <div className="detail-grid">
-          <div className="stack-lg" style={{ maxWidth: '38rem' }}>
-            <div className="stack">
-              <p className="eyebrow">Contact</p>
-              <h1 className="display">Talk to us.</h1>
-              <p className="lede">
-                Whether you have a property to let, a viewing you are trying to
-                arrange, or a question about money that is sitting in escrow —
-                a person will answer.
-              </p>
-            </div>
+    <>
+      <section className="section-lg">
+        <div className="page">
+          <PageIntro eyebrow="Contact" title="Talk to us.">
+            <p className="lede">
+              Whether you have a property to let, a viewing you are trying to
+              arrange, or a question about money that is sitting in escrow —
+              a person will answer.
+            </p>
+          </PageIntro>
+        </div>
+      </section>
 
+      <section className="section" style={{ paddingTop: 0 }}>
+        <div className="page">
+          <div className="detail-grid">
             <div className="stack-lg">
               <section className="stack-sm">
                 <h2 className="h2">If you already have an account</h2>
@@ -97,7 +100,7 @@ export default function ContactPage() {
             </div>
           </aside>
         </div>
-      </div>
-    </section>
+      </section>
+    </>
   );
 }

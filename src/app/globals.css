@@ -796,10 +796,17 @@ legend {
   margin: 0.4rem 0;
 }
 
+/*
+ * The footer sits on the brand's own ink — the same near-black the logo
+ * paints its house on, the surface the auth aside and the CTA band already
+ * use. Every page therefore ends the way the brand begins. Its colours are
+ * FIXED, not tokenised, on purpose: the tokens above exist so light and
+ * dark MODE can agree with each other; this panel is identical in both.
+ */
 .site-foot {
-  border-top: 1px solid var(--line);
-  background: var(--bg-soft);
-  padding: 3rem 0 2.5rem;
+  background: var(--brand-ink);
+  color: #f4f7f6;
+  padding: 3.5rem 0 2.5rem;
   margin-top: 4rem;
   font-size: 0.9375rem;
 }
@@ -816,26 +823,35 @@ legend {
   font-size: 0.8125rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: var(--ink-faint);
+  color: #8b968f;
   margin-bottom: 0.75rem;
   font-weight: 620;
 }
 .foot-col a {
   display: block;
   padding: 0.25rem 0;
-  color: var(--ink-soft);
+  color: #c3cbc7;
   text-decoration: none;
 }
 .foot-col a:hover {
-  color: var(--ink);
+  color: #ffffff;
   text-decoration: underline;
 }
 .foot-legal {
   margin-top: 2.5rem;
   padding-top: 1.5rem;
-  border-top: 1px solid var(--line);
-  color: var(--ink-faint);
+  border-top: 1px solid #2a332f;
+  color: #8b968f;
   font-size: 0.875rem;
+}
+.site-foot .muted {
+  color: #a5aeaa;
+}
+.site-foot .brand {
+  color: #f4f7f6;
+}
+.site-foot .brand-tagline {
+  color: #a5aeaa;
 }
 
 /* ── property media ─────────────────────────────────────────────────── */
@@ -1837,6 +1853,240 @@ a.list-item:hover {
   background: #1cb954;
 }
 
+/*
+ * The landlord CTA carries the reference's numbered-column composition:
+ * the pitch on the left, the three real steps of letting through us stacked
+ * as a ruled list on the right. Rules and numbers switch to the panel's
+ * own register; the content is the same process the for-landlords page
+ * explains in full — nothing here is a new claim.
+ */
+.cta-grid {
+  display: grid;
+  gap: 2.5rem;
+}
+@media (min-width: 62rem) {
+  .cta-grid {
+    grid-template-columns: 1.1fr 0.9fr;
+    gap: 4rem;
+    align-items: center;
+  }
+}
+.cta-steps {
+  counter-reset: cstep;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.cta-steps > li {
+  counter-increment: cstep;
+  border-top: 1px solid #2a332f;
+  padding-top: 0.9rem;
+}
+.cta-steps > li + li {
+  margin-top: 0.9rem;
+}
+.cta-steps > li::before {
+  content: counter(cstep, decimal-leading-zero);
+  font-size: 0.75rem;
+  font-weight: 680;
+  letter-spacing: 0.06em;
+  color: var(--brand-green);
+}
+.cta-steps h3 {
+  font-size: 1.05rem;
+  margin-top: 0.2rem;
+}
+.cta-steps p {
+  color: #a5aeaa;
+  font-size: 0.9375rem;
+  margin-top: 0.25rem;
+}
+
+/* ── home: featured feed ────────────────────────────────────────────── */
+
+/*
+ * Type tabs over the featured grid. They are ordinary links to the
+ * filtered marketplace, styled as tabs because that is how they read. The
+ * active state is the inverted ink pair rather than the action green:
+ * green on this page means "the next thing to press", and a filter the
+ * visitor has not chosen yet is not that. var(--ink)/var(--bg) keeps the
+ * inversion correct in both colour modes.
+ */
+.feed-tabs {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.feed-tabs .chip {
+  padding: 0.35rem 0.85rem;
+}
+.feed-tabs .chip[aria-current='page'] {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--bg);
+  font-weight: 560;
+}
+@media (hover: hover) {
+  .feed-tabs .chip:hover {
+    border-color: var(--ink-faint);
+    color: var(--ink);
+  }
+  .feed-tabs .chip[aria-current='page']:hover {
+    border-color: var(--ink);
+    color: var(--bg);
+  }
+}
+
+/* ── home: corridor numbers ─────────────────────────────────────────── */
+
+/*
+ * The reference's stats band, told only in numbers this system actually
+ * holds: how many homes are live, how many neighbourhoods hold one, and
+ * what a tenant has ever paid us. The figures get the reference's big
+ * numerals; the captions stay honest when a number is small — a thin
+ * corridor stated plainly is the product working, not failing.
+ */
+.corridor {
+  display: grid;
+  gap: 2.5rem;
+  align-items: start;
+}
+@media (min-width: 62rem) {
+  .corridor {
+    grid-template-columns: 1fr 1.05fr;
+    gap: 4rem;
+  }
+}
+.numbers {
+  display: grid;
+  gap: 1.75rem;
+}
+.num-figure {
+  border-top: 2px solid var(--line);
+  padding-top: 1rem;
+}
+.num-figure strong {
+  display: block;
+  font-size: clamp(2.25rem, 1.6rem + 2.6vw, 3.25rem);
+  line-height: 1;
+  letter-spacing: -0.03em;
+  font-weight: 660;
+  font-variant-numeric: tabular-nums;
+}
+.num-figure span {
+  display: block;
+  margin-top: 0.45rem;
+  color: var(--ink-soft);
+  font-size: 0.9375rem;
+  max-width: 26rem;
+}
+.corridor-note {
+  background: var(--bg-soft);
+  border-radius: var(--radius-lg);
+  padding: 1.75rem 1.5rem;
+  display: grid;
+  gap: 1.1rem;
+  align-content: start;
+}
+@media (min-width: 62rem) {
+  .corridor-note {
+    padding: 2.25rem 2rem;
+  }
+}
+
+/* ── home: first-timer guide ────────────────────────────────────────── */
+
+/*
+ * The reference's "user guide for first timer": the heading owns the left
+ * column and keeps its place while the steps run down the right, each
+ * hanging off its own rule segment so the eye reads one path rather than
+ * four loose cards. Geometry is the only difference from .steps — the
+ * counters and the copy discipline are the same.
+ */
+.guide {
+  display: grid;
+  gap: 2.5rem;
+}
+@media (min-width: 62rem) {
+  .guide {
+    grid-template-columns: 0.9fr 1.1fr;
+    gap: 4rem;
+  }
+  .guide-head {
+    position: sticky;
+    top: 5.5rem;
+    align-self: start;
+  }
+}
+.steps-rule {
+  counter-reset: step;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.steps-rule > li {
+  counter-increment: step;
+  border-left: 2px solid var(--line-strong);
+  padding-left: 1.25rem;
+  padding-bottom: 1.6rem;
+  transition: border-color 160ms ease;
+}
+.steps-rule > li:last-child {
+  padding-bottom: 0;
+}
+@media (hover: hover) {
+  .steps-rule > li:hover {
+    border-left-color: var(--accent);
+  }
+}
+.steps-rule > li::before {
+  content: counter(step, decimal-leading-zero);
+  display: block;
+  font-size: 0.8125rem;
+  font-weight: 680;
+  color: var(--accent);
+  letter-spacing: 0.06em;
+  margin-bottom: 0.4rem;
+}
+.steps-rule h3 {
+  margin-bottom: 0.35rem;
+}
+.steps-rule p {
+  color: var(--ink-soft);
+  font-size: 0.9375rem;
+}
+
+/* ── home: entrance ─────────────────────────────────────────────────── */
+
+/*
+ * One motion idea for the page: each direct section settles in once, a
+ * small rise with a 40ms cascade — hierarchy communicated by timing, not
+ * by things flying around. prefers-reduced-motion neutralises it globally
+ * at the top of this file, and no element animates twice.
+ */
+.stagger > * {
+  animation: enter 320ms ease both;
+}
+.stagger > *:nth-child(2) {
+  animation-delay: 40ms;
+}
+.stagger > *:nth-child(3) {
+  animation-delay: 80ms;
+}
+.stagger > *:nth-child(4) {
+  animation-delay: 120ms;
+}
+.stagger > *:nth-child(5) {
+  animation-delay: 160ms;
+}
+.stagger > *:nth-child(6) {
+  animation-delay: 200ms;
+}
+.stagger > *:nth-child(7) {
+  animation-delay: 240ms;
+}
+
 /* ── operations console components ──────────────────────────────────── */
 
 /*
@@ -2202,37 +2452,6 @@ a.card-link:hover .card-title {
   margin-top: 0.6rem;
   color: var(--ink-soft);
 }
-
-/* ── landlord listing management ────────────────────────────────────── */
-
-.photo-grid {
-  display: grid;
-  gap: 0.75rem;
-  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
-}
-.photo-tile .media {
-  border-radius: var(--radius);
-  aspect-ratio: 4 / 3;
-}
-.photo-tile p {
-  margin-top: 0.3rem;
-}
-
-.agreement-clause {
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  padding: 0.6rem 0.8rem;
-  font-size: 0.9375rem;
-}
-.agreement-clause > summary {
-  cursor: pointer;
-  font-weight: 560;
-}
-.agreement-clause > p {
-  margin-top: 0.6rem;
-  color: var(--ink-soft);
-}
-
 /* ── areas directory (QA round: /areas) ─────────────────────────────── */
 
 .area-grid {

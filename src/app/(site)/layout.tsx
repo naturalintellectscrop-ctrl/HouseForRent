@@ -1,4 +1,5 @@
 import { SiteFooter, SiteHeader } from '@/app/site-chrome';
+import '../proof-strip.css';
 
 /**
  * The public marketplace shell.

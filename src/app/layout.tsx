@@ -1,7 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
-import './proof-strip.css';
 
 const geist = Geist({ subsets: ['latin'], variable: '--font-geist' });
 const geistMono = Geist_Mono({ subsets: ['latin'], variable: '--font-geist-mono' });
@@ -47,10 +46,13 @@ export const viewport: Viewport = {
 };
 
 /**
- * ── System fonts ──
- * A webfont over a Ugandan mobile connection costs a download and a layout
- * shift on every cold start (NFR-5). The identity is carried by colour,
- * spacing and hierarchy, which arrive with the HTML.
+ * ── Fonts ──
+ * `next/font/google` downloads Geist at BUILD time and self-hosts it — no
+ * runtime request to Google, and the CSS is preloaded with `font-display:
+ * swap` semantics, so a cold start on a Ugandan mobile connection (NFR-5)
+ * pays one cached font file and no third-party round-trip. The identity is
+ * still carried mainly by colour, spacing and hierarchy, which arrive with
+ * the HTML.
  */
 export default function RootLayout({
   children,

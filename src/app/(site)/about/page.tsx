@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { PageIntro } from '@/app/ui';
 
 export const metadata = {
   title: 'About',
@@ -20,12 +21,10 @@ export default function AboutPage() {
     <>
       <section className="section-lg">
         <div className="page">
-          <div className="stack" style={{ maxWidth: '44rem' }}>
-            <p className="eyebrow">About</p>
-            <h1 className="display">
-              We would rather list ten homes we have seen than a thousand we
-              have not.
-            </h1>
+          <PageIntro
+            eyebrow="About"
+            title="We would rather list ten homes we have seen than a thousand we have not."
+          >
             <p className="lede">
               House For Rent is a residential rental marketplace operated by
               Natural Intellects Ltd in Kampala. It exists because the ordinary
@@ -33,7 +32,7 @@ export default function AboutPage() {
               months of income, and asks a landlord to hand keys to someone they
               met once.
             </p>
-          </div>
+          </PageIntro>
         </div>
       </section>
 
