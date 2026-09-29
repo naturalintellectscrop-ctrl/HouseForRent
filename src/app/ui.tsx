@@ -141,6 +141,58 @@ export const Icon = {
       <path d="M19 21l-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" fill="currentColor" />
     </Svg>
   ),
+  mail: (p: { size?: number }) => (
+    <Svg {...p}>
+      <rect x="3" y="5" width="18" height="14" rx="2" />
+      <path d="m3 7 9 6 9-6" />
+    </Svg>
+  ),
+  phone: (p: { size?: number }) => (
+    <Svg {...p}>
+      <path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z" />
+    </Svg>
+  ),
+  /* Unlinked social placeholders (the real handles are coming). Drawn in
+     the same thin-line register as the rest of the set rather than as
+     filled brand artwork, so the footer keeps one visual voice. Each is
+     rendered WITHOUT a link until the real profile exists — a social
+     button that goes nowhere is a dead end. */
+  whatsapp: (p: { size?: number }) => (
+    <Svg {...p}>
+      <path d="M12 3a9 9 0 0 0-7.7 13.6L3 21l4.5-1.2A9 9 0 1 0 12 3z" />
+      <path d="M9 8.7c.3 3 2.9 5.4 5.9 5.7l1.4-1.4-2-1.3-1 .5a5.3 5.3 0 0 1-2.1-2.1l.5-1L10.4 7z" />
+    </Svg>
+  ),
+  facebook: (p: { size?: number }) => (
+    <Svg {...p}>
+      <path d="M15 8h3V5h-3a4 4 0 0 0-4 4v2H8v3h3v7h3v-7h3l1-3h-4V9a1 1 0 0 1 1-1z" />
+    </Svg>
+  ),
+  instagram: (p: { size?: number }) => (
+    <Svg {...p}>
+      <rect x="3.5" y="3.5" width="17" height="17" rx="4.5" />
+      <circle cx="12" cy="12" r="3.8" />
+      <circle cx="17.2" cy="6.8" r="0.6" fill="currentColor" stroke="none" />
+    </Svg>
+  ),
+  xSocial: (p: { size?: number }) => (
+    <Svg {...p}>
+      <path d="M4 4l16 16" />
+      <path d="M20 4L4 20" />
+    </Svg>
+  ),
+  tiktok: (p: { size?: number }) => (
+    <Svg {...p}>
+      <path d="M14 4v9.5a3.75 3.75 0 1 1-3.2-3.7" />
+      <path d="M14 6c.6 2 2.2 3.4 4.5 3.6" />
+    </Svg>
+  ),
+  youtube: (p: { size?: number }) => (
+    <Svg {...p}>
+      <rect x="2.5" y="6" width="19" height="12" rx="3.5" />
+      <path d="M10.5 9.5v5L15 12z" />
+    </Svg>
+  ),
 };
 
 /* ── brand ──────────────────────────────────────────────────────────── */
@@ -151,6 +203,19 @@ export const Icon = {
  * never drift from what is painted on the logo.
  */
 export const TAGLINE = 'Find your next home with ease.';
+
+/**
+ * The company's real contact channels, owner-supplied. One constant so the
+ * footer, the contact page and any future surface can never drift from what
+ * Natural Intellects actually answers. Both numbers take calls and WhatsApp.
+ */
+export const CONTACT = {
+  email: 'naturalintellectsltd@gmail.com',
+  phones: [
+    { display: '+256 762 449 504', tel: '+256762449504' },
+    { display: '+256 752 255 676', tel: '+256752255676' },
+  ],
+} as const;
 
 export function Brand({ sub, href = '/' }: { sub?: string; href?: string }) {
   return (

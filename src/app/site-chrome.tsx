@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Brand, Icon, TAGLINE } from '@/app/ui';
+import { Brand, CONTACT, Icon, TAGLINE } from '@/app/ui';
 import { isSignedIn, currentRole, homeFor } from '@/lib/session';
 
 const NAV = [
@@ -105,6 +105,15 @@ export async function SiteHeader() {
 }
 
 export function SiteFooter() {
+  const socials = [
+    { label: 'WhatsApp', icon: Icon.whatsapp },
+    { label: 'Facebook', icon: Icon.facebook },
+    { label: 'Instagram', icon: Icon.instagram },
+    { label: 'X', icon: Icon.xSocial },
+    { label: 'TikTok', icon: Icon.tiktok },
+    { label: 'YouTube', icon: Icon.youtube },
+  ];
+
   return (
     <footer className="site-foot">
       <div className="page">
@@ -119,6 +128,30 @@ export function SiteFooter() {
               A rental marketplace where every home is visited and confirmed by
               one of our field officers before it reaches you.
             </p>
+            {/* Real channels, answered by people. Email opens a compose
+                window; numbers dial directly; the WhatsApp links pre-open a
+                chat — no forms that post nowhere. */}
+            <div className="foot-contact">
+              <a href={`mailto:${CONTACT.email}`} className="foot-contact-row">
+                <Icon.mail size={15} />
+                {CONTACT.email}
+              </a>
+              {CONTACT.phones.map((phone) => (
+                <span key={phone.tel} className="foot-contact-row">
+                  <Icon.phone size={15} />
+                  <a href={`tel:${phone.tel}`}>{phone.display}</a>
+                  <a
+                    href={`https://wa.me/${phone.tel.replace('+', '')}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={`WhatsApp ${phone.display}`}
+                  >
+                    <Icon.whatsapp size={15} />
+                    <span className="sr-only">WhatsApp {phone.display}</span>
+                  </a>
+                </span>
+              ))}
+            </div>
           </div>
 
           <div className="foot-col">
@@ -142,6 +175,24 @@ export function SiteFooter() {
             <Link href="/contact">Contact</Link>
             <Link href="/ops">Staff console</Link>
           </div>
+        </div>
+
+        {/* Social placeholders: the handles are not live yet, so these are
+            deliberately NOT links — an icon that navigates nowhere is a dead
+            end. They render as inert marks with their name exposed to screen
+            readers, and become real links the day the profiles exist. */}
+        <div className="foot-social" aria-label="Social media (coming soon)">
+          {socials.map((social) => (
+            <span
+              key={social.label}
+              className="social-logo"
+              role="img"
+              aria-label={`${social.label} — coming soon`}
+              title={`${social.label} — coming soon`}
+            >
+              {social.icon({ size: 18 })}
+            </span>
+          ))}
         </div>
 
         <p className="foot-legal">
