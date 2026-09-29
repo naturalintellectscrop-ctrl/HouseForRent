@@ -24,7 +24,6 @@ export default async function SavedPage() {
   return (
     <div className="stack-lg">
       <div>
-        <p className="eyebrow">My account</p>
         <h1 className="h1">Saved homes</h1>
         <p className="lede">
           Homes you bookmarked while looking. Nobody is told that you saved a

@@ -22,7 +22,7 @@ export default function HowItWorksPage() {
     <>
       <section className="section">
         <div className="page">
-          <PageIntro eyebrow="How it works" title="What happens between finding a home and getting the keys.">
+          <PageIntro title="What happens between finding a home and getting the keys.">
             <p className="lede">
               Renting in Kampala usually means paying several months upfront to
               someone you have just met, for a property you may have seen once.

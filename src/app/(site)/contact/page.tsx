@@ -1,9 +1,10 @@
 import Link from 'next/link';
-import { PageIntro } from '@/app/ui';
+import { CONTACT, Icon, PageIntro } from '@/app/ui';
 
 export const metadata = {
   title: 'Contact',
-  description: 'How to reach House For Rent in Kampala.',
+  description:
+    'Call, WhatsApp or email House For Rent in Kampala — a person answers.',
 };
 
 /**
@@ -11,19 +12,20 @@ export const metadata = {
  * A form that posts nowhere is worse than no form: it takes someone's
  * question, shows a success message, and silently discards it. There is no
  * messaging endpoint in this system yet, so this page routes people to the
- * channels that actually reach a human, and says plainly which ones those
- * are. When an enquiry endpoint exists, a form belongs here.
+ * channels that actually reach a human — the company's own phone numbers
+ * (calls and WhatsApp) and its email. When an enquiry endpoint exists, a
+ * form belongs here.
  */
 export default function ContactPage() {
   return (
     <>
       <section className="section-lg">
         <div className="page">
-          <PageIntro eyebrow="Contact" title="Talk to us.">
+          <PageIntro title="Talk to us.">
             <p className="lede">
               Whether you have a property to let, a viewing you are trying to
               arrange, or a question about money that is sitting in escrow —
-              a person will answer.
+              call, WhatsApp or email, and a person will answer.
             </p>
           </PageIntro>
         </div>
@@ -71,13 +73,49 @@ export default function ContactPage() {
               </section>
 
               <section className="stack-sm">
-                <h2 className="h2">Anything else</h2>
+                <h2 className="h2">Call, WhatsApp or email us</h2>
                 <p className="muted">
-                  We have not yet published a general enquiries address on this
-                  site, and we would rather say so than print one that reaches
-                  nobody. If you need to speak to us and have no account, the
-                  registration above is the shortest path to a conversation.
+                  Both numbers take calls and WhatsApp. If it is about money
+                  already in escrow, have the phone number on your account
+                  handy so we can find the deal quickly.
                 </p>
+                <div className="contact-channels">
+                  {CONTACT.phones.map((phone) => (
+                    <div key={phone.tel} className="contact-channel">
+                      <span className="contact-channel-icon" aria-hidden="true">
+                        <Icon.phone size={18} />
+                      </span>
+                      <div>
+                        <a href={`tel:${phone.tel}`} className="contact-channel-main">
+                          {phone.display}
+                        </a>
+                        <span className="muted" style={{ fontSize: '0.875rem' }}>
+                          Call or{' '}
+                          <a
+                            href={`https://wa.me/${phone.tel.replace('+', '')}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            WhatsApp
+                          </a>
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                  <div className="contact-channel">
+                    <span className="contact-channel-icon" aria-hidden="true">
+                      <Icon.mail size={18} />
+                    </span>
+                    <div>
+                      <a href={`mailto:${CONTACT.email}`} className="contact-channel-main">
+                        {CONTACT.email}
+                      </a>
+                      <span className="muted" style={{ fontSize: '0.875rem' }}>
+                        Email — for documents and anything in writing
+                      </span>
+                    </div>
+                  </div>
+                </div>
               </section>
             </div>
           </div>
@@ -90,6 +128,26 @@ export default function ContactPage() {
                 <br />
                 Kampala, Uganda
               </p>
+              <hr className="divider" style={{ margin: '0.75rem 0' }} />
+              <h3 className="h3">Reach us directly</h3>
+              <div className="stack-sm" style={{ marginTop: '0.5rem' }}>
+                {CONTACT.phones.map((phone) => (
+                  <p key={phone.tel} className="muted" style={{ margin: 0 }}>
+                    <a href={`tel:${phone.tel}`}>{phone.display}</a>
+                    {' · '}
+                    <a
+                      href={`https://wa.me/${phone.tel.replace('+', '')}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      WhatsApp
+                    </a>
+                  </p>
+                ))}
+                <p className="muted" style={{ margin: 0 }}>
+                  <a href={`mailto:${CONTACT.email}`}>{CONTACT.email}</a>
+                </p>
+              </div>
               <hr className="divider" style={{ margin: '0.75rem 0' }} />
               <h3 className="h3">Service area</h3>
               <p className="muted">

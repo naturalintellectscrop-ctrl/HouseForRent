@@ -53,10 +53,7 @@ export default async function ForLandlordsPage() {
     <>
       <section className="section-lg">
         <div className="page">
-          <PageIntro
-            eyebrow="For landlords"
-            title="Let your property to a tenant we have already checked."
-          >
+          <PageIntro title="Let your property to a tenant we have already checked.">
             <p className="lede">
               You do not pay us to list. You do not pay us monthly. We are paid
               once, {rate ? describeRate(rate.rateBpOfMonth) : 'a fixed share'},
@@ -77,7 +74,6 @@ export default async function ForLandlordsPage() {
       <section className="section section-sunk">
         <div className="page stack-lg">
           <div>
-            <p className="eyebrow">What you get</p>
             <h2 className="h1">The work we do before anyone views</h2>
           </div>
 
@@ -123,7 +119,6 @@ export default async function ForLandlordsPage() {
           <div className="detail-grid">
             <div className="stack-lg">
               <div>
-                <p className="eyebrow">Commission</p>
                 <h2 className="h1">One payment, once, on success.</h2>
               </div>
 
@@ -210,7 +205,6 @@ export default async function ForLandlordsPage() {
       <section className="section section-sunk">
         <div className="page stack-lg">
           <div>
-            <p className="eyebrow">Getting started</p>
             <h2 className="h1">Four steps to a live listing</h2>
           </div>
 

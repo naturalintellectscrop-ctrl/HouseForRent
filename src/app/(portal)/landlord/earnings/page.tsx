@@ -57,7 +57,6 @@ export default async function EarningsPage() {
     return (
       <div className="stack-lg">
         <div>
-          <p className="eyebrow">Landlord</p>
           <h1 className="h1">Earnings</h1>
         </div>
         <Empty
@@ -84,7 +83,6 @@ export default async function EarningsPage() {
     return (
       <div className="stack-lg">
         <div>
-          <p className="eyebrow">Landlord</p>
           <h1 className="h1">Earnings</h1>
         </div>
         <Empty
@@ -107,7 +105,6 @@ export default async function EarningsPage() {
   return (
     <div className="stack-lg">
       <div>
-        <p className="eyebrow">Landlord</p>
         <h1 className="h1">Earnings</h1>
         <p className="lede">
           What has been paid to you, what is waiting, and what is still held —

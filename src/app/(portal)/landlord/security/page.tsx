@@ -16,7 +16,6 @@ export default function LandlordSecurityPage() {
   return (
     <div className="stack-lg">
       <div>
-        <p className="eyebrow">Landlord</p>
         <h1 className="h1">Security</h1>
         <p className="lede">
           Change your password. When you do, every other device signed in to

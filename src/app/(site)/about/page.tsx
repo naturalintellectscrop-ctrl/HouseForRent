@@ -21,10 +21,7 @@ export default function AboutPage() {
     <>
       <section className="section-lg">
         <div className="page">
-          <PageIntro
-            eyebrow="About"
-            title="We would rather list ten homes we have seen than a thousand we have not."
-          >
+          <PageIntro title="We would rather list ten homes we have seen than a thousand we have not.">
             <p className="lede">
               House For Rent is a residential rental marketplace operated by
               Natural Intellects Ltd in Kampala. It exists because the ordinary

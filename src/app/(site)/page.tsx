@@ -229,7 +229,6 @@ export default async function HomePage() {
       <section className="section">
         <div className="page stack-lg">
           <SectionHeader
-            eyebrow="Available now"
             title="Recently confirmed"
             size="h1"
             action={
@@ -277,7 +276,6 @@ export default async function HomePage() {
         <div className="page">
           <div className="guide">
             <div className="guide-head stack">
-              <p className="eyebrow">How it works</p>
               <h2 className="h1">From search to keys</h2>
               <p className="prose">
                 Four steps, and a person from this company is on the ground in
@@ -329,7 +327,6 @@ export default async function HomePage() {
         <div className="page">
           <div className="stack-lg">
             <div>
-              <p className="eyebrow">Why this is different</p>
               <h2 className="h1" style={{ maxWidth: '20ch' }}>
                 The listing is not the product. The visit is.
               </h2>
@@ -380,7 +377,6 @@ export default async function HomePage() {
       <section className="section">
         <div className="page stack-lg">
           <SectionHeader
-            eyebrow="From the field"
             title="The guarantee behind every listing"
           />
 
@@ -470,9 +466,9 @@ export default async function HomePage() {
         <div className="page">
           <div className="corridor">
             <div className="numbers">
-              <p className="eyebrow" style={{ marginBottom: '0.5rem' }}>
+              <h2 className="h2" style={{ marginBottom: '0.75rem' }}>
                 Where we work
-              </p>
+              </h2>
               <div className="num-figure">
                 <strong className="num">{feed.totalCount}</strong>
                 <span>
@@ -546,10 +542,7 @@ export default async function HomePage() {
       {/* ── renting, explained (the reference's blog slot) ───────────── */}
       <section className="section">
         <div className="page stack-lg">
-          <SectionHeader
-            eyebrow="Guides"
-            title="Renting, explained"
-          />
+          <SectionHeader title="Renting, explained" />
 
           <div className="guide-cards">
             {guideCards.map((guide) => (

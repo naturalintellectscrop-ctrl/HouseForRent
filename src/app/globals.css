@@ -819,6 +819,60 @@ legend {
   color: #a5aeaa;
 }
 
+/*
+ * Real contact channels in the footer — fixed light-on-ink like everything
+ * else in this block. Rows are inline-flex so icon and number hold together
+ * when the column is narrow on a phone.
+ */
+.foot-contact {
+  margin-top: 1.25rem;
+  display: grid;
+  gap: 0.45rem;
+  justify-items: start;
+}
+.foot-contact-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #cfd6d2;
+  font-size: 0.9rem;
+  text-decoration: none;
+}
+a.foot-contact-row:hover,
+.foot-contact-row a:hover {
+  color: #f4f7f6;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.foot-contact-row svg {
+  color: #8b968f;
+  flex-shrink: 0;
+}
+.foot-contact-row + .foot-contact-row {
+  margin-top: 0.1rem;
+}
+
+/* Social placeholders: inert marks until the real handles exist. Slightly
+   dimmed with a visible affordance that they are not links yet. */
+.foot-social {
+  margin-top: 2rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid #2a332f;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+.social-logo {
+  display: inline-grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border: 1px solid #354039;
+  border-radius: 999px;
+  color: #8b968f;
+  cursor: default;
+}
+
 /* ── property media ─────────────────────────────────────────────────── */
 
 /*
@@ -1076,6 +1130,41 @@ legend {
     position: sticky;
     top: 5.5rem;
   }
+}
+
+/*
+ * Contact channels on /contact: one row per real channel — icon chip, the
+ * number or address as the primary line, how-to-use-it underneath. Nothing
+ * here is a form that posts nowhere.
+ */
+.contact-channels {
+  display: grid;
+  gap: 1rem;
+}
+.contact-channel {
+  display: flex;
+  gap: 0.85rem;
+  align-items: flex-start;
+}
+.contact-channel-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  flex-shrink: 0;
+}
+.contact-channel-main {
+  display: block;
+  font-weight: 600;
+  font-size: 1.05rem;
+  text-decoration: none;
+}
+.contact-channel-main:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 .spec {
@@ -1798,8 +1887,10 @@ a.list-item:hover {
 }
 /* A card inside the panel is a LIGHT surface (the newest-listing card, the
    honest empty frame) — it must not inherit the panel's light-on-ink text
-   or its heading prints white-on-white. */
-.hero-panel .card {
+   or its heading prints white-on-white. .pcard is the property card's own
+   class; .card is the empty frame. */
+.hero-panel .card,
+.hero-panel .pcard {
   color: var(--ink);
 }
 .hero-panel .lede {
