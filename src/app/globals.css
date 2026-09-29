@@ -1801,6 +1801,74 @@ a.list-item:hover {
   flex: 1 1 14rem;
 }
 
+/*
+ * The reference's hero sits on a dark rounded panel; ours sits on the
+ * brand ink (the same register as the footer and the landlord panel).
+ * Colours inside are deliberately fixed light-on-ink rather than tokenised:
+ * mode tokens exist for surfaces that flip between light and dark, and
+ * this panel is identical in both — that is what a brand block is.
+ */
+.hero-panel {
+  background: var(--brand-ink);
+  color: #f4f7f6;
+  border: 1px solid #2a332f;
+  border-radius: var(--radius-lg);
+  padding: 2.25rem 1.5rem;
+}
+@media (min-width: 52rem) {
+  .hero-panel {
+    padding: 4.5rem 3.5rem;
+  }
+}
+.hero-panel .display {
+  color: #f4f7f6;
+  max-width: 16ch;
+}
+.hero-panel .lede {
+  color: #a5aeaa;
+}
+.hero-panel .faint {
+  color: #7e8883;
+}
+/* The eyebrow keeps its all-caps register but gains the red brand rule
+   from the footer's tagline line — the ink blocks open the way the brand
+   signature does. */
+.hero-panel .eyebrow {
+  color: #a5aeaa;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+.hero-panel .eyebrow::before {
+  content: '';
+  display: inline-block;
+  width: 1.5rem;
+  height: 2px;
+  background: var(--brand-red);
+}
+.hero-panel .input {
+  background: #18211c;
+  border-color: #354039;
+  color: #f4f7f6;
+}
+.hero-panel .input::placeholder {
+  color: #6b7570;
+}
+.hero-panel .input:hover {
+  border-color: #59645e;
+}
+.hero-panel .btn-secondary {
+  background: transparent;
+  color: #f4f7f6;
+  border-color: #354039;
+}
+.hero-panel .btn-secondary:hover {
+  border-color: #6b7570;
+}
+.hero-panel .btn-primary:hover {
+  background: #1cb954;
+}
+
 .promise-grid {
   display: grid;
   gap: 2rem;
@@ -1995,6 +2063,189 @@ a.list-item:hover {
   }
 }
 
+/* ── home: the field standard ───────────────────────────────────────── */
+
+/*
+ * The reference's testimonial slot, told truthfully. There are no invented
+ * client quotes and no stars to fabricate: the statement on the right is
+ * the company's own guarantee — a commitment the product's architecture
+ * actually enforces (an officer must file a report before a listing can go
+ * live) — and the photographs on the left are the system's own, lifted
+ * from real field visits, demo fixtures labelled on the image itself.
+ */
+.field-grid {
+  display: grid;
+  gap: 3rem;
+  align-items: center;
+}
+@media (min-width: 62rem) {
+  .field-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 4rem;
+  }
+}
+.field-photos {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+.field-photo {
+  position: relative;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--bg-sunk);
+  border: 1px solid var(--line);
+  aspect-ratio: 4 / 5;
+}
+.field-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.field-photo .media-fixture {
+  z-index: 1;
+}
+.field-photo .media-empty {
+  position: absolute;
+  inset: 0;
+  height: auto;
+}
+.field-photo-solo {
+  grid-column: 1 / -1;
+  aspect-ratio: 3 / 2;
+}
+@media (min-width: 62rem) {
+  .field-photos {
+    display: block;
+    position: relative;
+  }
+  .field-photo {
+    width: 76%;
+    aspect-ratio: 3 / 2;
+    box-shadow: 0 24px 48px rgba(14, 20, 18, 0.16);
+  }
+  .field-photo-solo {
+    width: 100%;
+  }
+  /* The overlap is the reference's stacked-photograph composition; the
+     mat border keeps the two frames legible where they cross. Static
+     transforms, not motion — reduced-motion has nothing to cancel. */
+  .field-photo-a {
+    transform: rotate(-2deg);
+  }
+  .field-photo-b {
+    position: absolute;
+    right: 0;
+    bottom: -2rem;
+    width: 54%;
+    transform: rotate(2.5deg);
+    border: 6px solid var(--bg);
+    box-shadow: 0 16px 32px rgba(14, 20, 18, 0.2);
+  }
+}
+.field-card {
+  display: grid;
+  gap: 1.1rem;
+  justify-items: start;
+}
+.field-quote {
+  margin: 0;
+  font-size: clamp(1.2rem, 1rem + 0.7vw, 1.55rem);
+  line-height: 1.38;
+  font-weight: 620;
+  letter-spacing: -0.01em;
+  max-width: 34ch;
+}
+.field-checks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.6rem;
+}
+.field-checks li {
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-start;
+  font-size: 0.9375rem;
+  color: var(--ink-soft);
+  max-width: 34rem;
+}
+.field-checks svg {
+  color: var(--accent);
+  flex-shrink: 0;
+  margin-top: 0.15rem;
+}
+
+/* ── home: renting, explained ───────────────────────────────────────── */
+
+/*
+ * The reference's blog row, filled with real content: each card is a
+ * question a first-time renter actually has, answered in one true sentence
+ * and linked to the page that answers it in full. No fabricated dates,
+ * authors, or thumbnails — text-led because there is no editorial
+ * photography to put there and stock imagery is banned on this product.
+ */
+.guide-cards {
+  display: grid;
+  gap: 1.25rem;
+}
+@media (min-width: 40rem) {
+  .guide-cards {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+@media (min-width: 72rem) {
+  .guide-cards {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+.guide-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding: 1.4rem 1.3rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--bg);
+  text-decoration: none;
+  transition: border-color 160ms ease, transform 160ms ease;
+}
+@media (hover: hover) {
+  .guide-card:hover {
+    border-color: var(--accent-line);
+    transform: translateY(-2px);
+  }
+}
+.guide-tag {
+  font-size: 0.6875rem;
+  font-weight: 640;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.guide-card h3 {
+  font-size: 1.05rem;
+  font-weight: 620;
+  margin: 0;
+}
+.guide-card p {
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+  line-height: 1.5;
+  margin: 0;
+  flex: 1;
+}
+.guide-more {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--accent);
+  font-size: 0.875rem;
+  font-weight: 560;
+}
+
 /* ── home: first-timer guide ────────────────────────────────────────── */
 
 /*
@@ -2085,6 +2336,15 @@ a.list-item:hover {
 }
 .stagger > *:nth-child(7) {
   animation-delay: 240ms;
+}
+.stagger > *:nth-child(8) {
+  animation-delay: 280ms;
+}
+.stagger > *:nth-child(9) {
+  animation-delay: 320ms;
+}
+.stagger > *:nth-child(10) {
+  animation-delay: 360ms;
 }
 
 /* ── operations console components ──────────────────────────────────── */
