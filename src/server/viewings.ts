@@ -257,6 +257,11 @@ export async function getViewingDetail(viewingId: string) {
       furnished: v.listing.property.furnished,
       neighbourhoodName: v.listing.property.neighbourhood.name,
       landmarkText: v.listing.property.landmarkText,
+      /** Part of the "is this listing publicly visible right now"
+       * predicate (with publicationState + verificationState) that decides
+       * whether the visit record may show the officer a working
+       * public-listing link rather than a dead one. */
+      inServiceArea: v.listing.property.neighbourhood.inServiceArea,
       propertyId: v.listing.propertyId,
       verificationState: v.listing.verificationState,
       availabilityStatus: v.listing.availabilityStatus,

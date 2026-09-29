@@ -182,5 +182,46 @@ const badViewing = await tenant('POST', '/viewings/qa-journey-nonexistent/cancel
 check('unknown viewing 404', badViewing.status === 404 && badViewing.json.error?.code === 'VIEWING_NOT_FOUND', JSON.stringify(badViewing.json));
 check('tenant on ops cancel 403', (await tenant('POST', `/ops/viewings/qa-journey-nonexistent/cancel`, { note: 'x' })).status === 403);
 
+// ── directory role filter (GET /admin/users?role=…, Task 15) ─────────────
+console.log('\ndirectory role filter:');
+check('role=tenant only tenants', await (async () => {
+  const r = await admin('GET', '/admin/users?role=tenant');
+  return r.status === 200 && r.json.length > 0 && r.json.every((x) => x.role === 'tenant');
+})());
+check('role=lister only listers', await (async () => {
+  const r = await admin('GET', '/admin/users?role=lister');
+  return r.status === 200 && r.json.length > 0 && r.json.every((x) => x.role === 'lister');
+})());
+check('unknown role 422 VALIDATION', await (async () => {
+  const r = await admin('GET', '/admin/users?role=hacker');
+  return r.status === 422 && r.json.error?.code === 'VALIDATION' && /role must be one of/.test(r.json.error.message);
+})());
+check('q composes with role', await (async () => {
+  const r = await admin('GET', `/admin/users?q=${encodeURIComponent(QA_LISTER_PHONE.slice(-7))}&role=lister`);
+  return r.status === 200 && r.json.length === 1 && r.json[0].primaryPhone === QA_LISTER_PHONE;
+})());
+check('tenant 403 on filtered read', (await tenant('GET', '/admin/users?role=tenant')).status === 403);
+
+// ── viewing detail (GET /viewings/:id, Task 15 — the HTTP surface for the
+//    officer's visit record, including the server-derived listing block) ──
+console.log('\nviewing detail:');
+const myViewings = await tenant('GET', '/viewings/mine');
+check('tenant viewings list 200', myViewings.status === 200 && Array.isArray(myViewings.json) && myViewings.json.length > 0);
+if (myViewings.json.length > 0) {
+  const vid = myViewings.json[0].id;
+  const asAdmin = await admin('GET', `/viewings/${vid}`);
+  check('admin 200 with listing block', asAdmin.status === 200 && asAdmin.json.listing && typeof asAdmin.json.listing.expectedUpfront === 'string');
+  check('expectedUpfront = rent×months + deposit', await (async () => {
+    const l = asAdmin.json.listing;
+    const expect = (BigInt(l.monthlyRent) * BigInt(l.requiredMonthsUpfront) + BigInt(l.depositAmount)).toString();
+    return l.expectedUpfront === expect;
+  })());
+  check('publiclyVisible is boolean', typeof asAdmin.json.listing.publiclyVisible === 'boolean');
+  check('listing block carries landmark', typeof asAdmin.json.listing.landmarkText === 'string' && asAdmin.json.listing.landmarkText.length > 0);
+  check('tenant 403 on staff surface', (await tenant('GET', `/viewings/${vid}`)).status === 403);
+  check('anon 401', (await anon('GET', `/viewings/${vid}`)).status === 401);
+  check('unknown viewing 404', (await admin('GET', '/viewings/qa-journey-nonexistent')).status === 404);
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed === 0 ? 0 : 1);

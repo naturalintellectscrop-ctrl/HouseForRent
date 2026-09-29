@@ -5,7 +5,7 @@ import {
   ApiError,
   type ViewingDetail,
 } from '@/lib/api';
-import { ApiAlert, StatusPill, when } from '@/app/ui';
+import { ApiAlert, FURNISHED_LABEL, shillings, StatusPill, TYPE_LABEL, when } from '@/app/ui';
 import { currentRole } from '@/lib/session';
 import { FieldReportForm } from './field-report-form';
 import { MediaCapture } from './media-capture';
@@ -54,7 +54,7 @@ export default async function ViewingPage(props: {
     throw err;
   }
 
-  const { viewing, fieldReport, introduction, canConduct } = detail;
+  const { viewing, listing, fieldReport, introduction, canConduct } = detail;
   // A REQUESTED viewing is not a closed one — it has simply not been
   // scheduled yet. Treating "not scheduled" as "closed" made the page tell
   // an operator that a waiting request had "closed without a report", which
@@ -74,9 +74,58 @@ export default async function ViewingPage(props: {
         <StatusPill status={viewing.status} />
       </div>
       <p className="lede">
-        Listing {viewing.listingId.slice(0, 8)} · tenant{' '}
+        {viewing.bedrooms}-bed{' '}
+        {(TYPE_LABEL[listing.propertyType] ?? listing.propertyType).toLowerCase()} in{' '}
+        {viewing.neighbourhood} · tenant{' '}
         {viewing.tenantName ?? viewing.tenantPartyId.slice(0, 8)}
       </p>
+
+      {/* ── Where the visit happens (Task 15) ──
+          An officer standing in a stairwell needs the landmark and the
+          terms the tenant is working from — not an opaque listing id. The
+          money figure is derived server-side; the public link renders only
+          when the exact predicate the public detail page answers 404 with
+          holds, so the officer can never follow a dead link. */}
+      <div className="card">
+        <div className="card-head">
+          <span className="card-title">
+            {closed ? 'Where the visit was' : 'Where you are going'}
+          </span>
+          <span className="mono faint" style={{ fontSize: '0.8125rem' }}>
+            listing {viewing.listingId.slice(0, 8)}
+          </span>
+        </div>
+        <dl className="dl">
+          <dt>Home</dt>
+          <dd>
+            {listing.bedrooms}-bed {TYPE_LABEL[listing.propertyType] ?? listing.propertyType} ·{' '}
+            {FURNISHED_LABEL[listing.furnished] ?? listing.furnished}
+          </dd>
+          <dt>Landmark</dt>
+          <dd>{listing.landmarkText}</dd>
+          <dt>Advertised rent</dt>
+          <dd>
+            {shillings(listing.monthlyRent)} / month · deposit{' '}
+            {shillings(listing.depositAmount)}
+          </dd>
+          <dt>Tenant funds at agreement</dt>
+          <dd>{shillings(listing.expectedUpfront)}</dd>
+        </dl>
+        {listing.publiclyVisible ? (
+          <p className="muted" style={{ marginBottom: 0 }}>
+            <Link href={`/properties/${viewing.listingId}`}>
+              Open the public listing
+            </Link>{' '}
+            — the photographs and description the tenant is working from.
+          </p>
+        ) : (
+          <p className="muted" style={{ marginBottom: 0 }}>
+            This listing is not publicly visible any more, so there is no
+            public page to open — the tenant asked to see it before that
+            changed.
+          </p>
+        )}
+      </div>
 
       {viewing.status === 'no_show' && (
         <p className="alert alert-note">
