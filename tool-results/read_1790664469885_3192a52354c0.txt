@@ -1,0 +1,1019 @@
+     1→// House For Rent V1 — core domain schema.
+     2→// Source of truth: /docs/House_For_Rent_Data_Model.md. Do not diverge from it
+     3→// without a flagged, confirmed decision — see /docs/DOMAIN.md for the mapping
+     4→// of every model back to its SSOT decision(s).
+     5→//
+     6→// Conventions carried over from Data_Model.md:
+     7→//   - All money is Int/BigInt shillings. Never Float/Decimal for money.
+     8→//   - 🔒 in a comment marks an immutable table. Enforced at the DATABASE level
+     9→//     by a BEFORE UPDATE OR DELETE trigger (see
+    10→//     prisma/migrations/*_immutable_tables/migration.sql) that raises an
+    11→//     exception regardless of which role or code path issues the write —
+    12→//     not merely a service-layer convention. Corrections are new rows.
+    13→//   - ⟡ in a comment marks a seam field: V1 constrains it to a single value via
+    14→//     enum + check constraint / application validation, but future values are
+    15→//     addable without migrating existing rows.
+    16→
+    17→generator client {
+    18→  provider = "prisma-client-js"
+    19→}
+    20→
+    21→datasource db {
+    22→  provider = "postgresql"
+    23→}
+    24→
+    25→// ============================================================================
+    26→// Identity & Verification module (Data_Model.md §2)
+    27→// ============================================================================
+    28→
+    29→/// Account lifecycle states.
+    30→///
+    31→/// `active`, `suspended` and `closed` are the original SSOT set.
+    32→/// `pending_verification`, `disabled` and `archived` were added for the
+    33→/// auth-hardening pass; they are additive enum values, so no existing row
+    34→/// changes meaning and no data migrates.
+    35→///
+    36→/// What each one MEANS is defined once, in `AccountStatusPolicy`
+    37→/// (src/auth/account-status.ts), and enforced at login. A status column
+    38→/// nothing checks is documentation, not a control — which is exactly what
+    39→/// this was before that policy existed.
+    40→enum PartyStatus {
+    41→  /// Registered but not yet identity-verified. CAN sign in — a tenant must
+    42→  /// be able to reach the app in order to complete verification.
+    43→  pending_verification
+    44→  active
+    45→  /// Temporarily blocked by ops. Cannot sign in; reversible.
+    46→  suspended
+    47→  /// Blocked and not expected to return. Cannot sign in.
+    48→  disabled
+    49→  /// Retained for audit/retention only (DPA 2019). Cannot sign in.
+    50→  archived
+    51→  /// Original SSOT value, retained so existing rows keep their meaning.
+    52→  closed
+    53→}
+    54→
+    55→/// The product-agnostic actor. A party may be a tenant, lister, FOO, or admin —
+    56→/// role is contextual (via user_account.auth_role), not a fixed column, because
+    57→/// one human could be both a tenant and a landlord. (SSOT Decision 8; Technical
+    58→/// Architecture §4.1)
+    59→model Party {
+    60→  id           String      @id @default(uuid())
+    61→  displayName  String      @map("display_name")
+    62→  primaryPhone String      @unique @map("primary_phone")
+    63→  status       PartyStatus @default(active)
+    64→  createdAt    DateTime    @default(now()) @map("created_at")
+    65→  updatedAt    DateTime    @updatedAt @map("updated_at")
+    66→
+    67→  userAccounts          UserAccount[]
+    68→  listerProfile         ListerProfile?
+    69→  identityVerifications IdentityVerification[]
+    70→  consentRecords        ConsentRecord[]
+    71→
+    72→  mandatesAsLister   PropertyMandate[] @relation("MandateLister")
+    73→  mandatesVerifiedBy PropertyMandate[] @relation("MandateVerifier")
+    74→
+    75→  propertiesOwned Property[]
+    76→
+    77→  viewingsAsTenant Viewing[] @relation("ViewingTenant")
+    78→  viewingsAsFoo    Viewing[] @relation("ViewingFoo")
+    79→
+    80→  introductionsAsTenant   IntroductionRecord[] @relation("IntroTenant")
+    81→  introductionsAsLandlord IntroductionRecord[] @relation("IntroLandlord")
+    82→  introductionsAsFoo      IntroductionRecord[] @relation("IntroFoo")
+    83→
+    84→  fieldReports FieldReport[]
+    85→
+    86→  screeningRuns ScreeningRun[]
+    87→
+    88→  dealsAsTenant   Deal[]           @relation("DealTenant")
+    89→  dealsAsLandlord Deal[]           @relation("DealLandlord")
+    90→  dealTransitions DealTransition[]
+    91→
+    92→  ledgerAccounts LedgerAccount[]
+    93→
+    94→  configVersionsCreated         ConfigVersion[]
+    95→  commissionRateVersionsCreated CommissionRateVersion[]
+    96→
+    97→  listingAgreements ListingAgreement[]
+    98→
+    99→  mediaAssetsUploaded MediaAsset[]
+   100→
+   101→  auditEvents AuditEvent[]
+   102→
+   103→  @@map("party")
+   104→}
+   105→
+   106→enum AuthRole {
+   107→  tenant
+   108→  lister
+   109→  foo
+   110→  admin
+   111→}
+   112→
+   113→/// Auth binding for a party. Kept separate from Party so a party can exist
+   114→/// (e.g. a landlord created by ops) before self-service credentials. V1: one
+   115→/// primary role per account (Data_Model.md §2.2).
+   116→model UserAccount {
+   117→  id             String   @id @default(uuid())
+   118→  supabaseUserId String?  @unique @map("supabase_user_id")
+   119→  partyId        String   @map("party_id")
+   120→  authRole  AuthRole @map("auth_role")
+   121→  /// Set on each successful login. Nullable because an account that has
+   122→  /// never signed in genuinely has no value — a sentinel date would make
+   123→  /// "never" indistinguishable from "long ago".
+   124→  lastLoginAt DateTime? @map("last_login_at")
+   125→  createdAt DateTime @default(now()) @map("created_at")
+   126→
+   127→  party            Party              @relation(fields: [partyId], references: [id])
+   128→  sessions         Session[]
+   129→  credential       UserCredential?
+   130→  passwordResets   PasswordResetToken[]
+   131→
+   132→  @@map("user_account")
+   133→}
+   134→
+   135→/// Password reset tokens.
+   136→///
+   137→/// ── Why hashed, single-use and short-lived ──
+   138→/// A reset token is a credential that bypasses the password entirely, so it
+   139→/// is stored as a SHA-256 hash exactly like a refresh token: a database
+   140→/// disclosure must not hand over the ability to take over accounts. It is
+   141→/// consumed on use (`usedAt`) and expires quickly — the same reasoning that
+   142→/// makes refresh tokens rotate.
+   143→///
+   144→/// ── Why deliberately NOT immutable ──
+   145→/// Unlike the 🔒 tables, this row is legitimately mutated (marking it used)
+   146→/// and legitimately deleted (expiry cleanup). Marking it immutable would be
+   147→/// wrong rather than merely unnecessary — the same call already recorded
+   148→/// for `session` in DOMAIN.md.
+   149→model PasswordResetToken {
+   150→  id            String    @id @default(uuid())
+   151→  userAccountId String    @map("user_account_id")
+   152→  tokenHash     String    @unique @map("token_hash")
+   153→  expiresAt     DateTime  @map("expires_at")
+   154→  usedAt        DateTime? @map("used_at")
+   155→  createdAt     DateTime  @default(now()) @map("created_at")
+   156→
+   157→  userAccount UserAccount @relation(fields: [userAccountId], references: [id])
+   158→
+   159→  @@index([userAccountId])
+   160→  @@map("password_reset_token")
+   161→}
+   162→
+   163→/// Credential store. Data_Model.md §2.2 deliberately models no password
+   164→/// columns on `user_account`, noting "credentials handled by auth
+   165→/// subsystem" and leaving the shape to document 4 — this is that decision.
+   166→///
+   167→/// Kept in its own table rather than as columns on `user_account` so that
+   168→/// reading an account (which happens on every authorised request) never
+   169→/// loads the password hash, and so a future switch to a different
+   170→/// credential type (OTP-only, WebAuthn) adds a table rather than migrating
+   171→/// the account row. Only the bcrypt hash is stored; the password itself
+   172→/// never touches the database.
+   173→model UserCredential {
+   174→  id            String   @id @default(uuid())
+   175→  userAccountId String   @unique @map("user_account_id")
+   176→  passwordHash  String   @map("password_hash")
+   177→  createdAt     DateTime @default(now()) @map("created_at")
+   178→  updatedAt     DateTime @updatedAt @map("updated_at")
+   179→
+   180→  userAccount UserAccount @relation(fields: [userAccountId], references: [id])
+   181→
+   182→  @@map("user_credential")
+   183→}
+   184→
+   185→/// Standard session/refresh record (Data_Model.md §2.3 — "fields per auth
+   186→/// choice, not detailed there"). Minimal V1 shape: an opaque refresh-token
+   187→/// hash + expiry, revocable. Not immutable — sessions are legitimately
+   188→/// mutated (revoked) and deleted (expiry cleanup); this is intentionally
+   189→/// outside the 🔒 set.
+   190→model Session {
+   191→  id               String    @id @default(uuid())
+   192→  userAccountId    String    @map("user_account_id")
+   193→  refreshTokenHash String    @map("refresh_token_hash")
+   194→  expiresAt        DateTime  @map("expires_at")
+   195→  revokedAt        DateTime? @map("revoked_at")
+   196→  createdAt        DateTime  @default(now()) @map("created_at")
+   197→
+   198→  userAccount UserAccount @relation(fields: [userAccountId], references: [id])
+   199→
+   200→  @@index([userAccountId])
+   201→  @@map("session")
+   202→}
+   203→
+   204→enum ListerTier {
+   205→  property_owner
+   206→  broker_agent
+   207→  property_mgmt_company
+   208→}
+   209→
+   210→/// Tier drives verification + mandate requirements (FR-1.1, FR-3.2; SSOT
+   211→/// Decision 8). One profile per party.
+   212→model ListerProfile {
+   213→  id        String     @id @default(uuid())
+   214→  partyId   String     @unique @map("party_id")
+   215→  tier      ListerTier
+   216→  createdAt DateTime   @default(now()) @map("created_at")
+   217→  updatedAt DateTime   @updatedAt @map("updated_at")
+   218→
+   219→  party Party @relation(fields: [partyId], references: [id])
+   220→
+   221→  @@map("lister_profile")
+   222→}
+   223→
+   224→enum IdentityMethod {
+   225→  nin
+   226→  phone
+   227→  selfie_match
+   228→}
+   229→
+   230→enum VerificationState {
+   231→  pending
+   232→  verified
+   233→  failed
+   234→}
+   235→
+   236→/// Identity = who a party is. SEPARATE from mandate (Technical Architecture
+   237→/// §4.1). One row per verification attempt; current state derivable from the
+   238→/// latest row per (party, method). A party is "identity-verified" when it has
+   239→/// a 'verified' row for each required method (nin, phone, selfie_match).
+   240→///
+   241→/// No plaintext NIN is stored here — the raw NIN is handled by the
+   242→/// IdentityProvider boundary; only verification state and an opaque
+   243→/// provider_ref persist (DPA 2019 data minimisation, NFR-3).
+   244→model IdentityVerification {
+   245→  id          String            @id @default(uuid())
+   246→  partyId     String            @map("party_id")
+   247→  method      IdentityMethod
+   248→  state       VerificationState @default(pending)
+   249→  providerRef String?           @map("provider_ref")
+   250→  verifiedAt  DateTime?         @map("verified_at")
+   251→  createdAt   DateTime          @default(now()) @map("created_at")
+   252→
+   253→  party Party @relation(fields: [partyId], references: [id])
+   254→
+   255→  @@index([partyId, method])
+   256→  @@map("identity_verification")
+   257→}
+   258→
+   259→/// 🔒 Immutable: consent is a historical fact. Withdrawal is a new row with a
+   260→/// 'consent_withdrawal' purpose, never an edit (DPA 2019).
+   261→model ConsentRecord {
+   262→  id             String    @id @default(uuid())
+   263→  partyId        String    @map("party_id")
+   264→  purpose        String
+   265→  grantedAt      DateTime  @map("granted_at")
+   266→  retentionUntil DateTime? @map("retention_until")
+   267→  policyVersion  String    @map("policy_version")
+   268→  createdAt      DateTime  @default(now()) @map("created_at")
+   269→
+   270→  party Party @relation(fields: [partyId], references: [id])
+   271→
+   272→  @@map("consent_record")
+   273→}
+   274→
+   275→enum MandateState {
+   276→  pending
+   277→  verified
+   278→  rejected
+   279→}
+   280→
+   281→/// Authority = a lister's right to market a SPECIFIC property (FR-3.2, FR-3.3).
+   282→/// A (lister, property) pair. This is what an unmandated broker listing lacks.
+   283→/// Enforcement (stated in Data_Model.md §2.7, for the Listings module): a
+   284→/// broker_agent or property_mgmt_company listing cannot transition to 'live'
+   285→/// unless a 'verified' mandate exists for (its lister, its property).
+   286→/// property_owner listings do not require a mandate row in V1.
+   287→model PropertyMandate {
+   288→  id                String       @id @default(uuid())
+   289→  listerPartyId     String       @map("lister_party_id")
+   290→  propertyId        String       @map("property_id")
+   291→  evidenceMediaId   String?      @map("evidence_media_id")
+   292→  state             MandateState @default(pending)
+   293→  verifiedByPartyId String?      @map("verified_by_party_id")
+   294→  verifiedAt        DateTime?    @map("verified_at")
+   295→  createdAt         DateTime     @default(now()) @map("created_at")
+   296→  updatedAt         DateTime     @updatedAt @map("updated_at")
+   297→
+   298→  listerParty     Party       @relation("MandateLister", fields: [listerPartyId], references: [id])
+   299→  verifiedByParty Party?      @relation("MandateVerifier", fields: [verifiedByPartyId], references: [id])
+   300→  property        Property    @relation(fields: [propertyId], references: [id])
+   301→  evidenceMedia   MediaAsset? @relation(fields: [evidenceMediaId], references: [id])
+   302→
+   303→  @@unique([listerPartyId, propertyId])
+   304→  @@map("property_mandate")
+   305→}
+   306→
+   307→// ============================================================================
+   308→// Config module (Data_Model.md §3) — versioned, effective-dated
+   309→// ============================================================================
+   310→
+   311→enum ConfigValueType {
+   312→  int
+   313→  json
+   314→  text
+   315→}
+   316→
+   317→/// Generic versioned config for non-money parameters: service-area boundary,
+   318→/// freshness window (days), screening module set, required-months default.
+   319→model ConfigParameter {
+   320→  id        String          @id @default(uuid())
+   321→  key       String          @unique
+   322→  valueType ConfigValueType @map("value_type")
+   323→  createdAt DateTime        @default(now()) @map("created_at")
+   324→
+   325→  versions ConfigVersion[]
+   326→
+   327→  @@map("config_parameter")
+   328→}
+   329→
+   330→/// 🔒 Immutable: a config change is a new version, never an edit. Current value
+   331→/// = latest version whose effective_from <= now() (FR-10.1).
+   332→model ConfigVersion {
+   333→  id               String   @id @default(uuid())
+   334→  parameterId      String   @map("parameter_id")
+   335→  value            Json
+   336→  effectiveFrom    DateTime @map("effective_from")
+   337→  createdByPartyId String   @map("created_by_party_id")
+   338→  createdAt        DateTime @default(now()) @map("created_at")
+   339→
+   340→  parameter      ConfigParameter @relation(fields: [parameterId], references: [id])
+   341→  createdByParty Party           @relation(fields: [createdByPartyId], references: [id])
+   342→
+   343→  @@index([parameterId, effectiveFrom])
+   344→  @@map("config_version")
+   345→}
+   346→
+   347→/// 🔒 Immutable. Commission rate is money-touching, so it gets its own explicit
+   348→/// versioned table (Technical Architecture §4.1) rather than living in the
+   349→/// generic config_version table. Rate is expressed as basis points of ONE
+   350→/// MONTH's rent (10000 bp = 1.0 month) so commission math is pure integer
+   351→/// arithmetic: commission = monthly_rent * rate_bp_of_month / 10000. The
+   352→/// default V1 value (~10000 bp) is a config choice pending landlord
+   353→/// validation (SSOT Decision 4) — changing it creates a NEW version and never
+   354→/// mutates an existing one; in-flight deals hold a snapshot (see Deal below),
+   355→/// making them structurally immune to the change (FR-7.4).
+   356→model CommissionRateVersion {
+   357→  id               String   @id @default(uuid())
+   358→  rateBpOfMonth    Int      @map("rate_bp_of_month")
+   359→  effectiveFrom    DateTime @map("effective_from")
+   360→  createdByPartyId String   @map("created_by_party_id")
+   361→  note             String?
+   362→  createdAt        DateTime @default(now()) @map("created_at")
+   363→
+   364→  createdByParty Party @relation(fields: [createdByPartyId], references: [id])
+   365→
+   366→  deals             Deal[]
+   367→  listingAgreements ListingAgreement[]
+   368→
+   369→  @@index([effectiveFrom])
+   370→  @@map("commission_rate_version")
+   371→}
+   372→
+   373→// ============================================================================
+   374→// Listings & Properties module (Data_Model.md §4)
+   375→// ============================================================================
+   376→
+   377→/// Taxonomy-first location (FR-2.2). Hierarchical to allow corridor grouping.
+   378→/// Corridor membership is a DATA FLAG (in_service_area), not code (FR-2.5).
+   379→/// The authoritative service-area definition lives in Config ('service_area');
+   380→/// this flag is its materialised projection for query performance.
+   381→model Neighbourhood {
+   382→  id            String   @id @default(uuid())
+   383→  name          String
+   384→  parentId      String?  @map("parent_id")
+   385→  inServiceArea Boolean  @default(false) @map("in_service_area")
+   386→  createdAt     DateTime @default(now()) @map("created_at")
+   387→
+   388→  parent   Neighbourhood?  @relation("NeighbourhoodHierarchy", fields: [parentId], references: [id])
+   389→  children Neighbourhood[] @relation("NeighbourhoodHierarchy")
+   390→
+   391→  properties Property[]
+   392→
+   393→  @@map("neighbourhood")
+   394→}
+   395→
+   396→enum PropertyType {
+   397→  apartment
+   398→  house
+   399→  room
+   400→  other
+   401→}
+   402→
+   403→enum FurnishedState {
+   404→  furnished
+   405→  semi_furnished
+   406→  unfurnished
+   407→}
+   408→
+   409→/// ⟡ transaction_type is a single-value enum in V1 ('rental' only). Adding
+   410→/// 'sale' is a Postgres enum ADD VALUE, which does not migrate or invalidate
+   411→/// existing rows — seam preserved without building sale logic (FR-2.4, SSOT
+   412→/// Decision 6).
+   413→enum TransactionType {
+   414→  rental
+   415→}
+   416→
+   417→/// street_address is OPTIONAL and never required (FR-2.2) — location is
+   418→/// neighbourhood-taxonomy-first with a map pin + landmark.
+   419→model Property {
+   420→  id              String          @id @default(uuid())
+   421→  ownerPartyId    String          @map("owner_party_id")
+   422→  propertyType    PropertyType    @map("property_type")
+   423→  bedrooms        Int
+   424→  bathrooms       Int
+   425→  furnished       FurnishedState
+   426→  neighbourhoodId String          @map("neighbourhood_id")
+   427→  geoLat          Float?          @map("geo_lat")
+   428→  geoLng          Float?          @map("geo_lng")
+   429→  landmarkText    String          @map("landmark_text")
+   430→  streetAddress   String?         @map("street_address")
+   431→  transactionType TransactionType @default(rental) @map("transaction_type")
+   432→  createdAt       DateTime        @default(now()) @map("created_at")
+   433→  updatedAt       DateTime        @updatedAt @map("updated_at")
+   434→
+   435→  ownerParty    Party         @relation(fields: [ownerPartyId], references: [id])
+   436→  neighbourhood Neighbourhood @relation(fields: [neighbourhoodId], references: [id])
+   437→
+   438→  mandates PropertyMandate[]
+   439→  listings Listing[]
+   440→
+   441→  @@map("property")
+   442→}
+   443→
+   444→/// ⟡ tier is single-value in V1 ('standard' only) — seam for premium
+   445→/// operations (SSOT Decision 1). Availability freshness: a listing is STALE
+   446→/// when now() - availability_confirmed_at > freshness_window (window from
+   447→/// Config) — staleness is COMPUTED, not stored, so the window can change by
+   448→/// config alone (FR-2.3).
+   449→///
+   450→/// Invariant (enforced at the publish transition, not by DB constraint alone,
+   451→/// since it depends on lister tier + mandate state which live in other
+   452→/// tables): publication_state = 'live' requires verification_state =
+   453→/// 'verified' AND, for broker/mgmt listers, a verified property_mandate.
+   454→enum ListingTier {
+   455→  standard
+   456→}
+   457→
+   458→enum PublicationState {
+   459→  draft
+   460→  awaiting_verification
+   461→  live
+   462→  rented
+   463→  withdrawn
+   464→}
+   465→
+   466→enum ListingVerificationState {
+   467→  unverified
+   468→  verified
+   469→}
+   470→
+   471→enum AvailabilityStatus {
+   472→  available
+   473→  unavailable
+   474→}
+   475→
+   476→model Listing {
+   477→  id                      String                   @id @default(uuid())
+   478→  propertyId              String                   @map("property_id")
+   479→  monthlyRent             BigInt                   @map("monthly_rent")
+   480→  requiredMonthsUpfront   Int                      @map("required_months_upfront")
+   481→  depositAmount           BigInt                   @map("deposit_amount")
+   482→  tier                    ListingTier              @default(standard)
+   483→  publicationState        PublicationState         @default(draft) @map("publication_state")
+   484→  verificationState       ListingVerificationState @default(unverified) @map("verification_state")
+   485→  availabilityStatus      AvailabilityStatus       @default(available) @map("availability_status")
+   486→  availabilityConfirmedAt DateTime?                @map("availability_confirmed_at")
+   487→  descriptionText         String?                  @map("description_text")
+   488→  createdAt               DateTime                 @default(now()) @map("created_at")
+   489→  updatedAt               DateTime                 @updatedAt @map("updated_at")
+   490→
+   491→  property Property @relation(fields: [propertyId], references: [id])
+   492→
+   493→  listingAmenities    ListingAmenity[]
+   494→  viewings            Viewing[]
+   495→  introductionRecords IntroductionRecord[]
+   496→  deals               Deal[]
+   497→  listingAgreements   ListingAgreement[]
+   498→  photos              ListingPhoto[]
+   499→
+   500→  @@map("listing")
+   501→}
+   502→
+   503→model Amenity {
+   504→  id   String @id @default(uuid())
+   505→  name String @unique
+   506→
+   507→  listingAmenities ListingAmenity[]
+   508→
+   509→  @@map("amenity")
+   510→}
+   511→
+   512→model ListingAmenity {
+   513→  listingId String @map("listing_id")
+   514→  amenityId String @map("amenity_id")
+   515→
+   516→  listing Listing @relation(fields: [listingId], references: [id])
+   517→  amenity Amenity @relation(fields: [amenityId], references: [id])
+   518→
+   519→  @@id([listingId, amenityId])
+   520→  @@map("listing_amenity")
+   521→}
+   522→
+   523→// ============================================================================
+   524→// Viewings & Field Ops module (Data_Model.md §5)
+   525→// ============================================================================
+   526→
+   527→/// ⟡ conducted_by_role is 'foo'-only in V1 (FR-5.6 seam). Adding
+   528→/// 'certified_partner' is an enum extension; existing rows unaffected.
+   529→///
+   530→/// Invariant (enforced at the transition, see Stage 1/5 services): a viewing
+   531→/// cannot move to 'conducted' without (a) an introduction_record and (b) a
+   532→/// field_report (FR-5.3, FR-5.4).
+   533→enum ConductedByRole {
+   534→  foo
+   535→}
+   536→
+   537→enum ViewingStatus {
+   538→  requested
+   539→  scheduled
+   540→  conducted
+   541→  no_show
+   542→  cancelled
+   543→}
+   544→
+   545→model Viewing {
+   546→  id                 String          @id @default(uuid())
+   547→  listingId          String          @map("listing_id")
+   548→  tenantPartyId      String          @map("tenant_party_id")
+   549→  conductedByPartyId String?         @map("conducted_by_party_id")
+   550→  conductedByRole    ConductedByRole @default(foo) @map("conducted_by_role")
+   551→  scheduledFor       DateTime        @map("scheduled_for")
+   552→  status             ViewingStatus   @default(requested)
+   553→  createdAt          DateTime        @default(now()) @map("created_at")
+   554→  updatedAt          DateTime        @updatedAt @map("updated_at")
+   555→
+   556→  listing          Listing @relation(fields: [listingId], references: [id])
+   557→  tenantParty      Party   @relation("ViewingTenant", fields: [tenantPartyId], references: [id])
+   558→  conductedByParty Party?  @relation("ViewingFoo", fields: [conductedByPartyId], references: [id])
+   559→
+   560→  introductionRecord IntroductionRecord?
+   561→  fieldReport        FieldReport?
+   562→
+   563→  @@map("viewing")
+   564→}
+   565→
+   566→/// 🔒 Immutable — this is evidence. The timestamped tenant<->property<->
+   567→/// landlord<->FOO linkage that makes the circumvention clause enforceable
+   568→/// (FR-5.3, FR-8.3, SSOT Decision 11). Persists independently of the deal — a
+   569→/// bypassed deal (no deal record) still leaves this evidence.
+   570→model IntroductionRecord {
+   571→  id              String   @id @default(uuid())
+   572→  viewingId       String   @unique @map("viewing_id")
+   573→  tenantPartyId   String   @map("tenant_party_id")
+   574→  listingId       String   @map("listing_id")
+   575→  landlordPartyId String   @map("landlord_party_id")
+   576→  fooPartyId      String   @map("foo_party_id")
+   577→  introducedAt    DateTime @map("introduced_at")
+   578→  createdAt       DateTime @default(now()) @map("created_at")
+   579→
+   580→  viewing       Viewing @relation(fields: [viewingId], references: [id])
+   581→  tenantParty   Party   @relation("IntroTenant", fields: [tenantPartyId], references: [id])
+   582→  landlordParty Party   @relation("IntroLandlord", fields: [landlordPartyId], references: [id])
+   583→  fooParty      Party   @relation("IntroFoo", fields: [fooPartyId], references: [id])
+   584→  listing       Listing @relation(fields: [listingId], references: [id])
+   585→
+   586→  deals Deal[]
+   587→
+   588→  @@map("introduction_record")
+   589→}
+   590→
+   591→enum ConditionRating {
+   592→  excellent
+   593→  good
+   594→  fair
+   595→  poor
+   596→}
+   597→
+   598→/// Structured, not free-text-only (FR-5.4). condition_rating and
+   599→/// matches_listing are structured fields precisely so they become baseline
+   600→/// data for future Certified Partner standards (SSOT Decision 9) — you can't
+   601→/// certify against a standard you never measured.
+   602→model FieldReport {
+   603→  id              String          @id @default(uuid())
+   604→  viewingId       String          @unique @map("viewing_id")
+   605→  fooPartyId      String          @map("foo_party_id")
+   606→  conditionRating ConditionRating @map("condition_rating")
+   607→  matchesListing  Boolean         @map("matches_listing")
+   608→  isAvailable     Boolean         @map("is_available")
+   609→  issuesText      String?         @map("issues_text")
+   610→  timingNote      String?         @map("timing_note")
+   611→  mediaAssetIds   String[]        @map("media_asset_ids")
+   612→  reportedAt      DateTime        @map("reported_at")
+   613→  createdAt       DateTime        @default(now()) @map("created_at")
+   614→
+   615→  viewing  Viewing @relation(fields: [viewingId], references: [id])
+   616→  fooParty Party   @relation(fields: [fooPartyId], references: [id])
+   617→
+   618→  @@map("field_report")
+   619→}
+   620→
+   621→// ============================================================================
+   622→// Screening module (Data_Model.md §6) — modular pipeline
+   623→// ============================================================================
+   624→
+   625→enum ScreeningOverallState {
+   626→  pending
+   627→  passed
+   628→  failed
+   629→}
+   630→
+   631→/// The pipeline is data-driven: which modules run comes from Config
+   632→/// ('screening_modules'); V1 = ['identity']. module_set snapshots what
+   633→/// actually ran on this run, so history stays interpretable after config
+   634→/// changes (FR-6.1, FR-6.2).
+   635→model ScreeningRun {
+   636→  id            String                @id @default(uuid())
+   637→  tenantPartyId String                @map("tenant_party_id")
+   638→  dealId        String?               @map("deal_id")
+   639→  overallState  ScreeningOverallState @default(pending) @map("overall_state")
+   640→  moduleSet     Json                  @map("module_set")
+   641→  createdAt     DateTime              @default(now()) @map("created_at")
+   642→  updatedAt     DateTime              @updatedAt @map("updated_at")
+   643→
+   644→  tenantParty Party @relation(fields: [tenantPartyId], references: [id])
+   645→  deal        Deal? @relation(fields: [dealId], references: [id])
+   646→
+   647→  moduleResults ScreeningModuleResult[]
+   648→
+   649→  @@map("screening_run")
+   650→}
+   651→
+   652→enum ScreeningModuleState {
+   653→  pending
+   654→  passed
+   655→  failed
+   656→  skipped
+   657→}
+   658→
+   659→/// Adding a future module = a new module_key value + a new pipeline module;
+   660→/// NO schema change here, and no change to the tenant flow (FR-6.2). Ability-
+   661→/// to-pay is NOT a screening module — it's evidenced by escrow funding
+   662→/// (FR-6.3); no employment/financial documents are modelled anywhere in V1.
+   663→model ScreeningModuleResult {
+   664→  id             String               @id @default(uuid())
+   665→  screeningRunId String               @map("screening_run_id")
+   666→  moduleKey      String               @map("module_key")
+   667→  state          ScreeningModuleState
+   668→  detail         Json?
+   669→  createdAt      DateTime             @default(now()) @map("created_at")
+   670→
+   671→  screeningRun ScreeningRun @relation(fields: [screeningRunId], references: [id])
+   672→
+   673→  @@map("screening_module_result")
+   674→}
+   675→
+   676→// ============================================================================
+   677→// Deals & Guarantee module (Data_Model.md §7) — the spine
+   678→// ============================================================================
+   679→
+   680→/// One authoritative status; explicit transitions only; illegal transitions
+   681→/// rejected (FR-8.1). §7.3's transition table is the state machine — the
+   682→/// service layer exposes only the transitions listed there.
+   683→///
+   684→/// Move-In Guarantee (FR-8.2), stated as a structural fact: there is NO
+   685→/// transition from escrow_funded to settled. The only exits from
+   686→/// escrow_funded are move_in_confirmed (forward) or refunded (money back).
+   687→/// Funds are therefore unreleasable until move-in — the guarantee is the
+   688→/// SHAPE OF THE GRAPH, needing no reserve fund.
+   689→enum DealStatus {
+   690→  created
+   691→  tenant_matched
+   692→  agreement_signed
+   693→  escrow_funded
+   694→  move_in_confirmed
+   695→  commission_earned
+   696→  settled
+   697→  closed
+   698→  cancelled
+   699→  refunded
+   700→  dispute_hold
+   701→}
+   702→
+   703→model Deal {
+   704→  id                   String     @id @default(uuid())
+   705→  listingId            String     @map("listing_id")
+   706→  tenantPartyId        String     @map("tenant_party_id")
+   707→  landlordPartyId      String     @map("landlord_party_id")
+   708→  introductionRecordId String?    @map("introduction_record_id")
+   709→  status               DealStatus @default(created)
+   710→
+   711→  // SNAPSHOTTED at agreement_signed, immutable thereafter (FR-7.4). A later
+   712→  // change to the listing's rent or to commission_rate_version cannot alter
+   713→  // an in-flight deal — immunity is structural, not disciplinary.
+   714→  monthlyRentSnapshot      BigInt? @map("monthly_rent_snapshot")
+   715→  commissionRateBpSnapshot Int?    @map("commission_rate_bp_snapshot")
+   716→  commissionRateVersionId  String? @map("commission_rate_version_id")
+   717→
+   718→  // Derived, stored at earn time. commission_amount =
+   719→  // monthly_rent_snapshot * commission_rate_bp_snapshot / 10000, integer
+   720→  // arithmetic, computed at commission_earned — never from escrow total,
+   721→  // never from a live rate (FR-7.3).
+   722→  commissionAmount BigInt? @map("commission_amount")
+   723→  agreementId      String? @map("agreement_id")
+   724→
+   725→  createdAt DateTime @default(now()) @map("created_at")
+   726→  updatedAt DateTime @updatedAt @map("updated_at")
+   727→
+   728→  listing               Listing                @relation(fields: [listingId], references: [id])
+   729→  tenantParty           Party                  @relation("DealTenant", fields: [tenantPartyId], references: [id])
+   730→  landlordParty         Party                  @relation("DealLandlord", fields: [landlordPartyId], references: [id])
+   731→  introductionRecord    IntroductionRecord?    @relation(fields: [introductionRecordId], references: [id])
+   732→  commissionRateVersion CommissionRateVersion? @relation(fields: [commissionRateVersionId], references: [id])
+   733→  agreement             ListingAgreement?      @relation(fields: [agreementId], references: [id])
+   734→
+   735→  transitions     DealTransition[]
+   736→  ledgerAccounts  LedgerAccount[]
+   737→  ledgerEntries   LedgerEntry[]
+   738→  pspInstructions PspInstruction[]
+   739→  screeningRuns   ScreeningRun[]
+   740→
+   741→  @@map("deal")
+   742→}
+   743→
+   744→/// 🔒 Explicit, auditable state history. One authoritative status on Deal;
+   745→/// full history here.
+   746→model DealTransition {
+   747→  id           String   @id @default(uuid())
+   748→  dealId       String   @map("deal_id")
+   749→  fromStatus   String   @map("from_status")
+   750→  toStatus     String   @map("to_status")
+   751→  actorPartyId String   @map("actor_party_id")
+   752→  reason       String?
+   753→  occurredAt   DateTime @map("occurred_at")
+   754→  createdAt    DateTime @default(now()) @map("created_at")
+   755→
+   756→  deal       Deal  @relation(fields: [dealId], references: [id])
+   757→  actorParty Party @relation(fields: [actorPartyId], references: [id])
+   758→
+   759→  @@map("deal_transition")
+   760→}
+   761→
+   762→// ============================================================================
+   763→// Payments module (Data_Model.md §8) — double-entry ledger & PSP boundary
+   764→// ============================================================================
+   765→
+   766→/// Typed accounts (Technical Architecture §5.1). Product-agnostic: no
+   767→/// "rent"/"commission" as columns — meaning comes from account_type.
+   768→enum LedgerAccountType {
+   769→  escrow_liability
+   770→  commission_receivable
+   771→  commission_revenue
+   772→  landlord_payable
+   773→  psp_clearing
+   774→}
+   775→
+   776→model LedgerAccount {
+   777→  id           String            @id @default(uuid())
+   778→  accountType  LedgerAccountType @map("account_type")
+   779→  ownerPartyId String?           @map("owner_party_id")
+   780→  dealId       String?           @map("deal_id")
+   781→  currency     String            @default("UGX")
+   782→  createdAt    DateTime          @default(now()) @map("created_at")
+   783→
+   784→  ownerParty Party? @relation(fields: [ownerPartyId], references: [id])
+   785→  deal       Deal?  @relation(fields: [dealId], references: [id])
+   786→
+   787→  entries LedgerEntry[]
+   788→
+   789→  @@map("ledger_account")
+   790→}
+   791→
+   792→enum LedgerDirection {
+   793→  debit
+   794→  credit
+   795→}
+   796→
+   797→/// 🔒 Immutable, balanced postings. The single source of financial truth.
+   798→///
+   799→/// Invariants (enforced in code within the DB transaction, FR-7.2):
+   800→///   - For a given posting_id, sum(debits) = sum(credits). Unbalanced ->
+   801→///     rejected before commit.
+   802→///   - No UPDATE/DELETE on any row. Corrections = a new reversing posting_id.
+   803→///   - amount > 0 always; direction carries the sign.
+   804→///   - Money is BigInt; no float anywhere.
+   805→///
+   806→/// Canonical postings (Data_Model.md §8.2):
+   807→///   fund_escrow:          debit psp_clearing,      credit escrow_liability
+   808→///   recognise_commission: debit escrow_liability,  credit commission_revenue
+   809→///   settle:               debit escrow_liability,  credit landlord_payable
+   810→///                         (+ PSP release: debit landlord_payable, credit psp_clearing)
+   811→///   refund:               debit escrow_liability,  credit psp_clearing
+   812→model LedgerEntry {
+   813→  id         String          @id @default(uuid())
+   814→  postingId  String          @map("posting_id")
+   815→  accountId  String          @map("account_id")
+   816→  direction  LedgerDirection
+   817→  amount     BigInt
+   818→  dealId     String?         @map("deal_id")
+   819→  reference  String?
+   820→  occurredAt DateTime        @map("occurred_at")
+   821→  createdAt  DateTime        @default(now()) @map("created_at")
+   822→
+   823→  account LedgerAccount @relation(fields: [accountId], references: [id])
+   824→  deal    Deal?         @relation(fields: [dealId], references: [id])
+   825→
+   826→  @@index([postingId])
+   827→  @@index([accountId])
+   828→  @@map("ledger_entry")
+   829→}
+   830→
+   831→enum PspInstructionKind {
+   832→  collect
+   833→  release
+   834→  refund
+   835→}
+   836→
+   837→enum PspInstructionState {
+   838→  pending
+   839→  succeeded
+   840→  failed
+   841→}
+   842→
+   843→/// 🔒 The idempotent boundary to the external custodian (Technical
+   844→/// Architecture §5.2). idempotency_key dedupes duplicate callbacks (FR-7.8).
+   845→///
+   846→/// FULLY immutable — the instruction as issued never changes. Its lifecycle
+   847→/// (pending → succeeded/failed) is recorded as PspInstructionEvent rows and
+   848→/// the current state is DERIVED from the latest event, not stored here.
+   849→/// The `state` column is retained only as the initial, permanent record of
+   850→/// how the instruction was created (always `pending`); read current state
+   851→/// via PspInstructionEvent. This keeps the amount, kind and idempotency key
+   852→/// of a money instruction un-editable after the fact, which is the point of
+   853→/// marking this table immutable in the first place.
+   854→model PspInstruction {
+   855→  id             String              @id @default(uuid())
+   856→  dealId         String              @map("deal_id")
+   857→  kind           PspInstructionKind
+   858→  amount         BigInt
+   859→  idempotencyKey String              @unique @map("idempotency_key")
+   860→  providerRef    String?             @map("provider_ref")
+   861→  state          PspInstructionState @default(pending)
+   862→  createdAt      DateTime            @default(now()) @map("created_at")
+   863→
+   864→  deal   Deal                  @relation(fields: [dealId], references: [id])
+   865→  events PspInstructionEvent[]
+   866→
+   867→  @@map("psp_instruction")
+   868→}
+   869→
+   870→/// 🔒 Append-only lifecycle log for a psp_instruction. The instruction's
+   871→/// CURRENT state is the `toState` of its most recent event (or `pending` if
+   872→/// it has none). Duplicate provider callbacks are deduplicated on
+   873→/// (instruction, toState) so a repeated "succeeded" webhook cannot post
+   874→/// twice (FR-7.8).
+   875→model PspInstructionEvent {
+   876→  id            String              @id @default(uuid())
+   877→  instructionId String              @map("instruction_id")
+   878→  toState       PspInstructionState @map("to_state")
+   879→  providerRef   String?             @map("provider_ref")
+   880→  detail        String?
+   881→  occurredAt    DateTime            @map("occurred_at")
+   882→  createdAt     DateTime            @default(now()) @map("created_at")
+   883→
+   884→  instruction PspInstruction @relation(fields: [instructionId], references: [id])
+   885→
+   886→  @@unique([instructionId, toState])
+   887→  @@index([instructionId])
+   888→  @@map("psp_instruction_event")
+   889→}
+   890→
+   891→/// Ledger-vs-PSP reconciliation (FR-7.8, FR-10.4).
+   892→model ReconciliationCheck {
+   893→  id              String   @id @default(uuid())
+   894→  runAt           DateTime @map("run_at")
+   895→  ledgerBalance   BigInt   @map("ledger_balance")
+   896→  pspBalance      BigInt   @map("psp_balance")
+   897→  isReconciled    Boolean  @map("is_reconciled")
+   898→  discrepancyNote String?  @map("discrepancy_note")
+   899→  createdAt       DateTime @default(now()) @map("created_at")
+   900→
+   901→  @@map("reconciliation_check")
+   902→}
+   903→
+   904→// ============================================================================
+   905→// Agreements module (Data_Model.md §9)
+   906→// ============================================================================
+   907→
+   908→/// 🔒 Originates the rate snapshot (FR-9.1). Immutable once accepted. At
+   909→/// acceptance, the deal copies commission_rate_version.rate_bp_of_month ->
+   910→/// deal.commission_rate_bp_snapshot and monthly_rent_at_signing ->
+   911→/// deal.monthly_rent_snapshot. Names the LANDLORD as payer (FR-9.2);
+   912→/// tenant-facing surfaces carry no charge.
+   913→model ListingAgreement {
+   914→  id                         String    @id @default(uuid())
+   915→  listingId                  String    @map("listing_id")
+   916→  listerPartyId              String    @map("lister_party_id")
+   917→  commissionRateVersionId    String    @map("commission_rate_version_id")
+   918→  monthlyRentAtSigning       BigInt    @map("monthly_rent_at_signing")
+   919→  circumventionClauseVersion String    @map("circumvention_clause_version")
+   920→  acceptedAt                 DateTime? @map("accepted_at")
+   921→  accepted                   Boolean   @default(false)
+   922→  createdAt                  DateTime  @default(now()) @map("created_at")
+   923→
+   924→  listing               Listing               @relation(fields: [listingId], references: [id])
+   925→  listerParty           Party                 @relation(fields: [listerPartyId], references: [id])
+   926→  commissionRateVersion CommissionRateVersion @relation(fields: [commissionRateVersionId], references: [id])
+   927→
+   928→  deals Deal[]
+   929→
+   930→  @@map("listing_agreement")
+   931→}
+   932→
+   933→// ============================================================================
+   934→// Media & Audit (Data_Model.md §10)
+   935→// ============================================================================
+   936→
+   937→enum MediaKind {
+   938→  image
+   939→  video
+   940→}
+   941→
+   942→model MediaAsset {
+   943→  id                String    @id @default(uuid())
+   944→  storageRef        String    @map("storage_ref")
+   945→  kind              MediaKind
+   946→  perceptualHash    String?   @map("perceptual_hash")
+   947→  uploadedByPartyId String    @map("uploaded_by_party_id")
+   948→  /// The MIME type actually stored. Nullable because rows written by the
+   949→  /// V1 mock capture path predate byte storage and have no file behind them.
+   950→  mimeType          String?   @map("mime_type")
+   951→  byteSize          Int?      @map("byte_size")
+   952→  createdAt         DateTime  @default(now()) @map("created_at")
+   953→
+   954→  uploadedByParty Party @relation(fields: [uploadedByPartyId], references: [id])
+   955→
+   956→  propertyMandates PropertyMandate[]
+   957→  listingPhotos    ListingPhoto[]
+   958→
+   959→  @@map("media_asset")
+   960→}
+   961→
+   962→/// A photograph shown on a listing (FR-4.2 — the property is the evidence).
+   963→///
+   964→/// ── Why this is a table and not a column on Listing ──
+   965→/// A listing has many photographs, they are ordered, and each one carries
+   966→/// its own provenance. Provenance is the point: `source` records whether a
+   967→/// human being from this platform stood in that room. A tenant deciding
+   968→/// whether to spend a Saturday travelling to Kira is entitled to know
+   969→/// whether the picture was taken by our field officer or supplied by the
+   970→/// person trying to let the property — and a development fixture must be
+   971→/// able to say so out loud rather than pass as either.
+   972→enum PhotoSource {
+   973→  /// Captured by a Field Operations Officer during a verification visit.
+   974→  /// The only value that may be presented as verified photography.
+   975→  field_officer
+   976→  /// Supplied by the lister. Shown, but never described as verified.
+   977→  lister
+   978→  /// Seeded demonstration imagery. NOT a real property on this platform.
+   979→  /// The API marks it and every surface must label it.
+   980→  development_fixture
+   981→}
+   982→
+   983→model ListingPhoto {
+   984→  id           String      @id @default(uuid())
+   985→  listingId    String      @map("listing_id")
+   986→  mediaAssetId String      @map("media_asset_id")
+   987→  sortOrder    Int         @default(0) @map("sort_order")
+   988→  caption      String?
+   989→  source       PhotoSource
+   990→  createdAt    DateTime    @default(now()) @map("created_at")
+   991→
+   992→  listing    Listing    @relation(fields: [listingId], references: [id])
+   993→  mediaAsset MediaAsset @relation(fields: [mediaAssetId], references: [id])
+   994→
+   995→  @@unique([listingId, mediaAssetId])
+   996→  @@index([listingId, sortOrder])
+   997→  @@map("listing_photo")
+   998→}
+   999→
+  1000→/// 🔒 Append-only (NFR-2). Money, verification, consent, config-change
+  1001→/// events.
+  1002→model AuditEvent {
+  1003→  id           String   @id @default(uuid())
+  1004→  eventType    String   @map("event_type")
+  1005→  actorPartyId String   @map("actor_party_id")
+  1006→  subjectRef   String?  @map("subject_ref")
+  1007→  payload      Json?
+  1008→  occurredAt   DateTime @map("occurred_at")
+  1009→  createdAt    DateTime @default(now()) @map("created_at")
+  1010→
+  1011→  actorParty Party @relation(fields: [actorPartyId], references: [id])
+  1012→
+  1013→  @@map("audit_event")
+  1014→}
+  1015→
+  1016→// ============================================================================
+  1017→// Better Auth (Technical Architecture — auth provider evaluation)
+  1018→// ============================================================================
+  1019→
