@@ -33,7 +33,13 @@ import { findMandatesForLister, findMandatesForOps } from '@/server/mandates';
 import { findForParty, getDealForCaller, listDealsForOps, landlordFinancials } from '@/server/deals';
 import { isSaved, listSaved } from '@/server/saved';
 import { recentActivity } from '@/server/activity';
-import { adminUserDirectory, recentAuditEvents, recentReconciliationChecks } from '@/server/ops';
+import {
+  adminUserDirectory,
+  adminPartyDetail,
+  adminNeighbourhoodDirectory,
+  recentAuditEvents,
+  recentReconciliationChecks,
+} from '@/server/ops';
 import { everyPostingBalances } from '@/server/ledger';
 import { resolveSession } from '@/server/auth';
 import type { SearchResponse } from './contract';
@@ -507,6 +513,32 @@ async function resolveAdminUsers(sp: URLSearchParams) {
   if (caller.role !== 'admin') throw new ApiError(403, 'FORBIDDEN', 'admin surface');
   const rows = await adminUserDirectory(sp.get('q') ?? undefined);
   return rows.map((r) => ({ ...r, createdAt: r.createdAt.toISOString() }));
+}
+
+/**
+ * One account in full, for /ops/users/[partyId] (Task 13). A
+ * subject-scoped read: the service filters every query by this partyId.
+ * Dates normalise to ISO so the shape matches what a real HTTP body
+ * would carry.
+ */
+async function resolveAdminPartyDetail(partyId: string) {
+  const caller = await requireCaller();
+  if (caller.role !== 'admin') throw new ApiError(403, 'FORBIDDEN', 'admin surface');
+  const d = await adminPartyDetail(partyId);
+  return {
+    ...d,
+    party: { ...d.party, createdAt: d.party.createdAt.toISOString() },
+    properties: d.properties.map((p) => ({ ...p, createdAt: p.createdAt.toISOString() })),
+    deals: d.deals.map((x) => ({ ...x, createdAt: x.createdAt.toISOString() })),
+    audit: d.audit.map((a) => ({ ...a, createdAt: a.createdAt.toISOString() })),
+  };
+}
+
+/** Every neighbourhood with its usage counts, for /ops/areas (Task 13). */
+async function resolveOpsNeighbourhoods() {
+  const caller = await requireCaller();
+  if (caller.role !== 'admin') throw new ApiError(403, 'FORBIDDEN', 'admin surface');
+  return { neighbourhoods: await adminNeighbourhoodDirectory() };
 }
 
 async function resolvePresentedTerms(listingId: string): Promise<PresentedTerms> {
@@ -1021,7 +1053,11 @@ function resolverFor(path: string, authenticated: boolean): Resolver {
   if (parts[1] === 'admin' && parts[2] === 'mandates') return () => resolveAdminMandates(u.searchParams);
   if (parts[1] === 'admin' && parts[2] === 'launch-gate') return () => resolveLaunchGate();
   if (parts[1] === 'admin' && parts[2] === 'verification-queue') return () => resolveVerificationQueue();
+  if (parts[1] === 'admin' && parts[2] === 'users' && parts.length === 4) {
+    return () => resolveAdminPartyDetail(parts[3]);
+  }
   if (parts[1] === 'admin' && parts[2] === 'users') return () => resolveAdminUsers(u.searchParams);
+  if (parts[1] === 'ops' && parts[2] === 'neighbourhoods') return () => resolveOpsNeighbourhoods();
   // TASK 7-b (additive): the deal queue's "Show only" filter passes ?status=
   // — must precede the unfiltered admin deals route below. The distribution
   // stays whole (it is the shape of the whole book); only the rows narrow.

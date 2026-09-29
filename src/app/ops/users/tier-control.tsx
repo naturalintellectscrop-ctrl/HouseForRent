@@ -100,7 +100,6 @@ export function TierControl({
               setOk(null);
               setError(null);
             }}
-            style={{ minWidth: '11rem' }}
           >
             {TIER_OPTIONS.map((t) => (
               <option key={t.value} value={t.value}>

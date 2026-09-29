@@ -669,10 +669,11 @@ export async function listServiceAreaNeighbourhoods() {
   return db.neighbourhood.findMany({ where: { inServiceArea: true }, orderBy: { name: 'asc' } });
 }
 
-/** F-015: neighbourhoods are creatable through the API by staff. */
-export async function createNeighbourhood(params: { name: string; district: string; inServiceArea?: boolean; latitude?: number; longitude?: number }) {
-  return db.neighbourhood.create({ data: params });
-}
+// F-015 note: neighbourhood CREATION moved to ops.ts
+// (createServiceAreaNeighbourhood) when it gained its first real UI —
+// duplicate protection, validation and an audit row. The old bare
+// db.neighbourhood.create wrapper here was unreachable dead code and is
+// gone (consolidate, don't duplicate).
 
 export async function listAmenities() {
   return db.amenity.findMany({ orderBy: { name: 'asc' } });

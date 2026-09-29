@@ -12,6 +12,8 @@ import { createHash } from 'node:crypto';
 import { db } from '@/lib/db';
 import { everyPostingBalances } from './ledger';
 import { AUTH_ROLES, LISTER_TIERS, type AuthRole, type ListerTier } from './domain';
+import { ApiError } from './http';
+import { NeighbourhoodNotFoundError } from './listings';
 
 // ── identity (MOCK provider) ─────────────────────────────────────────────
 
@@ -294,6 +296,343 @@ export async function adminUserDirectory(query?: string): Promise<DirectoryRow[]
 }
 
 export { AUTH_ROLES };
+
+// ── account detail (admin) ───────────────────────────────────────────────
+
+/** No account (or no party) answers to this id. */
+export class PartyNotFoundError extends Error {
+  constructor(partyId: string) {
+    super(`no account found for party ${partyId}`);
+    this.name = 'PartyNotFoundError';
+  }
+}
+
+export interface AdminPartyDetail {
+  party: {
+    id: string;
+    displayName: string;
+    primaryPhone: string;
+    status: string;
+    createdAt: Date;
+  };
+  role: string;
+  accountStatus: string;
+  listerTier: string | null;
+  identity: {
+    state: string | null;
+    method: string | null;
+    checkedAt: Date | null;
+    attempts: number;
+    /** The provider is the sandbox mock; every surface must say so. */
+    provider: 'sandbox-mock' | null;
+  };
+  /** Properties this party owns, newest first, with listing counts. */
+  properties: Array<{
+    id: string;
+    label: string;
+    neighbourhood: string;
+    district: string;
+    listingCount: number;
+    liveListings: number;
+    createdAt: Date;
+  }>;
+  /** Deals where this party is the tenant or the landlord. */
+  deals: Array<{
+    id: string;
+    side: 'tenant' | 'landlord';
+    status: string;
+    neighbourhood: string;
+    monthlyRent: string;
+    createdAt: Date;
+  }>;
+  viewings: { requested: number; scheduled: number; conducted: number; cancelled: number };
+  /**
+   * This party's own trail, both directions: events they acted in, and
+   * events carried out ON this account (tier changes, provisioning). A
+   * subject-scoped read — exactly what the audit page's scope discipline
+   * says an account page may do. No free-text, no other parties' rows.
+   */
+  audit: Array<{
+    id: string;
+    action: string;
+    entityType: string;
+    entityId: string;
+    actorName: string;
+    actorRole: string | null;
+    detail: Record<string, unknown> | null;
+    createdAt: Date;
+  }>;
+}
+
+/**
+ * One account, as operations may see it.
+ *
+ * ── Why this page exists and where its line is ──
+ * The directory answers "who and how many"; resolving a dispute or a
+ * landlord's phone call needs the one account in front of you: are they
+ * verified, what do they hold, what has happened on their account. It
+ * stays subject-scoped BY CONSTRUCTION — every query is filtered by this
+ * partyId — and it shows deal states, not ledger balances (money detail
+ * lives on the deal page where its audit trail lives too).
+ */
+export async function adminPartyDetail(partyId: string): Promise<AdminPartyDetail> {
+  const party = await db.party.findUnique({
+    where: { id: partyId },
+    include: {
+      account: true,
+      identityVerifications: { orderBy: { createdAt: 'desc' } },
+      listerProfile: true,
+    },
+  });
+  if (!party || !party.account) throw new PartyNotFoundError(partyId);
+  const account = party.account;
+
+  const [properties, dealsAsTenant, dealsAsLandlord] = await Promise.all([
+    db.property.findMany({
+      where: { ownerPartyId: partyId },
+      include: {
+        neighbourhood: true,
+        _count: { select: { listings: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    }),
+    db.deal.findMany({
+      where: { tenantPartyId: partyId },
+      include: { listing: { include: { property: { include: { neighbourhood: true } } } } },
+      orderBy: { createdAt: 'desc' },
+      take: 25,
+    }),
+    db.deal.findMany({
+      where: { landlordPartyId: partyId },
+      include: { listing: { include: { property: { include: { neighbourhood: true } } } } },
+      orderBy: { createdAt: 'desc' },
+      take: 25,
+    }),
+  ]);
+
+  // Live listings per owned property — one grouped query, mapped per row.
+  const liveByProperty = await db.listing.groupBy({
+    by: ['propertyId'],
+    where: { publicationState: 'live', property: { ownerPartyId: partyId } },
+    _count: { propertyId: true },
+  });
+  const liveCountFor = (propertyId: string) =>
+    liveByProperty.find((g) => g.propertyId === propertyId)?._count.propertyId ?? 0;
+
+  // The tenant-side viewing record, counted by state (bounded read: an
+  // account's own viewings, newest 200).
+  const viewingRows = await db.viewing.findMany({
+    where: { tenantPartyId: partyId },
+    select: { id: true, status: true, scheduledFor: true, updatedAt: true, listingId: true },
+    orderBy: { updatedAt: 'desc' },
+    take: 200,
+  });
+  const viewingsByState = { requested: 0, scheduled: 0, conducted: 0, cancelled: 0 };
+  for (const v of viewingRows) {
+    if (v.status in viewingsByState) viewingsByState[v.status as keyof typeof viewingsByState] += 1;
+  }
+
+  const ownDealIds = [...new Set([...dealsAsTenant, ...dealsAsLandlord].map((d) => d.id))];
+
+  const auditRows = await db.auditEvent.findMany({
+    where: {
+      OR: [
+        { actorPartyId: partyId },
+        { entityType: 'party', entityId: partyId },
+        // Money/consent events carried on this party's OWN deals still
+        // belong on this account's trail — they are what a landlord calling
+        // about "my money" needs to see, and they stay subject-scoped by
+        // construction (only ids from the queries above enter this list).
+        ...(ownDealIds.length ? [{ entityType: 'deal', entityId: { in: ownDealIds } }] : []),
+      ],
+    },
+    orderBy: { createdAt: 'desc' },
+    take: 20,
+    include: { actor: { select: { displayName: true } } },
+  });
+
+  const identity = party.identityVerifications;
+  const latestVerified = identity.find((i) => i.state === 'verified');
+
+  return {
+    party: {
+      id: party.id,
+      displayName: party.displayName,
+      primaryPhone: party.primaryPhone,
+      status: party.status,
+      createdAt: party.createdAt,
+    },
+    role: account.role,
+    accountStatus: account.status,
+    listerTier: party.listerProfile?.tier ?? null,
+    identity: {
+      state: latestVerified?.state ?? identity[0]?.state ?? null,
+      method: (latestVerified ?? identity[0])?.method ?? null,
+      checkedAt: (latestVerified ?? identity[0])?.verifiedAt ?? identity[0]?.createdAt ?? null,
+      attempts: identity.length,
+      provider: identity.length ? 'sandbox-mock' : null,
+    },
+    properties: properties.map((p) => ({
+      id: p.id,
+      label: `${p.bedrooms}-bed ${p.propertyType}`,
+      neighbourhood: p.neighbourhood.name,
+      district: p.neighbourhood.district,
+      listingCount: p._count.listings,
+      liveListings: liveCountFor(p.id),
+      createdAt: p.createdAt,
+    })),
+    deals: [
+      ...dealsAsTenant.map((d) => ({
+        id: d.id,
+        side: 'tenant' as const,
+        status: d.status,
+        neighbourhood: d.listing.property.neighbourhood.name,
+        monthlyRent: (d.monthlyRentSnapshot ?? 0n).toString(),
+        createdAt: d.createdAt,
+      })),
+      ...dealsAsLandlord.map((d) => ({
+        id: d.id,
+        side: 'landlord' as const,
+        status: d.status,
+        neighbourhood: d.listing.property.neighbourhood.name,
+        monthlyRent: (d.monthlyRentSnapshot ?? 0n).toString(),
+        createdAt: d.createdAt,
+      })),
+    ].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()),
+    viewings: viewingsByState,
+    audit: auditRows.map((r) => ({
+      id: r.id,
+      action: r.action,
+      entityType: r.entityType,
+      entityId: r.entityId,
+      actorName: r.actor?.displayName ?? 'system',
+      actorRole: r.actorRole,
+      detail: r.detail ? (JSON.parse(r.detail) as Record<string, unknown>) : null,
+      createdAt: r.createdAt,
+    })),
+  };
+}
+
+// ── service-area administration (neighbourhoods) ─────────────────────────
+
+/**
+ * Why a neighbourhood toggle is an operations decision with an audit row:
+ * `inServiceArea` is read LIVE by the public search filter, the publish
+ * gates (a listing outside the area cannot go live) and the deal service
+ * (an introduction outside it is refused). Turning it off silently would
+ * strand live listings in a corridor we no longer serve; turning it on
+ * widens what the platform will verify. Both directions deserve a record
+ * of who moved the boundary and when.
+ */
+export async function adminNeighbourhoodDirectory() {
+  const rows = await db.neighbourhood.findMany({
+    orderBy: [{ district: 'asc' }, { name: 'asc' }],
+    include: { _count: { select: { properties: true } } },
+  });
+  return Promise.all(
+    rows.map(async (n) => ({
+      id: n.id,
+      name: n.name,
+      district: n.district,
+      inServiceArea: n.inServiceArea,
+      propertyCount: n._count.properties,
+      liveListingCount: await db.listing.count({
+        where: { publicationState: 'live', property: { neighbourhoodId: n.id } },
+      }),
+      hasCoordinates: n.latitude !== null && n.longitude !== null,
+    })),
+  );
+}
+
+export class DuplicateNeighbourhoodError extends Error {
+  constructor(name: string, district: string) {
+    super(`a neighbourhood called "${name}" already exists in ${district}`);
+    this.name = 'DuplicateNeighbourhoodError';
+  }
+}
+
+/**
+ * F-015's create path, hardened for its first real UI: names are required,
+ * a duplicate name+district is a 409 rather than a silent second row, and
+ * the creation is audited like every other boundary move.
+ */
+export async function createServiceAreaNeighbourhood(params: {
+  adminPartyId: string;
+  name: string;
+  district: string;
+  inServiceArea: boolean;
+}) {
+  const name = params.name.trim();
+  const district = params.district.trim();
+  if (!name || !district) {
+    throw new ApiError(400, 'VALIDATION', 'neighbourhood name and district are required');
+  }
+  const existing = await db.neighbourhood.findFirst({ where: { name, district } });
+  if (existing) throw new DuplicateNeighbourhoodError(name, district);
+
+  // Interactive transaction: the audit row needs the created row's id, so
+  // both writes happen inside one callback (all-or-nothing).
+  return db.$transaction(async (tx) => {
+    const row = await tx.neighbourhood.create({
+      data: { name, district, inServiceArea: params.inServiceArea },
+    });
+    await tx.auditEvent.create({
+      data: {
+        actorPartyId: params.adminPartyId,
+        actorRole: 'admin',
+        action: 'neighbourhood_created',
+        entityType: 'neighbourhood',
+        entityId: row.id,
+        detail: JSON.stringify({ name, district, inServiceArea: params.inServiceArea }),
+      },
+    });
+    return row;
+  });
+}
+
+export async function setNeighbourhoodServiceArea(params: {
+  adminPartyId: string;
+  neighbourhoodId: string;
+  inServiceArea: boolean;
+}) {
+  const row = await db.neighbourhood.findUnique({ where: { id: params.neighbourhoodId } });
+  if (!row) throw new NeighbourhoodNotFoundError(params.neighbourhoodId);
+
+  if (row.inServiceArea === params.inServiceArea) {
+    // Idempotent by intent: a double-click re-records nothing — but the
+    // caller still gets the current truth so the UI can confirm it.
+    return { ...row, changed: false };
+  }
+
+  const liveListings = await db.listing.count({
+    where: { publicationState: 'live', property: { neighbourhoodId: params.neighbourhoodId } },
+  });
+
+  const [updated] = await db.$transaction([
+    db.neighbourhood.update({
+      where: { id: params.neighbourhoodId },
+      data: { inServiceArea: params.inServiceArea },
+    }),
+    db.auditEvent.create({
+      data: {
+        actorPartyId: params.adminPartyId,
+        actorRole: 'admin',
+        action: 'service_area_changed',
+        entityType: 'neighbourhood',
+        entityId: params.neighbourhoodId,
+        detail: JSON.stringify({
+          neighbourhood: row.name,
+          district: row.district,
+          from: row.inServiceArea,
+          to: params.inServiceArea,
+          liveListingsAffected: params.inServiceArea ? 0 : liveListings,
+        }),
+      },
+    }),
+  ]);
+  return { ...updated, changed: true };
+}
 
 // ── listing tier administration ─────────────────────────────────────────
 
