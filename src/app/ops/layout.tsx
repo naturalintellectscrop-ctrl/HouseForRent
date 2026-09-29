@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { requireStaff } from '@/lib/session';
 import { Brand } from '@/app/ui';
+import { SiteFooter } from '@/app/site-chrome';
 
 /**
  * The operations console shell.
@@ -59,6 +60,10 @@ export default async function OpsLayout({
       <main id="main" className="ops-shell">
         {children}
       </main>
+      {/* The console is a different register, not a different product: it
+          ends the way every other surface ends (Task 17 did this for the
+          portals). The density divergence above the footer is unchanged. */}
+      <SiteFooter />
     </div>
   );
 }

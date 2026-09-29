@@ -92,41 +92,11 @@
 }
 
 /*
- * Dark is a real counterpart, not an inversion. The values are re-derived
- * against the near-black identity surface, because inverting a light theme
- * produces greys that are correct in ratio and wrong in feel.
+ * Light-only by decision of the product owner: one theme, tuned once, with
+ * no second register to keep honest. The dark tokens that used to live here
+ * were removed wholesale — any component still reading a token gets the
+ * single light value, so the site cannot drift between two palettes.
  */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --ink: #f4f7f6;
-    --ink-soft: #a5aeaa;
-    --ink-faint: #78827d;
-    --line: #232b28;
-    --line-strong: #354039;
-    --bg: #0e1412;
-    --bg-soft: #141b19;
-    --bg-sunk: #0a0f0d;
-    --surface: #161e1b;
-    --surface-alt: #1c2522;
-
-    /* On the near-black page the board's green clears 5:1 unmodified, so
-       dark gets the real brand value rather than the button-safe step. */
-    --accent: #16a34a;
-    --accent-ink: #ffffff;
-    --accent-soft: rgba(22, 163, 74, 0.14);
-    --accent-line: rgba(22, 163, 74, 0.34);
-
-    --ok: #22c55e;
-    --ok-bg: rgba(22, 163, 74, 0.14);
-    --warn: #f59e0b;
-    --warn-bg: rgba(245, 158, 11, 0.13);
-    --danger: #f87171;
-    --danger-bg: rgba(220, 38, 38, 0.15);
-
-    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
-    --shadow-lg: 0 12px 32px -8px rgba(0, 0, 0, 0.6);
-  }
-}
 
 /* ── reset ──────────────────────────────────────────────────────────── */
 
@@ -407,11 +377,6 @@ span.stack-lg {
 .btn-primary:hover {
   /* a step LIGHTER than the base: #0a5514 is already the deep end */
   background: #0d6519;
-}
-@media (prefers-color-scheme: dark) {
-  .btn-primary:hover {
-    background: #1cb954;
-  }
 }
 
 .btn-secondary {
@@ -1553,6 +1518,13 @@ a.list-item:hover {
   font-size: 0.875rem;
   color: var(--ink-soft);
 }
+/* Title and note are spans inside a plain div; without this they run
+   together on one line ("You describe the propertyYou are here."). */
+.trail li > div {
+  display: grid;
+  gap: 0.15rem;
+  justify-items: start;
+}
 
 /* ── the operations console ─────────────────────────────────────────── */
 
@@ -1823,6 +1795,12 @@ a.list-item:hover {
 .hero-panel .display {
   color: #f4f7f6;
   max-width: 16ch;
+}
+/* A card inside the panel is a LIGHT surface (the newest-listing card, the
+   honest empty frame) — it must not inherit the panel's light-on-ink text
+   or its heading prints white-on-white. */
+.hero-panel .card {
+  color: var(--ink);
 }
 .hero-panel .lede {
   color: #a5aeaa;

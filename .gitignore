@@ -52,3 +52,13 @@ prompt
 server.log
 # Skills directory
 /skills/media/
+
+# sandbox runtime data & environment tooling (not product code)
+/skills/
+/tool-results/
+/upload/
+/download/
+/media/
+/db/
+*.db
+--full-page

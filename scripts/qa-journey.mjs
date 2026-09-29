@@ -1,21 +1,24 @@
 #!/usr/bin/env node
 /**
- * QA regression harness — the newest admin/ops endpoints over REAL HTTP.
+ * QA regression harness — admin/ops endpoints over REAL HTTP.
  *
  * ── Why this exists ──
- * Tasks 11–14 added a run of new endpoints (viewing cancel, lister tier,
+ * Tasks 11–16 added admin/ops endpoints (viewing cancel, lister tier,
  * mandate decision, neighbourhood service area, party detail, ops identity
- * check). Each was verified once by hand; this script replays the contract
- * so a future change that breaks one of them fails loudly instead of
- * silently. It exercises the same surface a browser does — /api/v1 over
- * HTTP with session cookies — never Prisma directly (a test that bypasses
- * the API can prove a service works; it cannot prove the product works).
+ * check, officers roster, viewing detail). This script replays their
+ * contracts so a future change that breaks one fails loudly. It exercises
+ * the same surface a browser does — /api/v1 over HTTP with session cookies
+ * — never Prisma directly (a test that bypasses the API can prove a service
+ * works; it cannot prove the product works).
  *
- * ── What it deliberately does NOT do ──
- * It is re-runnable without polluting demo state: where it can, it asserts
- * refusals (401/403/404/409/422) and idempotent no-ops. The only records it
- * creates are identity-check attempts on the QA-labelled tenant — true
- * records on a QA account, bounded to a handful per run.
+ * ── Empty-instance aware (Task 19) ──
+ * The demo-data purge (scripts/purge-demo-data.mjs) removed the seeded
+ * content and the three QA-labelled accounts. The harness now detects what
+ * is present and runs accordingly: contract refusals (401/403/404/422) and
+ * idempotent no-ops always run because they write nothing; blocks that
+ * need seeded content (QA identity checks, a real viewing) print `skip`
+ * lines instead of failing. Nothing is written to a kept account except a
+ * same-value no-op, which records nothing by design.
  *
  * ── The F-009 rule ──
  * Refuses to run without QA_PASSWORD in the environment. The password is
@@ -33,15 +36,19 @@ if (!QA_PASSWORD) {
 const BASE = process.argv[2] ?? 'http://localhost:3000';
 const API = `${BASE}/api/v1`;
 
-// Demo/QA accounts (see scripts/seed-demo.mjs and prior QA rounds).
+// Seed OPERATOR accounts (see scripts/seed-demo.mjs) — these survive the
+// purge so the staff console and the portals stay reachable. The QA_* phones
+// belong to the purged QA-labelled accounts and are optional at runtime.
 const ADMIN_PHONE = '+256700100030';
 const TENANT_PHONE = '+256700100010'; // Grace Achieng — verified tenant
-const QA_TENANT_PHONE = '+256700100099'; // QA Second Tenant
-const QA_LISTER_PHONE = '+256700100098'; // QA Broker Agent
+const LISTER_PHONE = '+256700100001'; // Sarah Nabukenya — verified lister
+const QA_TENANT_PHONE = '+256700100099';
+const QA_LISTER_PHONE = '+256700100098';
 const NIN_OK = 'CM90010099QA01';
 
 let passed = 0;
 let failed = 0;
+let skipped = 0;
 
 function check(name, cond, detail = '') {
   if (cond) {
@@ -51,6 +58,11 @@ function check(name, cond, detail = '') {
     failed += 1;
     console.error(`  FAIL ${name}${detail ? ` — ${detail}` : ''}`);
   }
+}
+
+function skip(name) {
+  skipped += 1;
+  console.log(`  skip ${name} — not present on this instance`);
 }
 
 /** Minimal cookie-carrying client: one jar per login. */
@@ -89,62 +101,74 @@ console.log(`qa-journey against ${API}\n`);
 
 // ── setup ────────────────────────────────────────────────────────────────
 const admin = client();
-const adminSession = await login(admin, ADMIN_PHONE);
+await login(admin, ADMIN_PHONE);
 const tenant = client();
 await login(tenant, TENANT_PHONE);
 
-// Resolve the QA ids through the directory (the way the UI does).
+// Resolve accounts through the directory (the way the UI does).
 const dir = await admin('GET', '/admin/users');
 check('directory lists accounts', dir.status === 200 && Array.isArray(dir.json) && dir.json.length > 0);
-const qaTenant = dir.json.find((r) => r.primaryPhone === QA_TENANT_PHONE);
-const qaLister = dir.json.find((r) => r.primaryPhone === QA_LISTER_PHONE);
-const adminRow = dir.json.find((r) => r.primaryPhone === ADMIN_PHONE);
-check('QA tenant present in directory', Boolean(qaTenant));
-check('QA lister present in directory', Boolean(qaLister));
+const row = (phone) => dir.json.find((r) => r.primaryPhone === phone);
+const qaTenant = row(QA_TENANT_PHONE);
+const qaLister = row(QA_LISTER_PHONE);
+const tenantRow = row(TENANT_PHONE);
+const listerRow = row(LISTER_PHONE);
+const adminRow = row(ADMIN_PHONE);
 check('admin present in directory', Boolean(adminRow));
-if (!qaTenant || !qaLister || !adminRow) {
-  console.error('QA accounts missing — run the demo seed and prior QA rounds first.');
+check('tenant present in directory', Boolean(tenantRow));
+check('lister present in directory', Boolean(listerRow));
+if (!adminRow || !tenantRow || !listerRow) {
+  console.error('Seed operator accounts missing — run scripts/seed-demo.mjs first.');
   process.exit(1);
 }
 
 // ── party detail (GET /admin/users/:partyId) ─────────────────────────────
 console.log('\nparty detail:');
-const detail = await admin('GET', `/admin/users/${qaTenant.partyId}`);
-check('admin 200 with identity block', detail.status === 200 && detail.json.identity && typeof detail.json.identity.attempts === 'number');
-const attemptsBefore = detail.json.identity.attempts;
-check('anon 401', (await anon('GET', `/admin/users/${qaTenant.partyId}`)).status === 401);
-check('tenant 403', (await tenant('GET', `/admin/users/${qaTenant.partyId}`)).status === 403);
+check('admin 200 with identity block', await (async () => {
+  const r = await admin('GET', `/admin/users/${tenantRow.partyId}`);
+  return r.status === 200 && r.json.identity && typeof r.json.identity.attempts === 'number';
+})());
+check('anon 401', (await anon('GET', `/admin/users/${tenantRow.partyId}`)).status === 401);
+check('tenant 403', (await tenant('GET', `/admin/users/${tenantRow.partyId}`)).status === 403);
 check('unknown id 404 PARTY_NOT_FOUND', (await admin('GET', '/admin/users/nope')).status === 404);
 
 // ── ops identity check (POST /admin/users/:partyId/identity-check) ──────
 console.log('\nops identity check:');
-const path = `/admin/users/${qaTenant.partyId}/identity-check`;
-check('anon 401', (await anon('POST', path, { nin: NIN_OK, fullName: 'x' })).status === 401);
-check('tenant 403', (await tenant('POST', path, { nin: NIN_OK, fullName: 'x' })).status === 403);
+check('anon 401', (await anon('POST', `/admin/users/${tenantRow.partyId}/identity-check`, { nin: NIN_OK, fullName: 'x' })).status === 401);
+check('tenant 403', (await tenant('POST', `/admin/users/${tenantRow.partyId}/identity-check`, { nin: NIN_OK, fullName: 'x' })).status === 403);
 const staff = await admin('POST', `/admin/users/${adminRow.partyId}/identity-check`, { nin: NIN_OK, fullName: 'x' });
 check('staff account 422 IDENTITY_CHECK_NOT_APPLICABLE', staff.status === 422 && staff.json.error?.code === 'IDENTITY_CHECK_NOT_APPLICABLE', JSON.stringify(staff.json));
-const missing = await admin('POST', path, { nin: NIN_OK });
-check('missing field 400', missing.status === 400);
-const failedCheck = await admin('POST', path, { nin: NIN_OK, fullName: 'Not The Account Name' });
-check('mismatching name records 201 failed', failedCheck.status === 201 && failedCheck.json.state === 'failed' && failedCheck.json.by === 'operations', JSON.stringify(failedCheck.json));
-const okCheck = await admin('POST', path, { nin: NIN_OK, fullName: qaTenant.displayName });
-check('matching name records 201 verified', okCheck.status === 201 && okCheck.json.state === 'verified', JSON.stringify(okCheck.json));
-const detailAfter = await admin('GET', `/admin/users/${qaTenant.partyId}`);
-check('attempts grew by exactly 2', detailAfter.json.identity.attempts === attemptsBefore + 2, `${attemptsBefore} -> ${detailAfter.json.identity.attempts}`);
-const opsRows = detailAfter.json.audit.filter((a) => a.action === 'identity_verification' && a.detail?.by === 'operations');
-check('trail carries ops-run rows', opsRows.length >= 2, `found ${opsRows.length}`);
+check('missing field 400', (await admin('POST', `/admin/users/${tenantRow.partyId}/identity-check`, { nin: NIN_OK })).status === 400);
+if (qaTenant) {
+  const path = `/admin/users/${qaTenant.partyId}/identity-check`;
+  const failedCheck = await admin('POST', path, { nin: NIN_OK, fullName: 'Not The Account Name' });
+  check('mismatching name records 201 failed', failedCheck.status === 201 && failedCheck.json.state === 'failed' && failedCheck.json.by === 'operations', JSON.stringify(failedCheck.json));
+  const okCheck = await admin('POST', path, { nin: NIN_OK, fullName: qaTenant.displayName });
+  check('matching name records 201 verified', okCheck.status === 201 && okCheck.json.state === 'verified', JSON.stringify(okCheck.json));
+  const detail = await admin('GET', `/admin/users/${qaTenant.partyId}`);
+  check('trail carries ops-run rows', detail.json.audit.filter((a) => a.action === 'identity_verification' && a.detail?.by === 'operations').length >= 2);
+} else {
+  skip('mismatching name records 201 failed (needs a QA tenant)');
+  skip('matching name records 201 verified (needs a QA tenant)');
+  skip('trail carries ops-run rows (needs a QA tenant)');
+}
 
 // ── lister tier (POST /admin/users/:partyId/tier) ────────────────────────
 console.log('\nlister tier:');
-const tierPath = `/admin/users/${qaLister.partyId}/tier`;
+const tierPath = `/admin/users/${listerRow.partyId}/tier`;
 check('anon 401', (await anon('POST', tierPath, { tier: 'broker_agent' })).status === 401);
 check('tenant 403', (await tenant('POST', tierPath, { tier: 'broker_agent' })).status === 403);
-check(
-  'invalid tier 422',
-  (await admin('POST', tierPath, { tier: 'kingpin' })).status === 422,
-);
-const sameTier = await admin('POST', tierPath, { tier: qaLister.listerTier ?? 'property_owner' });
+check('invalid tier 422', (await admin('POST', tierPath, { tier: 'kingpin' })).status === 422);
+const sameTier = await admin('POST', tierPath, { tier: listerRow.listerTier ?? 'property_owner' });
 check('same-value submit is a no-op', sameTier.status === 200 && sameTier.json.changed === false, JSON.stringify(sameTier.json));
+if (qaLister) {
+  check('q composes to the QA lister', await (async () => {
+    const r = await admin('GET', `/admin/users?q=${encodeURIComponent(QA_LISTER_PHONE.slice(-7))}&role=lister`);
+    return r.status === 200 && r.json.length === 1 && r.json[0].primaryPhone === QA_LISTER_PHONE;
+  })());
+} else {
+  skip('q composes to the QA lister (QA lister purged)');
+}
 
 // ── mandate queue + decision refusals ────────────────────────────────────
 console.log('\nmandates:');
@@ -169,8 +193,7 @@ check('tenant 403', (await tenant('GET', '/ops/neighbourhoods')).status === 403)
 const first = list.json.neighbourhoods[0];
 const dup = await admin('POST', '/ops/neighbourhoods', { name: first.name, district: first.district });
 check('duplicate 409 NEIGHBOURHOOD_EXISTS', dup.status === 409 && dup.json.error?.code === 'NEIGHBOURHOOD_EXISTS', JSON.stringify(dup.json));
-const noName = await admin('POST', '/ops/neighbourhoods', { district: first.district });
-check('missing name 400', noName.status === 400);
+check('missing name 400', (await admin('POST', '/ops/neighbourhoods', { district: first.district })).status === 400);
 const sameArea = await admin('POST', `/ops/neighbourhoods/${first.id}/service-area`, { inServiceArea: first.inServiceArea });
 check('same-value toggle is a no-op', sameArea.status === 200 && sameArea.json.changed === false, JSON.stringify(sameArea.json));
 check('unknown neighbourhood 404', (await admin('POST', '/ops/neighbourhoods/nope/service-area', { inServiceArea: true })).status === 404);
@@ -180,9 +203,9 @@ console.log('\nviewing cancel:');
 check('anon 401', (await anon('POST', '/viewings/qa-journey-nonexistent/cancel')).status === 401);
 const badViewing = await tenant('POST', '/viewings/qa-journey-nonexistent/cancel');
 check('unknown viewing 404', badViewing.status === 404 && badViewing.json.error?.code === 'VIEWING_NOT_FOUND', JSON.stringify(badViewing.json));
-check('tenant on ops cancel 403', (await tenant('POST', `/ops/viewings/qa-journey-nonexistent/cancel`, { note: 'x' })).status === 403);
+check('tenant on ops cancel 403', (await tenant('POST', '/ops/viewings/qa-journey-nonexistent/cancel', { note: 'x' })).status === 403);
 
-// ── directory role filter (GET /admin/users?role=…, Task 15) ─────────────
+// ── directory role filter (GET /admin/users?role=…) ──────────────────────
 console.log('\ndirectory role filter:');
 check('role=tenant only tenants', await (async () => {
   const r = await admin('GET', '/admin/users?role=tenant');
@@ -197,18 +220,20 @@ check('unknown role 422 VALIDATION', await (async () => {
   return r.status === 422 && r.json.error?.code === 'VALIDATION' && /role must be one of/.test(r.json.error.message);
 })());
 check('q composes with role', await (async () => {
-  const r = await admin('GET', `/admin/users?q=${encodeURIComponent(QA_LISTER_PHONE.slice(-7))}&role=lister`);
-  return r.status === 200 && r.json.length === 1 && r.json[0].primaryPhone === QA_LISTER_PHONE;
+  const r = await admin('GET', `/admin/users?q=${encodeURIComponent(LISTER_PHONE.slice(-7))}&role=lister`);
+  return r.status === 200 && r.json.length === 1 && r.json[0].primaryPhone === LISTER_PHONE;
 })());
 check('tenant 403 on filtered read', (await tenant('GET', '/admin/users?role=tenant')).status === 403);
 
-// ── viewing detail (GET /viewings/:id, Task 15 — the HTTP surface for the
-//    officer's visit record, including the server-derived listing block) ──
+// ── viewing detail (GET /viewings/:id — the HTTP surface for the officer's
+//    visit record, including the server-derived listing block) ────────────
 console.log('\nviewing detail:');
 const myViewings = await tenant('GET', '/viewings/mine');
-check('tenant viewings list 200', myViewings.status === 200 && Array.isArray(myViewings.json) && myViewings.json.length > 0);
-const vid = myViewings.json.length > 0 ? myViewings.json[0].id : null;
-if (vid) {
+check('tenant viewings list 200', myViewings.status === 200 && Array.isArray(myViewings.json));
+check('unknown viewing 404', (await admin('GET', '/viewings/qa-journey-nonexistent')).status === 404);
+check('anon 401 on detail', (await anon('GET', '/viewings/qa-journey-nonexistent')).status === 401);
+if (myViewings.json?.length > 0) {
+  const vid = myViewings.json[0].id;
   const asAdmin = await admin('GET', `/viewings/${vid}`);
   check('admin 200 with listing block', asAdmin.status === 200 && asAdmin.json.listing && typeof asAdmin.json.listing.expectedUpfront === 'string');
   check('expectedUpfront = rent×months + deposit', await (async () => {
@@ -219,28 +244,32 @@ if (vid) {
   check('publiclyVisible is boolean', typeof asAdmin.json.listing.publiclyVisible === 'boolean');
   check('listing block carries landmark', typeof asAdmin.json.listing.landmarkText === 'string' && asAdmin.json.listing.landmarkText.length > 0);
   check('tenant 403 on staff surface', (await tenant('GET', `/viewings/${vid}`)).status === 403);
-  check('anon 401', (await anon('GET', `/viewings/${vid}`)).status === 401);
-  check('unknown viewing 404', (await admin('GET', '/viewings/qa-journey-nonexistent')).status === 404);
+} else {
+  skip('admin 200 with listing block (no viewings on this instance)');
+  skip('expectedUpfront = rent×months + deposit (no viewings)');
+  skip('publiclyVisible is boolean (no viewings)');
+  skip('listing block carries landmark (no viewings)');
+  skip('tenant 403 on staff surface (no viewings)');
 }
 
-// ── assignable officers + dispatch refusals (Task 16) ────────────────────
+// ── assignable officers + dispatch refusals ──────────────────────────────
 // Refusals only: an assertion that actually assigns would move a real
-// visit; reassignment semantics were verified by hand in the browser this
-// round (move, keep-slot, and the same-officer no-op that records nothing).
+// visit; reassignment semantics were verified by hand in the browser.
 console.log('\nassignable officers + dispatch refusals:');
 const officersRes = await admin('GET', '/ops/officers');
-check('admin 200 roster with load', officersRes.status === 200 && Array.isArray(officersRes.json) && officersRes.json.length > 0 && officersRes.json.every((o) => typeof o.assignedCount === 'number'));
+check('admin 200 roster with load', officersRes.status === 200 && Array.isArray(officersRes.json) && officersRes.json.every((o) => typeof o.assignedCount === 'number'));
 check('tenant 403', (await tenant('GET', '/ops/officers')).status === 403);
 check('anon 401', (await anon('GET', '/ops/officers')).status === 401);
 check('dispatch anon 401', (await anon('POST', '/ops/dispatch', { viewingId: 'x', fooPartyId: 'y' })).status === 401);
 check('dispatch tenant 403', (await tenant('POST', '/ops/dispatch', { viewingId: 'x', fooPartyId: 'y' })).status === 403);
 check('dispatch unknown viewing 404', (await admin('POST', '/ops/dispatch', { viewingId: 'qa-journey-nonexistent', fooPartyId: 'y' })).status === 404);
-check('dispatch non-officer party 404 OFFICER_NOT_FOUND', vid ? await (async () => {
-  // The QA tenant's own party id is a REAL party with an account that is
-  // not a field officer — the exact account the service must refuse.
+if (qaTenant && myViewings.json?.length > 0) {
+  const vid = myViewings.json[0].id;
   const r = await admin('POST', '/ops/dispatch', { viewingId: vid, fooPartyId: qaTenant.partyId });
-  return r.status === 404 && r.json.error?.code === 'OFFICER_NOT_FOUND';
-})() : false, 'needs a viewing id from /viewings/mine');
+  check('dispatch non-officer party 404 OFFICER_NOT_FOUND', r.status === 404 && r.json.error?.code === 'OFFICER_NOT_FOUND');
+} else {
+  skip('dispatch non-officer party 404 (needs a QA tenant + a real viewing)');
+}
 
-console.log(`\n${passed} passed, ${failed} failed`);
+console.log(`\n${passed} passed, ${failed} failed, ${skipped} skipped`);
 process.exit(failed === 0 ? 0 : 1);

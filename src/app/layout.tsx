@@ -37,12 +37,9 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  // The identity is drawn on a near-black surface; matching the browser
-  // chrome to the page stops the two-tone flash on a phone.
-  themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#ffffff' },
-    { media: '(prefers-color-scheme: dark)', color: '#0e1412' },
-  ],
+  // Light-only product: the browser chrome matches the page in both
+  // orientations and at every brightness, so there is no two-tone flash.
+  themeColor: '#ffffff',
 };
 
 /**
