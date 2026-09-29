@@ -64,6 +64,8 @@ export function jsonError(err: unknown): NextResponse {
     MissingMandateError: { status: 409, code: 'MISSING_MANDATE' },
     PropertyNotFoundError: { status: 404, code: 'PROPERTY_NOT_FOUND' },
     NotYourPropertyError: { status: 403, code: 'NOT_YOUR_PROPERTY' },
+    PartyNotFoundError: { status: 404, code: 'PARTY_NOT_FOUND' },
+    DuplicateNeighbourhoodError: { status: 409, code: 'NEIGHBOURHOOD_EXISTS' },
     MandateNotNeededError: { status: 422, code: 'MANDATE_NOT_NEEDED' },
     ListerTierNotApplicableError: { status: 422, code: 'TIER_NOT_APPLICABLE' },
     MandateNotFoundError: { status: 404, code: 'MANDATE_NOT_FOUND' },

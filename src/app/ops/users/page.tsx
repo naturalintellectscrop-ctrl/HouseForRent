@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
+import Link from 'next/link';
 import { api, ApiError, type DirectoryRow } from '@/lib/api';
-import { AdminOnly, onDay } from '@/app/ui';
+import { AdminOnly, onDayShort } from '@/app/ui';
 import { TierControl } from './tier-control';
 
 /**
@@ -76,15 +77,20 @@ export default async function UsersPage(props: {
         </p>
       ) : (
         <div className="table-scroll">
-          <table>
+          {/**
+            * table-compact: the directory carries 9 columns; at the default
+            * size they forced a horizontal scroll even on a full desktop.
+            * The detail page (name link) now carries the depth, so the row
+            * can afford to be tighter.
+            */}
+          <table className="table-compact">
             <thead>
               <tr>
                 <th scope="col">Name</th>
                 <th scope="col">Phone</th>
                 <th scope="col">Role</th>
                 <th scope="col">Lists as</th>
-                <th scope="col">Status</th>
-                <th scope="col">Identity</th>
+                <th scope="col">Standing</th>
                 <th scope="col" className="num">
                   Properties
                 </th>
@@ -97,8 +103,14 @@ export default async function UsersPage(props: {
             <tbody>
               {rows.map((r) => (
                 <tr key={r.partyId}>
-                  <td>{r.displayName}</td>
-                  <td className="mono">{r.primaryPhone}</td>
+                  <td>
+                    <Link href={`/ops/users/${r.partyId}`} style={{ fontWeight: 600 }}>
+                      {r.displayName}
+                    </Link>
+                  </td>
+                  <td className="mono">
+                    <Link href={`/ops/users/${r.partyId}`}>{r.primaryPhone}</Link>
+                  </td>
                   <td>{ROLE_LABEL[r.role] ?? r.role}</td>
                   <td>
                     {r.role === 'lister' ? (
@@ -108,28 +120,36 @@ export default async function UsersPage(props: {
                     )}
                   </td>
                   <td>
-                    {r.accountStatus === 'active' ? (
-                      'active'
-                    ) : (
-                      <span className="badge badge-warn">{r.accountStatus.replace(/_/g, ' ')}</span>
-                    )}
-                  </td>
-                  <td>
-                    {r.identityVerified ? (
-                      <span className="badge badge-ok">verified</span>
-                    ) : (
-                      <span className="badge">not verified</span>
-                    )}
+                    {/** Account standing and identity in one column: the two
+                        badges are read together ("pending verification AND
+                        unverified" is a different account from "active but
+                        unverified"), and splitting them across two columns
+                        was what pushed the table past a desktop's width. */}
+                    <span className="stack-sm" style={{ display: 'inline-flex', gap: '0.25rem' }}>
+                      {r.accountStatus === 'active' ? (
+                        <span className="badge badge-ok">active</span>
+                      ) : (
+                        <span className="badge badge-warn">{r.accountStatus.replace(/_/g, ' ')}</span>
+                      )}
+                      {r.identityVerified ? (
+                        <span className="badge badge-ok">identity verified</span>
+                      ) : (
+                        <span className="badge">identity unverified</span>
+                      )}
+                    </span>
                   </td>
                   <td className="num">{r.listingCount}</td>
                   <td className="num">{r.dealCount}</td>
-                  <td>{onDay(r.createdAt)}</td>
+                  <td style={{ whiteSpace: 'nowrap' }}>{onDayShort(r.createdAt)}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       )}
+      <p className="faint" style={{ fontSize: '0.8125rem', marginTop: '0.75rem' }}>
+        Open an account for its full standing, holdings and trail.
+      </p>
     </>
   );
 }

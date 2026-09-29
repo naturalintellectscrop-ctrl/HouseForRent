@@ -2113,6 +2113,38 @@ a.card-link:hover .card-title {
   border: 0;
 }
 
+/* Dense register for wide operational tables (directory, service areas):
+   at the default size a 9-column table needed horizontal scrolling even on
+   a full desktop. Depth lives on the linked detail pages, so the rows can
+   afford to be tighter. Phones still scroll via .table-scroll. */
+.table-compact {
+  font-size: 0.875rem;
+}
+.table-compact th,
+.table-compact td {
+  padding: 0.55rem 0.65rem;
+}
+.table-compact td .btn-sm {
+  padding: 0.3rem 0.65rem;
+}
+.table-compact td select {
+  min-width: 8.25rem;
+  font-size: 0.8125rem;
+  padding: 0.35rem 0.45rem;
+}
+
+/* Row-scanning affordance for dense operational tables: with 8+ columns a
+   pointing cursor needs to know which row it is on. Public tables stay
+   untouched — this is an ops-register detail. */
+.ops .table-scroll tbody tr {
+  transition: background-color 120ms ease;
+}
+@media (hover: hover) {
+  .ops .table-scroll tbody tr:hover {
+    background: color-mix(in srgb, var(--accent) 4%, transparent);
+  }
+}
+
 .tags {
   display: flex;
   gap: 0.35rem;

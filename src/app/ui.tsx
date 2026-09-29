@@ -204,6 +204,16 @@ export function onDay(iso: string): string {
   });
 }
 
+/** Compact variant for dense operational tables ("29 Sep 2026"). */
+export function onDayShort(iso: string): string {
+  return new Date(iso).toLocaleDateString('en-GB', {
+    timeZone: 'Africa/Kampala',
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
 /** "today" / "yesterday" / "4 days ago". Null stays null — never "unknown". */
 export function daysAgo(days: number | null): string | null {
   if (days === null) return null;
