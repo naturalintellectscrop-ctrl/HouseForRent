@@ -8,6 +8,8 @@ import {
   type TenantViewing,
 } from '@/lib/portal';
 import { Empty, Icon, shillings, Status, StatusPill, when } from '@/app/ui';
+import { ActivityFeed } from '../activity-feed';
+import type { ActivityRow } from '@/server/activity';
 
 export const metadata = { title: 'My account' };
 
@@ -22,13 +24,17 @@ export const metadata = { title: 'My account' };
  * dashboard that makes people ask us why the button does not work.
  */
 export default async function AccountPage() {
-  const [identity, viewings, deals] = await Promise.all([
+  const [identity, viewings, deals, activity] = await Promise.all([
     api<IdentityStatus>('/v1/identity/me').catch(() => null),
     api<TenantViewing[]>('/v1/viewings/mine').catch((e) => {
       if (e instanceof ApiError) return [];
       throw e;
     }),
     api<PartyDeal[]>('/v1/deals').catch((e) => {
+      if (e instanceof ApiError) return [];
+      throw e;
+    }),
+    api<ActivityRow[]>('/v1/activity/mine').catch((e) => {
       if (e instanceof ApiError) return [];
       throw e;
     }),
@@ -136,15 +142,25 @@ export default async function AccountPage() {
 
         {upcoming.length === 0 ? (
           <Empty
-            title="Nothing booked"
+            title={
+              viewings.length > 0
+                ? 'No viewings booked right now'
+                : 'Nothing booked'
+            }
             action={
-              <Link href="/properties" className="btn btn-secondary">
-                Find a home to view
+              <Link
+                href={
+                  viewings.length > 0 ? '/account/viewings' : '/properties'
+                }
+                className="btn btn-secondary"
+              >
+                {viewings.length > 0 ? 'See your viewings →' : 'Find a home to view'}
               </Link>
             }
           >
-            When you request a viewing, our operations desk assigns a field
-            officer to meet you at the property.
+            {viewings.length > 0
+              ? `You have ${viewings.length === 1 ? 'a past viewing' : `${viewings.length} past viewings`} on record. When you request a new one, our operations desk assigns a field officer to meet you at the property.`
+              : 'When you request a viewing, our operations desk assigns a field officer to meet you at the property.'}
           </Empty>
         ) : (
           <ul className="list">
@@ -163,7 +179,7 @@ export default async function AccountPage() {
                     {v.whatHappensNext}
                   </span>
                 </span>
-                <span className="stack-sm" style={{ textAlign: 'right' }}>
+                <span className="stack-sm" style={{ textAlign: 'right', alignItems: 'flex-end' }}>
                   <StatusPill status={v.status} />
                   <span className="faint" style={{ fontSize: '0.875rem' }}>
                     {when(v.scheduledFor)}
@@ -173,6 +189,12 @@ export default async function AccountPage() {
             ))}
           </ul>
         )}
+      </section>
+
+      {/* ── recent activity: real records only ───────────────────────── */}
+      <section className="stack">
+        <h2 className="h2">Recent activity</h2>
+        <ActivityFeed rows={activity} />
       </section>
     </div>
   );

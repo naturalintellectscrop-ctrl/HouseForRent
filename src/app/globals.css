@@ -241,18 +241,21 @@ a {
   }
 }
 
+/* padding-block, not the shorthand: .page supplies the horizontal gutter,
+   and a `padding: X 0` shorthand here was resetting it to 0 wherever the
+   two classes share an element (properties header sat flush on mobile). */
 .section {
-  padding: 3.5rem 0;
+  padding-block: 3.5rem;
 }
 .section-lg {
-  padding: 4.5rem 0;
+  padding-block: 4.5rem;
 }
 @media (min-width: 60rem) {
   .section {
-    padding: 5rem 0;
+    padding-block: 5rem;
   }
   .section-lg {
-    padding: 7rem 0;
+    padding-block: 7rem;
   }
 }
 
@@ -268,6 +271,19 @@ a {
 }
 .stack-lg > * + * {
   margin-top: 2rem;
+}
+
+/* Stacks on spans. .stack-sm's margin-top only does anything between block
+   children — but list rows and deal rows use <span className="stack-sm">
+   whose children (spans, links) are inline, so every line ran together.
+   Make a stack that lands on a span a real vertical flex container, which
+   blockifies its children and gives the margins effect. */
+span.stack,
+span.stack-sm,
+span.stack-lg {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
 }
 
 .row {
@@ -975,6 +991,64 @@ legend {
   }
 }
 
+/* ── the interactive detail gallery (QA round) ── */
+/* The large view follows the selection; the film strip sits beneath and
+   scrolls sideways when a listing has many photographs. */
+.gallery-main .media {
+  border-radius: var(--radius-lg);
+  aspect-ratio: 16 / 9;
+}
+@media (min-width: 48rem) {
+  .gallery-main .media {
+    aspect-ratio: 2 / 1;
+  }
+}
+.gallery-thumbs {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  overflow-x: auto;
+  padding-bottom: 0.25rem;
+  scrollbar-width: thin;
+}
+.gallery-thumb {
+  position: relative;
+  flex: 0 0 auto;
+  width: 6.5rem;
+  aspect-ratio: 4 / 3;
+  padding: 0;
+  border: 2px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  cursor: pointer;
+  overflow: hidden;
+}
+.gallery-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.gallery-thumb:hover {
+  border-color: var(--line-strong);
+}
+.gallery-thumb.is-current {
+  border-color: var(--accent);
+}
+.gallery-thumb-flag {
+  position: absolute;
+  left: 0.25rem;
+  bottom: 0.25rem;
+  font-size: 0.5625rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 0.05rem 0.3rem;
+}
+
 .detail-grid {
   display: grid;
   gap: 2rem;
@@ -1336,6 +1410,49 @@ tbody tr:last-child td {
 }
 a.list-item:hover {
   border-color: var(--line-strong);
+}
+
+/* Recent activity: a timeline-flavoured list. The when-column is fixed so
+   titles across rows align; on a phone it moves above the title. */
+.activity-feed {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0;
+}
+.activity-feed li {
+  border-bottom: 1px solid var(--line);
+}
+.activity-feed li:last-child {
+  border-bottom: 0;
+}
+.activity-row {
+  display: flex;
+  gap: 1rem;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  padding: 0.9rem 0.25rem;
+  text-decoration: none;
+  color: inherit;
+}
+.activity-row:hover .card-title {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.activity-when {
+  flex: 0 0 10.5rem;
+  font-size: 0.8125rem;
+  color: var(--ink-faint);
+}
+@media (max-width: 44rem) {
+  .activity-row {
+    align-items: flex-start;
+  }
+  .activity-when {
+    flex-basis: 100%;
+  }
 }
 
 /* A vertical progress trail: where a deal or a listing has got to. */

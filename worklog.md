@@ -209,3 +209,37 @@ Stage Summary:
 6. Real identity provider behind IdentityProvider seam (currently mock, labelled everywhere)
 7. Rate limiting at the edge before public launch (deferred per DOMAIN.md)
 8. Mandate submission route (remaining half of F-003) — first backlog item for the real repo
+
+---
+Task ID: 9
+Agent: main agent (QA + feature round)
+Task: Status assessment, agent-browser QA, bug fixes, new features (saved homes, activity feed, users directory), styling detail pass
+
+Work Log:
+- QA pass (agent-browser, desktop 1440 + mobile 412) found and FIXED 4 defects:
+  1. span.stack-sm inline collapse — `.stack-sm` only stacks BLOCK children; list rows across /account, /account/viewings, /account/deals, /landlord used `<span className="stack-sm">` with inline children, so title/address/status ran together in one line. Root fix: CSS rule making span-carrying stacks vertical flex containers (+ `alignItems:'flex-end'` on the 3 right-aligned rows). Verified visually on all affected pages.
+  2. Ops dashboard "Freshness window" card rendered `14 days` with a bordered `.hero-unit` box overlapping the card title → now uses `.kpi-state`. Verified.
+  3. Account overview said "Nothing booked" while /account/viewings showed 2 conducted viewings (contradictory data = AI-slop rule violation) → empty state now distinguishes "No viewings booked right now" (with past-viewings sentence + link) from the truly-empty case. Verified.
+  4. `.section { padding: X 0 }` shorthand clobbered `.page`'s horizontal gutter wherever combined (`page section`) → /properties header sat flush on mobile. Changed to `padding-block` so the gutters survive. Verified 412px + desktop.
+- QA utility: scripts/qa-reset-password.mjs (refuses without QA_PASSWORD, F-009 pattern) resets sandbox demo credentials; QA password lives in .env.local (gitignored, never committed). All 7 demo accounts now signable for QA rounds.
+- Contract gap CLOSED: GET /api/v1/listings/[id]/agreement + GET /api/v1/listings/[id]/photos route handlers added (paths existed in contract + adapter but returned Next.js 404 HTML to real HTTP clients). Both forward to the in-process adapter (one implementation).
+- FEATURE — Saved homes (tenant bookmarks), ADDITIVE ONLY:
+  - prisma: new `SavedListing` model (+ relations on Party/Listing); `bunx prisma db push` on sandbox SQLite; no existing table touched.
+  - src/server/saved.ts: saveListing (upsert, idempotent), unsaveListing (deleteMany, idempotent), isSaved, listSaved (returns feed-shaped SearchResult[]; saved homes that left search are counted honestly in hiddenCount, not shown or dropped). photoToView exported from listings.ts for reuse.
+  - API: POST+DELETE /api/v1/listings/[id]/saved, GET /api/v1/listings/saved (tenant-only, party from session). ListingNotFound → 404 mapping added to http.ts.
+  - UI: SaveToggle client component on property detail (aria-pressed, optimistic flip + rollback on failure, server truth via router.refresh); anonymous visitors get a sign-in affordance instead of a fake button; /account/saved page (same PropertyCard as the feed, hiddenCount notice); "Saved homes" nav link for tenants. DELIBERATE: no save button on PropertyCard — the card's documented no-invented-facts rule stands (a private bookmark is a real fact; a card heart-count would not be).
+  - Verified in browser: save → 201 → card appears on /account/saved → unsave → empty list. NOTE: first implementation split POST/DELETE into two Write calls to the SAME file — the second overwrote the first and POST 405'd; fixed by merging exports in one file.
+- FEATURE — Recent activity feed (tenant + landlord):
+  - src/server/activity.ts: rows derived ONLY from real records (DealTransition + viewing status), capped 8, newest first; sentences written server-side per role (tenant vs landlord vocabulary); no unread counters/badges — the product doesn't claim a notification system it doesn't have.
+  - API: GET /api/v1/activity/mine (tenant|lister; admin → 403). UI: shared (portal)/activity-feed.tsx + CSS timeline list; sections on /account and /landlord. Verified both roles with correct role-specific phrasing.
+- FEATURE — Admin users directory /ops/users:
+  - adminUserDirectory(query?) in ops.ts: role/status/identity-verified/listing+deal counts/joined; DELIBERATE data-minimisation line drawn in code comments: no identity documents, no ledger balances (those stay subject-scoped in the audit trail — same line the audit page draws). GET search form (?q=), shareable URLs.
+  - API: GET /api/v1/admin/users?q=; DirectoryRow type exported from lib/api.ts (createdAt normalised to ISO for real-HTTP shape parity); nav link (admin only). Verified: 7 rows, search=1 row, honest empty state.
+- STYLING detail pass: interactive PhotoGallery on property detail (client component; main image + thumbnail film strip; real <button> thumbs, aria-current, labelled group; provenance "Demo image" badges preserved incl. per-thumb "demo" flag; alt text follows selection). Learned: functions cannot be passed server→client (first version 500'd; fixed with plain-data altBase prop). Old static gallery classes remain for any future use; hero-unit/kpi-state separation kept.
+
+Stage Summary:
+- tsc 0 errors, ESLint 0 errors/warnings, ledger untouched, no destructive DB change (one additive table), demo data unchanged (0 saved rows, no deals walked).
+- Fixed 4 genuine UI/UX defects, closed the last 2 contract-gap routes, shipped 3 new features (saved homes, activity feed, users directory) and the interactive gallery.
+- New files: src/server/{saved,activity}.ts, api/v1/listings/{saved,[id]/{agreement,photos,saved}}, api/v1/activity/mine, api/v1/admin/users, (portal)/account/saved/page.tsx, (portal)/activity-feed.tsx, ops/users/page.tsx, (site)/properties/[id]/{save-toggle,photo-gallery}.tsx, scripts/qa-reset-password.mjs.
+- External risks unchanged: real PSP, real identity provider, API host provisioning, Vercel credentials (see Task 0 checklist).
+- Next steps: mandate submission route (F-003 second half) still the first backlog item for the real repo; ops deal queue bulk actions; neighbourhood admin (P3); consider saved-search alerts only after a real notification channel exists.

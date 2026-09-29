@@ -90,6 +90,12 @@ export interface ListingDetail extends SearchResult {
   geoLng: number | null;
   amenities: { id: string; name: string }[];
   fieldConfirmed: FieldConfirmed | null;
+  /**
+   * The signed-in tenant's bookmark state for this listing, resolved
+   * server-side. `null` for anonymous visitors and non-tenant roles — no
+   * toggle renders for them (saving is a private tenant surface).
+   */
+  savedByCaller?: boolean | null;
   neighbourhoodDistrict?: string;
   streetAddress?: string | null;
   listerDisplayName?: string;

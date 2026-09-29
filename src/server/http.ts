@@ -56,6 +56,7 @@ export function jsonError(err: unknown): NextResponse {
     NotAssignedOfficerError: { status: 403, code: 'NOT_ASSIGNED_OFFICER' },
     NotYourListingError: { status: 403, code: 'NOT_YOUR_LISTING' },
     NeighbourhoodNotFoundError: { status: 404, code: 'NEIGHBOURHOOD_NOT_FOUND' },
+    ListingNotFoundError: { status: 404, code: 'LISTING_NOT_FOUND' },
     UnverifiedListingError: { status: 409, code: 'UNVERIFIED_LISTING' },
     OutsideServiceAreaError: { status: 409, code: 'OUTSIDE_SERVICE_AREA' },
     MissingMandateError: { status: 409, code: 'MISSING_MANDATE' },

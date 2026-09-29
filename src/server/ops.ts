@@ -244,4 +244,69 @@ export async function listOfficers() {
   return accounts.map((a) => ({ partyId: a.partyId, displayName: a.party.displayName }));
 }
 
+// ── user directory (admin) ───────────────────────────────────────────────
+
+export interface DirectoryRow {
+  partyId: string;
+  displayName: string;
+  primaryPhone: string;
+  role: string;
+  accountStatus: string;
+  identityVerified: boolean;
+  listingCount: number;
+  dealCount: number;
+  createdAt: Date;
+}
+
+/**
+ * The admin's account directory.
+ *
+ * ── Scope discipline ──
+ * This answers "who has an account, is it in good standing, and how are
+ * they using the platform" — the questions dispatch and dispute-handling
+ * actually ask. It deliberately does NOT join identity documents, ledger
+ * balances or free-text history: those are subject-scoped reads (the audit
+ * trail), not a browsable directory. A searchable table here is account
+ * administration; an unfiltered firehose of everything would be
+ * surveillance, and the audit page already draws that line.
+ *
+ * Search is a phone/name substring from a GET form — shareable and
+ * bookmarkable like every other filter in the product.
+ */
+export async function adminUserDirectory(query?: string): Promise<DirectoryRow[]> {
+  const q = query?.trim();
+  const accounts = await db.userAccount.findMany({
+    where: q
+      ? {
+          OR: [
+            { party: { displayName: { contains: q } } },
+            { party: { primaryPhone: { contains: q } } },
+          ],
+        }
+      : undefined,
+    include: {
+      party: {
+        include: {
+          identityVerifications: { orderBy: { createdAt: 'desc' }, take: 1 },
+          _count: { select: { properties: true, dealsAsTenant: true, dealsAsLandlord: true } },
+        },
+      },
+    },
+    orderBy: { createdAt: 'desc' },
+    take: 100,
+  });
+
+  return accounts.map((a) => ({
+    partyId: a.partyId,
+    displayName: a.party.displayName,
+    primaryPhone: a.party.primaryPhone,
+    role: a.role,
+    accountStatus: a.status,
+    identityVerified: a.party.identityVerifications[0]?.state === 'verified',
+    listingCount: a.party._count.properties,
+    dealCount: a.party._count.dealsAsTenant + a.party._count.dealsAsLandlord,
+    createdAt: a.createdAt,
+  }));
+}
+
 export { AUTH_ROLES };

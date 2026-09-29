@@ -24,6 +24,7 @@ export default async function PortalLayout({
   await requireRole(['tenant', 'lister', 'admin']);
   const role = await currentRole();
   const isLandlord = role === 'lister';
+  const isTenant = role === 'tenant';
 
   return (
     <>
@@ -43,6 +44,7 @@ export default async function PortalLayout({
             ) : (
               <>
                 <Link href="/account">Overview</Link>
+                <Link href="/account/saved">Saved homes</Link>
                 <Link href="/account/viewings">Viewings</Link>
                 <Link href="/account/deals">My tenancy</Link>
                 <Link href="/properties">Browse homes</Link>
@@ -81,6 +83,14 @@ export default async function PortalLayout({
                   <Link href="/landlord">Portfolio</Link>
                   <Link href="/landlord/properties/new">Add a property</Link>
                   <Link href="/landlord/deals">Lettings</Link>
+                </>
+              ) : isTenant ? (
+                <>
+                  <Link href="/account">Overview</Link>
+                  <Link href="/account/saved">Saved homes</Link>
+                  <Link href="/account/viewings">Viewings</Link>
+                  <Link href="/account/deals">My tenancy</Link>
+                  <Link href="/properties">Browse homes</Link>
                 </>
               ) : (
                 <>

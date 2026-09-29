@@ -88,7 +88,7 @@ export interface PhotoView {
 }
 
 /** Same-origin media route (sandbox); the real deployment serves from the API host. */
-function photoToView(p: { id: string; mediaAssetId: string; position: number; asset: { source: string } }): PhotoView {
+export function photoToView(p: { id: string; mediaAssetId: string; position: number; asset: { source: string } }): PhotoView {
   return {
     id: p.id,
     mediaAssetId: p.mediaAssetId,

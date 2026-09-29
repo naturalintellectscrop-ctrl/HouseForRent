@@ -8,6 +8,8 @@ import {
   type PartyDeal,
 } from '@/lib/portal';
 import { daysAgo, Empty, Icon, shillings, Status } from '@/app/ui';
+import { ActivityFeed } from '../activity-feed';
+import type { ActivityRow } from '@/server/activity';
 
 export const metadata = { title: 'Your properties' };
 
@@ -23,12 +25,16 @@ export const metadata = { title: 'Your properties' };
  * would eventually tell somebody they were ready when the server disagreed.
  */
 export default async function LandlordPage() {
-  const [listings, deals] = await Promise.all([
+  const [listings, deals, activity] = await Promise.all([
     api<MyListing[]>('/v1/listings/mine').catch((e) => {
       if (e instanceof ApiError) return [];
       throw e;
     }),
     api<PartyDeal[]>('/v1/deals').catch((e) => {
+      if (e instanceof ApiError) return [];
+      throw e;
+    }),
+    api<ActivityRow[]>('/v1/activity/mine').catch((e) => {
       if (e instanceof ApiError) return [];
       throw e;
     }),
@@ -246,6 +252,12 @@ export default async function LandlordPage() {
           </ul>
         </section>
       ) : null}
+
+      {/* ── recent activity: viewings and lettings on your properties ── */}
+      <section className="stack">
+        <h2 className="h2">Recent activity</h2>
+        <ActivityFeed rows={activity} />
+      </section>
     </div>
   );
 }
