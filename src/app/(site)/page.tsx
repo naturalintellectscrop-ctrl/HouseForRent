@@ -1,6 +1,8 @@
 import Link from 'next/link';
+import type { ListingPhoto } from '@/lib/contract';
+import { mediaUrl } from '@/lib/contract';
 import { apiGet, type Neighbourhood, type SearchResponse } from '@/lib/api';
-import { Icon, PropertyCard, SectionHeader } from '@/app/ui';
+import { Icon, PropertyCard, SectionHeader, TAGLINE } from '@/app/ui';
 
 export const metadata = {
   title: 'House For Rent — verified homes to rent in Kampala',
@@ -20,13 +22,16 @@ export const metadata = {
  * companies that have never heard of us. A trust-first product that opens
  * with invented social proof has spent its credibility on the first screen.
  *
- * ── Shape ──
- * Hero → the promise in three lines → homes available now (with the
- * marketplace's own type filters one click away) → the four-step path →
- * why this is different → the corridor and its real numbers → the landlord
- * proposition. If the corridor is thin, the page says so and explains why —
- * verification takes an officer on a boda, and a short list of homes
- * somebody actually stood inside is the product, not an embarrassment.
+ * ── Shape (the reference wireframe's composition, in brand) ──
+ * Ink hero panel (display = the registered tagline, search, dual CTA, the
+ * newest verified home) → the three-line promise → homes available now
+ * with the marketplace's own type tabs → the four-step first-timer guide →
+ * why this is different → the field standard (guarantee + the system's own
+ * photographs) → the corridor and its real numbers → renting, explained →
+ * the landlord proposition. Two reference sections are deliberately not
+ * copied: testimonials would be fabricated, and a blog would be scheduled
+ * content that does not exist — both slots are filled with true things
+ * instead (see the field band and the guide cards).
  */
 export default async function HomePage() {
   const [feed, taxonomy] = await Promise.all([
@@ -55,83 +60,134 @@ export default async function HomePage() {
     { label: 'Single room', href: '/properties?propertyType=room' },
   ];
 
+  // The field band's photographs are the system's own, newest visits
+  // first. The hero card already shows the lead photo of the newest
+  // listing, so the stack prefers each home's second frame before reusing
+  // a lead — two distinct frames when the data has them, one when it does
+  // not, and an honest empty frame when it has none.
+  const stackPhotos: ListingPhoto[] = [];
+  if (feed.results[0]?.photos[1]) stackPhotos.push(feed.results[0].photos[1]);
+  if (feed.results[1]?.photos[0]) stackPhotos.push(feed.results[1].photos[0]);
+  if (stackPhotos.length === 0 && feed.results[0]?.photos[0]) {
+    stackPhotos.push(feed.results[0].photos[0]);
+  }
+
+  // The reference's blog slot, filled with real content: each card links
+  // to a page that genuinely answers the question it raises. There is no
+  // editorial desk behind this product, so there are no posts, dates or
+  // authors — and none are invented.
+  const guideCards = [
+    {
+      tag: 'Verification',
+      title: 'What “verified” actually means',
+      body: 'The checks an officer completes on site before a home can go live — and what the badge does not claim.',
+      href: '/how-it-works',
+    },
+    {
+      tag: 'On a live listing',
+      title: 'Reading a field report',
+      body: 'Condition, fixtures, photographs, and the date availability was last confirmed — open any home to see one.',
+      href: feed.results[0]
+        ? `/properties/${feed.results[0].listingId}`
+        : '/properties',
+    },
+    {
+      tag: 'Your money',
+      title: 'Held until you have moved in',
+      body: 'Rent and deposit sit with House For Rent until you confirm move-in; the landlord is paid after, not before.',
+      href: '/how-it-works',
+    },
+    {
+      tag: 'For landlords',
+      title: 'One commission, on move-in',
+      body: 'No listing fee, no monthly fee. We are paid once, when a tenant we introduced actually moves in.',
+      href: '/for-landlords',
+    },
+  ];
+
   return (
     <div className="stagger">
       {/* ── hero ─────────────────────────────────────────────────────── */}
-      <section className="section-lg">
+      <section className="section">
         <div className="page">
-          <div className="hero">
-            <div className="hero-copy stack">
-              <p className="eyebrow">Kampala &amp; Wakiso</p>
-              <h1 className="display">
-                Every home here has been stood inside by someone who works for
-                us.
-              </h1>
-              <p className="lede">
-                We do not publish a listing until one of our field officers has
-                visited the property, photographed it, and confirmed with the
-                landlord that it is genuinely available. Searching, viewing and
-                renting are free for tenants.
-              </p>
-
-              <form action="/properties" className="hero-search" role="search">
-                <label className="sr-only" htmlFor="q">
-                  Search by neighbourhood or landmark
-                </label>
-                <input
-                  id="q"
-                  name="q"
-                  type="search"
-                  className="input"
-                  placeholder="Ntinda, Kira, Bugolobi…"
-                  autoComplete="off"
-                  list="home-areas"
-                />
-                {/* The same names the marketplace's own search offers — not
-                    a second list that could drift from what search actually
-                    knows. Only areas with live homes, for the same reason
-                    the home page's picker filters to live areas. */}
-                <datalist id="home-areas">
-                  {areas.map((a) => (
-                    <option key={a.id} value={a.name} />
-                  ))}
-                </datalist>
-                <button type="submit" className="btn btn-primary">
-                  Search homes
-                </button>
-              </form>
-
-              <div className="row-between" style={{ maxWidth: '30rem' }}>
-                <p className="faint" style={{ fontSize: '0.875rem' }}>
-                  {feed.totalCount === 0
-                    ? 'Verification is under way in the first corridor.'
-                    : `${feed.totalCount} verified ${
-                        feed.totalCount === 1 ? 'home' : 'homes'
-                      } available right now.`}
+          <div className="hero-panel">
+            <div className="hero">
+              <div className="hero-copy stack">
+                <p className="eyebrow">Kampala &amp; Wakiso</p>
+                <h1 className="display">{TAGLINE}</h1>
+                <p className="lede">
+                  We do not publish a listing until one of our field officers
+                  has visited the property, photographed it, and confirmed
+                  with the landlord that it is genuinely available. Searching,
+                  viewing and renting are free for tenants.
                 </p>
-                <Link href="/how-it-works" className="btn btn-secondary btn-sm">
-                  How it works
-                </Link>
-              </div>
-            </div>
 
-            {/*
-              The hero image is the newest verified listing, not a stock
-              photograph. If there is nothing live, the frame is honest about
-              that rather than borrowing somebody else's house.
-            */}
-            <div className="hero-media">
-              {feed.results[0] ? (
-                <PropertyCard listing={feed.results[0]} priority />
-              ) : (
-                <div className="card">
-                  <p className="h3">Nothing live yet</p>
-                  <p className="muted" style={{ marginTop: '0.5rem' }}>
-                    The first properties are being verified on the ground.
-                    Nothing appears here until an officer has been.
+                <form
+                  action="/properties"
+                  className="hero-search"
+                  role="search"
+                >
+                  <label className="sr-only" htmlFor="q">
+                    Search by neighbourhood or landmark
+                  </label>
+                  <input
+                    id="q"
+                    name="q"
+                    type="search"
+                    className="input"
+                    placeholder="Ntinda, Kira, Bugolobi…"
+                    autoComplete="off"
+                    list="home-areas"
+                  />
+                  {/* The same names the marketplace's own search offers — not
+                      a second list that could drift from what search actually
+                      knows. Only areas with live homes, for the same reason
+                      the home page's picker filters to live areas. */}
+                  <datalist id="home-areas">
+                    {areas.map((a) => (
+                      <option key={a.id} value={a.name} />
+                    ))}
+                  </datalist>
+                  <button type="submit" className="btn btn-primary">
+                    Search homes
+                  </button>
+                </form>
+
+                <div className="row-between" style={{ maxWidth: '30rem' }}>
+                  <p className="faint" style={{ fontSize: '0.875rem' }}>
+                    {feed.totalCount === 0
+                      ? 'Verification is under way in the first corridor.'
+                      : `${feed.totalCount} verified ${
+                          feed.totalCount === 1 ? 'home' : 'homes'
+                        } available right now.`}
                   </p>
+                  <Link
+                    href="/how-it-works"
+                    className="btn btn-secondary btn-sm"
+                  >
+                    How it works
+                  </Link>
                 </div>
-              )}
+              </div>
+
+              {/*
+                The hero image is the newest verified listing, not a stock
+                photograph. If there is nothing live, the frame is honest about
+                that rather than borrowing somebody else's house.
+              */}
+              <div className="hero-media">
+                {feed.results[0] ? (
+                  <PropertyCard listing={feed.results[0]} priority />
+                ) : (
+                  <div className="card">
+                    <p className="h3">Nothing live yet</p>
+                    <p className="muted" style={{ marginTop: '0.5rem' }}>
+                      The first properties are being verified on the ground.
+                      Nothing appears here until an officer has been.
+                    </p>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -320,6 +376,95 @@ export default async function HomePage() {
         </div>
       </section>
 
+      {/* ── the field standard (the reference's testimonial slot) ───── */}
+      <section className="section">
+        <div className="page stack-lg">
+          <SectionHeader
+            eyebrow="From the field"
+            title="The guarantee behind every listing"
+          />
+
+          <div className="field-grid">
+            <div className="field-photos">
+              {/*
+                Photographs the system itself holds, from real field visits.
+                Demo fixtures are labelled on the image — a label a screenshot
+                cannot crop away. With nothing live the frame says so.
+              */}
+              {stackPhotos.map((photo, i) => (
+                <div
+                  key={photo.url}
+                  className={`field-photo field-photo-${String.fromCharCode(97 + i)}${
+                    stackPhotos.length === 1 ? ' field-photo-solo' : ''
+                  }`}
+                >
+                  <img
+                    src={mediaUrl(photo.url)}
+                    alt="Photograph taken during a House For Rent field visit"
+                    loading="lazy"
+                    decoding="async"
+                  />
+                  {photo.isDevelopmentFixture ? (
+                    <span className="media-fixture">Demo image</span>
+                  ) : null}
+                </div>
+              ))}
+              {stackPhotos.length === 0 ? (
+                <div className="field-photo field-photo-solo">
+                  <div className="media-empty">
+                    <Icon.camera size={20} />
+                    <span>The first field visits are under way</span>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+
+            {/*
+              The reference puts an invented client quote here. This product
+              does not have invented clients, so the card carries the one
+              statement a visitor can actually hold us to — and every clause
+              of it is enforced by the product's own architecture.
+            */}
+            <div className="card field-card">
+              <p className="eyebrow">The House For Rent guarantee</p>
+              <blockquote className="field-quote">
+                If a home is live on this site, a field officer we employ has
+                stood inside it, photographed it, and confirmed with the
+                landlord that it is available.
+              </blockquote>
+              <ul className="field-checks">
+                <li>
+                  <Icon.shield size={16} />
+                  <span>
+                    Every live home carries a structured field report, filed by
+                    the officer on the visit — not the landlord's word.
+                  </span>
+                </li>
+                <li>
+                  <Icon.camera size={16} />
+                  <span>
+                    The photographs come from that visit, and where an image is
+                    a demo fixture it is labelled on the image itself.
+                  </span>
+                </li>
+                <li>
+                  <Icon.clock size={16} />
+                  <span>
+                    Availability is re-confirmed with the landlord, and the
+                    date of that confirmation is shown on the listing.
+                  </span>
+                </li>
+              </ul>
+              <p style={{ margin: 0 }}>
+                <Link href="/how-it-works" className="btn btn-primary">
+                  See how we verify
+                </Link>
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* ── the corridor: locations, in real numbers ─────────────────── */}
       <section className="section section-sunk">
         <div className="page">
@@ -394,6 +539,30 @@ export default async function HomePage() {
                 </div>
               )}
             </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── renting, explained (the reference's blog slot) ───────────── */}
+      <section className="section">
+        <div className="page stack-lg">
+          <SectionHeader
+            eyebrow="Guides"
+            title="Renting, explained"
+          />
+
+          <div className="guide-cards">
+            {guideCards.map((guide) => (
+              <Link key={guide.title} href={guide.href} className="guide-card">
+                <span className="guide-tag">{guide.tag}</span>
+                <h3>{guide.title}</h3>
+                <p>{guide.body}</p>
+                <span className="guide-more">
+                  Read
+                  <Icon.arrow size={14} />
+                </span>
+              </Link>
+            ))}
           </div>
         </div>
       </section>

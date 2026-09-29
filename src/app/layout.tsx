@@ -57,8 +57,15 @@ export const viewport: Viewport = {
 export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
+  // data-scroll-behavior tells Next.js this smooth scrolling is ours, so
+  // route transitions may scroll instantly while in-page anchors stay
+  // smooth — silencing the framework's console warning honestly.
   return (
-    <html lang="en" className={`${geist.variable} ${geistMono.variable}`}>
+    <html
+      lang="en"
+      data-scroll-behavior="smooth"
+      className={`${geist.variable} ${geistMono.variable}`}
+    >
       <body>
         <a href="#main" className="skip">
           Skip to content
