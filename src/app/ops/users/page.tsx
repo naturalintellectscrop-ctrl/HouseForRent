@@ -14,16 +14,53 @@ import { TierControl } from './tier-control';
  * audit firehose — those remain subject-scoped reads on purpose (see the
  * audit page). Role, status and verification state come from the server;
  * nothing on this page is computed client-side.
+ *
+ * ── The role filter (Task 15) ──
+ * A row of chips that compose with the search box: both live in the URL
+ * (`?q=` and `?role=`), so a filtered view is shareable like every other
+ * filter in the product. The chips are the only writer of `role` — but a
+ * hand-typed `?role=` value is still handled honestly: the server refuses
+ * unknown values (422), so this page validates FIRST and says so, rather
+ * than rendering an error boundary or silently ignoring the filter.
  */
+
+/** The fixed filter vocabulary — mirrors AUTH_ROLES on the server. */
+const ROLE_FILTERS: ReadonlyArray<{ value: string; label: string }> = [
+  { value: 'tenant', label: 'Tenants' },
+  { value: 'lister', label: 'Landlords' },
+  { value: 'foo', label: 'Field officers' },
+  { value: 'admin', label: 'Operations' },
+];
+
+const ROLE_LABEL: Record<string, string> = {
+  tenant: 'Tenant',
+  lister: 'Landlord',
+  foo: 'Field officer',
+  admin: 'Operations',
+};
+
+/** Plural, human phrasing for empty states ("no landlord accounts yet"). */
+const ROLE_PLURAL: Record<string, string> = {
+  tenant: 'tenant',
+  lister: 'landlord',
+  foo: 'field officer',
+  admin: 'operations',
+};
+
 export default async function UsersPage(props: {
-  searchParams: Promise<{ q?: string }>;
+  searchParams: Promise<{ q?: string; role?: string }>;
 }) {
-  const { q } = await props.searchParams;
+  const { q, role: rawRole } = await props.searchParams;
+  const role = rawRole?.trim();
+  const roleKnown = !role || ROLE_FILTERS.some((f) => f.value === role);
 
   let rows: DirectoryRow[];
   try {
-    const path = q ? `/v1/admin/users?q=${encodeURIComponent(q)}` : '/v1/admin/users';
-    rows = await api<DirectoryRow[]>(path);
+    const params = new URLSearchParams();
+    if (q) params.set('q', q);
+    if (roleKnown && role) params.set('role', role);
+    const qs = params.toString();
+    rows = await api<DirectoryRow[]>(`/v1/admin/users${qs ? `?${qs}` : ''}`);
   } catch (err) {
     if (err instanceof ApiError) {
       if (err.status === 401) redirect('/login');
@@ -32,12 +69,15 @@ export default async function UsersPage(props: {
     throw err;
   }
 
-  const ROLE_LABEL: Record<string, string> = {
-    tenant: 'Tenant',
-    lister: 'Landlord',
-    foo: 'Field officer',
-    admin: 'Operations',
+  /** Chip href: switches role while preserving the current search term. */
+  const chipHref = (value?: string) => {
+    const p = new URLSearchParams();
+    if (q) p.set('q', q);
+    if (value) p.set('role', value);
+    const s = p.toString();
+    return `/ops/users${s ? `?${s}` : ''}`;
   };
+  const activeRole = roleKnown ? (role ?? undefined) : undefined;
 
   return (
     <>
@@ -47,6 +87,13 @@ export default async function UsersPage(props: {
         Documents and money stay in their own subject-scoped records — this
         is account administration, not surveillance.
       </p>
+
+      {!roleKnown && (
+        <p className="alert alert-note" role="status">
+          “{role}” is not an account role, so the filter is off — showing
+          every account.
+        </p>
+      )}
 
       <form method="get" className="card" style={{ marginBottom: '1.25rem' }}>
         <div className="field">
@@ -59,11 +106,12 @@ export default async function UsersPage(props: {
             placeholder="e.g. Grace or 700100010"
           />
         </div>
+        {activeRole && <input type="hidden" name="role" value={activeRole} />}
         <p style={{ marginTop: '0.75rem' }}>
           <button type="submit" className="btn btn-primary btn-sm">
             Search
           </button>
-          {q ? (
+          {q || activeRole ? (
             <a href="/ops/users" className="btn btn-ghost btn-sm">
               Clear
             </a>
@@ -71,9 +119,47 @@ export default async function UsersPage(props: {
         </p>
       </form>
 
+      <nav
+        className="row"
+        aria-label="Filter by role"
+        style={{ gap: '0.5rem', marginBottom: '1.25rem', flexWrap: 'wrap' }}
+      >
+        <Link
+          href={chipHref()}
+          aria-current={activeRole ? undefined : 'page'}
+          className="btn btn-sm"
+          style={
+            activeRole
+              ? { background: 'transparent', color: 'var(--ink-soft)', border: '1px solid var(--line)' }
+              : undefined
+          }
+        >
+          All roles
+        </Link>
+        {ROLE_FILTERS.map((f) => (
+          <Link
+            key={f.value}
+            href={chipHref(f.value)}
+            aria-current={activeRole === f.value ? 'page' : undefined}
+            className="btn btn-sm"
+            style={
+              activeRole === f.value
+                ? undefined
+                : { background: 'transparent', color: 'var(--ink-soft)', border: '1px solid var(--line)' }
+            }
+          >
+            {f.label}
+          </Link>
+        ))}
+      </nav>
+
       {rows.length === 0 ? (
         <p className="notice notice-info" role="status">
-          No account matches “{q}”.
+          {q
+            ? `No account matches “${q}”${activeRole ? ` among ${ROLE_PLURAL[activeRole] ?? activeRole} accounts` : ''}.`
+            : activeRole
+              ? `No ${ROLE_PLURAL[activeRole] ?? activeRole} accounts yet.`
+              : 'No accounts yet.'}
         </p>
       ) : (
         <div className="table-scroll">

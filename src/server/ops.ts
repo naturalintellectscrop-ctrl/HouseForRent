@@ -345,17 +345,29 @@ export interface DirectoryRow {
  * Search is a phone/name substring from a GET form — shareable and
  * bookmarkable like every other filter in the product.
  */
-export async function adminUserDirectory(query?: string): Promise<DirectoryRow[]> {
+export async function adminUserDirectory(query?: string, role?: string): Promise<DirectoryRow[]> {
   const q = query?.trim();
+  // Server-authoritative enum check (same 422 VALIDATION contract as the
+  // tier endpoint): an unknown role value is refused, never silently
+  // ignored — a filter that pretends to work is worse than one that fails.
+  const r = role?.trim();
+  if (r && !(AUTH_ROLES as readonly string[]).includes(r)) {
+    throw new ApiError(422, 'VALIDATION', `role must be one of: ${AUTH_ROLES.join(', ')}`);
+  }
   const accounts = await db.userAccount.findMany({
-    where: q
-      ? {
-          OR: [
-            { party: { displayName: { contains: q } } },
-            { party: { primaryPhone: { contains: q } } },
-          ],
-        }
-      : undefined,
+    where: {
+      AND: [
+        q
+          ? {
+              OR: [
+                { party: { displayName: { contains: q } } },
+                { party: { primaryPhone: { contains: q } } },
+              ],
+            }
+          : {},
+        r ? { role: r as AuthRole } : {},
+      ],
+    },
     include: {
       party: {
         include: {

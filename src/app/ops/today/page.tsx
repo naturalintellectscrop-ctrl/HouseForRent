@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { api, ApiError, type Viewing } from '@/lib/api';
-import { Empty, StatusPill, when } from '@/app/ui';
+import { Empty, shillings, StatusPill, when } from '@/app/ui';
 
 /**
  * The dispatch board (FR-5.2).
@@ -54,9 +54,21 @@ export default async function DispatchBoard() {
               <span className="card-title">{when(viewing.scheduledFor)}</span>
               <StatusPill status={viewing.status} />
             </div>
-            <p className="muted">
-              Listing {viewing.listingId.slice(0, 8)} · tenant{' '}
-              {viewing.tenantName ?? viewing.tenantPartyId.slice(0, 8)}
+            {/*
+              Task 15: the card speaks in landmarks, not ids. An officer
+              travelling to a visit needs the home, the meeting point and
+              the rent the tenant was quoted — the row data already carried
+              all of it; the card just never used it.
+            */}
+            <p style={{ fontWeight: 620, margin: '0 0 0.15rem' }}>
+              {viewing.bedrooms}-bed home in {viewing.neighbourhood}
+            </p>
+            <p className="muted" style={{ margin: '0 0 0.15rem' }}>
+              {viewing.landmarkText}
+            </p>
+            <p className="faint" style={{ fontSize: '0.875rem', margin: 0 }}>
+              tenant {viewing.tenantName ?? '…'}
+              {viewing.monthlyRent ? ` · ${shillings(viewing.monthlyRent)}/month` : ''}
             </p>
           </Link>
         ))

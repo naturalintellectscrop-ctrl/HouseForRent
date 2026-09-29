@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { api, ApiError, type DispatchQueue } from '@/lib/api';
-import { AdminOnly, Empty, ShortId, when } from '@/app/ui';
+import { AdminOnly, Empty, shillings, ShortId, when } from '@/app/ui';
 import { AssignForm } from './assign-form';
 
 /**
@@ -97,11 +97,16 @@ export default async function DispatchPage() {
                 )}
               </div>
 
+              <p style={{ fontWeight: 620, margin: '0 0 0.15rem' }}>
+                {row.viewing.bedrooms}-bed home in {row.neighbourhood}
+              </p>
               <p className="muted">
-                {row.neighbourhood} · listing{' '}
-                <ShortId value={row.listingId} /> · tenant{' '}
+                {row.viewing.landmarkText}
+                {row.viewing.monthlyRent ? ` · ${shillings(row.viewing.monthlyRent)}/month` : ''} ·
+                tenant{' '}
                 {row.viewing.tenantName ?? row.viewing.tenantPartyId.slice(0, 8)}{' '}
-                · requested {when(row.viewing.createdAt)} ·{' '}
+                · requested {when(row.viewing.createdAt)} · listing{' '}
+                <ShortId value={row.listingId} /> ·{' '}
                 {/* The row links to the full record: the landlord-reported
                     cancellation and any later audit question start from
                     here, not from a scrolling queue. */}

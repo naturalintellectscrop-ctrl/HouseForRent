@@ -330,8 +330,35 @@ export interface PresentedTerms {
   rateVersionId?: string;
 }
 
+/**
+ * The listing context a visit record shows the officer — the "where am I
+ * going, and what is the tenant working from" block (Task 15). Money is
+ * derived SERVER-side (`expectedUpfront` uses the same terms expression the
+ * escrow flow funds from) so the console never recomputes a shilling.
+ */
+export interface ViewingDetailListing {
+  id: string;
+  propertyType: string;
+  bedrooms: number;
+  bathrooms: number;
+  furnished: string;
+  neighbourhood: string;
+  landmarkText: string;
+  monthlyRent: string;
+  depositAmount: string;
+  requiredMonthsUpfront: number;
+  /** Server-derived: rent × months upfront + deposit — the figure a
+   * tenant is asked to fund at agreement (same terms expression as escrow). */
+  expectedUpfront: string;
+  /** True only when the exact predicate the public detail page answers
+   * 404 with holds (live + verified + in-corridor), so a rendered link can
+   * never dead-end. */
+  publiclyVisible: boolean;
+}
+
 export interface ViewingDetail {
   viewing: Viewing;
+  listing: ViewingDetailListing;
   fieldReport: FieldReport | null;
   introduction: IntroductionRecord | null;
   canConduct: boolean;
@@ -515,7 +542,7 @@ async function resolveAdminMandates(sp: URLSearchParams) {
 async function resolveAdminUsers(sp: URLSearchParams) {
   const caller = await requireCaller();
   if (caller.role !== 'admin') throw new ApiError(403, 'FORBIDDEN', 'admin surface');
-  const rows = await adminUserDirectory(sp.get('q') ?? undefined);
+  const rows = await adminUserDirectory(sp.get('q') ?? undefined, sp.get('role') ?? undefined);
   return rows.map((r) => ({ ...r, createdAt: r.createdAt.toISOString() }));
 }
 
@@ -756,6 +783,30 @@ async function resolveViewingDetail(viewingId: string): Promise<ViewingDetail> {
       landmarkText: detail.listing.landmarkText,
       bedrooms: detail.listing.bedrooms,
       monthlyRent: detail.listing.monthlyRent,
+    },
+    listing: {
+      id: detail.listing.id,
+      propertyType: detail.listing.propertyType,
+      bedrooms: detail.listing.bedrooms,
+      bathrooms: detail.listing.bathrooms,
+      furnished: detail.listing.furnished,
+      neighbourhood: detail.listing.neighbourhoodName,
+      landmarkText: detail.listing.landmarkText,
+      monthlyRent: detail.listing.monthlyRent,
+      depositAmount: detail.listing.depositAmount,
+      requiredMonthsUpfront: detail.listing.requiredMonthsUpfront,
+      /** Derived here, once, from the same terms expression the escrow
+       * flow funds from — the page renders it, it never computes it. */
+      expectedUpfront: (
+        BigInt(detail.listing.monthlyRent) * BigInt(detail.listing.requiredMonthsUpfront) +
+        BigInt(detail.listing.depositAmount)
+      ).toString(),
+      /** The exact predicate `publicDetail` answers 404 with, evaluated on
+       * the server: a rendered "open the public listing" link cannot 404. */
+      publiclyVisible:
+        detail.listing.publicationState === 'live' &&
+        detail.listing.verificationState === 'verified' &&
+        detail.listing.inServiceArea,
     },
     fieldReport,
     introduction,
