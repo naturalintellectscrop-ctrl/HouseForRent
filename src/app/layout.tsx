@@ -7,13 +7,32 @@ const geist = Geist({ subsets: ['latin'], variable: '--font-geist' });
 const geistMono = Geist_Mono({ subsets: ['latin'], variable: '--font-geist-mono' });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'),
   title: {
     default: 'House For Rent — verified homes to rent in Kampala',
     template: '%s · House For Rent',
   },
   description:
-    'Every home on House For Rent is visited and confirmed in person by one of our field officers before it reaches you. Free for tenants.',
-  icons: { icon: '/favicon.png' },
+    'Find your next home with ease. Every home on House For Rent is visited and confirmed in person by one of our field officers before it reaches you — free for tenants, in Kampala and Wakiso.',
+  icons: {
+    icon: [{ url: '/favicon.ico' }, { url: '/favicon.png', type: 'image/png' }],
+    apple: '/apple-touch-icon.png',
+  },
+  openGraph: {
+    type: 'website',
+    siteName: 'House For Rent',
+    title: 'House For Rent — verified homes to rent in Kampala',
+    description:
+      'Find your next home with ease. Every home is visited and confirmed in person by a field officer before it reaches you. Free for tenants.',
+    images: [
+      {
+        url: '/brand/og-cover.png',
+        width: 1200,
+        height: 630,
+        alt: 'House For Rent — find your next home with ease.',
+      },
+    ],
+  },
 };
 
 export const viewport: Viewport = {

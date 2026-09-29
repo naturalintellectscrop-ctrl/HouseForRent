@@ -281,3 +281,28 @@ Stage Summary:
 - Product now has: tenant/landlord password management with session-revocation semantics and audit; a landlord-facing earnings page whose every figure comes from the ledger; a public areas directory. All four role journeys still verified; nothing regressed.
 - Remaining known gaps (unchanged from Task 8): real PSP + identity provider are mocks behind seams; API host + Vercel deployment unverified (external); photo upload intentionally officer-only; no rate limiting yet.
 - Next-step recommendations: (1) tenant viewing cancellation flow if the service state machine allows it; (2) ops verification-queue page surfacing mandate submissions (the open half of F-003); (3) mobile polish pass on ops console tables; (4) before any deployment attempt, run scripts/journey-http.mjs equivalent against a provisioned API host.
+
+---
+Task ID: 10
+Agent: main agent (branding round)
+Task: Adopt the ORIGINAL company logo — derive favicon set, tagline and site description from it; restart the stopped webDevReview cron
+
+Work Log:
+- CRON RESTARTED: old job 423191 was present but stage="stopped" (why nothing fired). Deleted it, created fresh webDevReview job 423452, fixed_rate 900s, tz Africa/Nairobi, mandated description. Verified by list.
+- SOURCE OF TRUTH: original 1254x1254 logo retrieved from the chat CDN to /tmp/hfr-logo-original.png (upload/ dir did not persist the file). scripts/build-brand-assets.py (PIL) dissects it: row-scan ink bands → house mark / HOUSE / FOR / RENT / tagline; white→alpha conversion (two-threshold ramp, autocrop, square pad).
+- NEW ASSETS, all derived from the ORIGINAL artwork (replaces the previous low-quality dark-tile redraw whose tagline was garbled):
+  - public/brand/house-for-rent-logo.png (trimmed full lockup, 798x944)
+  - public/brand/mark-512.png + public/logo.png (64px transparent mark — header <Brand/> now uses the real mark on a white tile + hairline border so the black house survives dark mode, matching the favicon treatment)
+  - public/favicon.ico (16/32/48 on white rounded tile), public/favicon.png (32), public/apple-touch-icon.png (180, white full-bleed)
+  - public/brand/og-cover.png (1200x630, real lockup centred, nothing invented)
+- COLOURS SAMPLED from the artwork (median): roof red #cb0108, house ink #0e1412, field green #0a5514. Tokens updated with documented rationale: --brand-action (and --accent via var) → #0a5514 (white on it ≈ 8.4:1, UP from 5.02:1 — WCAG AA margin improves); btn-primary hover now a step LIGHTER (#0d6519) since base is the deep end; --accent-soft/-line re-derived; NEW --brand-red: #cb0108. --brand-green #16a34a kept ONLY for on-dark marks (auth aside/CTA), as before. Dark-mode accent untouched.
+- TAGLINE extracted verbatim from the logo: "Find your next home with ease." → src/app/ui.tsx exports TAGLINE (single source). Applied: footer brand block (uppercase, letterspaced, short red rule ::before echoing the logo's FOR rules — the logo red's one genuine interface job), auth-aside eyebrow ("HOUSE FOR RENT — FIND YOUR NEXT HOME WITH EASE." on the dark identity surface).
+- SITE DESCRIPTION generated from tagline: layout metadata + home page metadata + OG description all lead with it. layout.tsx now sets metadataBase (NEXT_PUBLIC_SITE_URL env with localhost fallback), icons {ico, png, apple}, openGraph {siteName, og-cover 1200x630}. Rendered head verified via curl (og:image absolute URL resolves).
+- About page "Operated by" card now shows the real lockup image (10rem) — the company's registered identity on the company page.
+- Removed leftover EMPTY dirs src/app/about/ and src/app/contact/ (the real pages live in (site)/ — initially looked like dead footer links; verified 200s before touching anything).
+- Verified by real HTTP + agent-browser: all 6 asset URLs 200 with correct content-types; head metadata correct; light+dark desktop and 412px mobile screenshots (header tile, footer tagline + red rule, deep-green primary buttons, about lockup, login eyebrow). tsc 0 errors, ESLint clean, dev.log zero errors. Dev server had died again (session env) — restarted detached, stable since.
+
+Stage Summary:
+- Brand identity now derives from the ORIGINAL logo file end-to-end: favicon set, header mark, about-page lockup, OG cover, tagline copy, and the two sampled colours. No fabricated claims introduced anywhere.
+- Cron: job 423452 (every 15 min) LIVE — replaces stopped 423191.
+- Next steps unchanged from Task 9 backlog (mandate submission route for real repo, ops bulk actions, neighbourhood admin), plus: when NEXT_PUBLIC_SITE_URL is known, set it so OG URLs are absolute in production.

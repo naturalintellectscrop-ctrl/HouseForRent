@@ -109,6 +109,20 @@ export default function AboutPage() {
 
             <aside className="detail-aside stack">
               <div className="card stack-sm">
+                {/* The company's registered identity, from the original
+                    artwork — not a redrawn approximation. */}
+                <img
+                  src="/brand/house-for-rent-logo.png"
+                  alt="House For Rent — find your next home with ease."
+                  width={160}
+                  height={189}
+                  style={{
+                    width: '10rem',
+                    height: 'auto',
+                    alignSelf: 'center',
+                  }}
+                />
+                <hr className="divider" style={{ margin: '0.75rem 0' }} />
                 <h3 className="h3">Operated by</h3>
                 <p className="muted">
                   Natural Intellects Ltd

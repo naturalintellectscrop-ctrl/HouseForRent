@@ -145,6 +145,13 @@ export const Icon = {
 
 /* ── brand ──────────────────────────────────────────────────────────── */
 
+/**
+ * The tagline, verbatim from the original logo artwork
+ * (public/brand/house-for-rent-logo.png). One constant so the site can
+ * never drift from what is painted on the logo.
+ */
+export const TAGLINE = 'Find your next home with ease.';
+
 export function Brand({ sub, href = '/' }: { sub?: string; href?: string }) {
   return (
     <Link href={href} className="brand">

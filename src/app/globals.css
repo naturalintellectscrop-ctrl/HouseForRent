@@ -23,18 +23,23 @@
 
 :root {
   /*
-   * The five brand colours, from the identity board.
+   * The brand colours, sampled from the ORIGINAL logo file
+   * (public/brand/house-for-rent-logo.png — scripts/build-brand-assets.py
+   * prints the values): roof red #cb0108, house ink #0e1412, field green
+   * #0a5514.
    *
    * ── Why there are two greens ──
-   * The board specifies #16a34a, and it is right everywhere it appears as a
-   * MARK: a verified pill, a price, accent text. It is wrong as a button
-   * FILL — white on #16a34a measures 3.29:1 and fails WCAG AA, and the
-   * primary button in this product is the one control nobody may mis-read.
-   * `--accent` is the same hue one step down, at 5.02:1 with white.
+   * The logo's green #0a5514 is right as a FILL: white on it measures
+   * ~8.4:1, comfortably past WCAG AA — and it is the colour the company
+   * actually chose for RENT. On the near-black identity surfaces (auth
+   * aside, CTA band) it is too deep to read, so those surfaces take
+   * --brand-green, the brighter mark of the same hue, which clears 5:1
+   * there. Two greens, one hue, each where it is legible.
    */
   --brand-ink: #0e1412;
   --brand-green: #16a34a;
-  --brand-action: #15803d;
+  --brand-action: #0a5514;
+  --brand-red: #cb0108;
   --brand-paper: #f8fafc;
 
   --ink: #0e1412;
@@ -48,10 +53,10 @@
   --surface: #ffffff;
   --surface-alt: #f5f7f6;
 
-  --accent: #15803d;
+  --accent: var(--brand-action);
   --accent-ink: #ffffff;
-  --accent-soft: rgba(22, 163, 74, 0.1);
-  --accent-line: rgba(22, 163, 74, 0.28);
+  --accent-soft: rgba(10, 85, 20, 0.08);
+  --accent-line: rgba(10, 85, 20, 0.26);
 
   --ok: #15803d;
   --ok-bg: #eaf4ee;
@@ -400,7 +405,8 @@ span.stack-lg {
   color: var(--accent-ink);
 }
 .btn-primary:hover {
-  background: #126b33;
+  /* a step LIGHTER than the base: #0a5514 is already the deep end */
+  background: #0d6519;
 }
 @media (prefers-color-scheme: dark) {
   .btn-primary:hover {
@@ -663,6 +669,32 @@ legend {
   height: 1.75rem;
   border-radius: 7px;
   flex: none;
+  /* The mark ships transparent so the black house body survives the dark
+     theme; the white tile (matching the favicon) keeps it readable on both
+     surfaces and reads as a deliberate app icon, not a stray image. */
+  background: #ffffff;
+  border: 1px solid var(--line);
+  padding: 2px;
+}
+.brand-tagline {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.7rem;
+  font-size: 0.6875rem;
+  font-weight: 640;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  color: var(--ink-soft);
+  /* The short red rule echoes the rules the logo paints around FOR — the
+     tagline arrives dressed the way the logo dresses it. */
+}
+.brand-tagline::before {
+  content: '';
+  width: 1.375rem;
+  height: 2px;
+  flex: none;
+  background: var(--brand-red);
 }
 .brand-sub {
   font-weight: 460;

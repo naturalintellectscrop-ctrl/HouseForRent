@@ -140,30 +140,10 @@ export async function recentAuditEvents(limit = 100) {
 }
 
 // ── verification queues ──────────────────────────────────────────────────
-
-/** Listings awaiting field verification (the FOO/ops verification queue). */
-export async function verificationQueue() {
-  const rows = await db.listing.findMany({
-    where: { publicationState: { in: ['draft', 'awaiting_verification'] }, verificationState: 'unverified' },
-    include: {
-      property: { include: { neighbourhood: true, owner: { select: { displayName: true } } } },
-      photos: true,
-    },
-    orderBy: { createdAt: 'asc' },
-  });
-  return rows.map((l) => ({
-    id: l.id,
-    propertyId: l.propertyId,
-    bedrooms: l.property.bedrooms,
-    bathrooms: l.property.bathrooms,
-    neighbourhood: l.property.neighbourhood.name,
-    landmarkText: l.property.landmarkText,
-    ownerName: l.property.owner.displayName,
-    monthlyRent: l.monthlyRent.toString(),
-    createdAt: l.createdAt,
-    photoCount: l.photos.length,
-  }));
-}
+// The admin verification queue now lives in listings.ts as
+// `adminVerificationQueue()` — one implementation of the publish gate's
+// blocker list, shared with evaluatePublish and findForLister. The previous
+// duplicate here is gone.
 
 export async function markListingAwaitingVerification(listingId: string) {
   return db.listing.update({

@@ -435,6 +435,30 @@ async function canPublish(params: { listerTier: ListerTier; listerPartyId: strin
 }
 
 /**
+ * The ONE implementation of "what stands between this listing and the live
+ * feed" (the publish gate, expressed as blocker codes). evaluatePublish,
+ * findForLister and the admin verification queue all call this — three
+ * surfaces, one opinion. `mandateVerified` is resolved by the caller (it
+ * needs a (lister, property) query only for non-owner tiers).
+ */
+function publishBlockers(input: {
+  verificationState: string;
+  inServiceArea: boolean;
+  hasAcceptedAgreement: boolean;
+  listerTier: ListerTier | undefined;
+  mandateVerified: boolean;
+}): string[] {
+  const blockedBy: string[] = [];
+  if (input.verificationState !== 'verified') blockedBy.push('field_verification');
+  if (!input.inServiceArea) blockedBy.push('outside_service_area');
+  if (input.listerTier && input.listerTier !== 'property_owner' && !input.mandateVerified) {
+    blockedBy.push('mandate');
+  }
+  if (!input.hasAcceptedAgreement) blockedBy.push('listing_agreement');
+  return blockedBy;
+}
+
+/**
  * THE publish gate — all four preconditions enforced server-side (FR-2.5,
  * FR-3.1, FR-3.2, FR-9.1). `dryRun` produces the same evaluation without
  * flipping state, so the landlord UI can show what is still missing.
@@ -449,20 +473,17 @@ export async function evaluatePublish(listingId: string, dryRun = true) {
   });
   if (!listing) throw new Error('listing not found');
 
-  const blockedBy: string[] = [];
-  if (listing.verificationState !== 'verified') blockedBy.push('field_verification');
-  if (!listing.property.neighbourhood.inServiceArea) blockedBy.push('outside_service_area');
-
   const tier = listing.property.owner.listerProfile?.tier as ListerTier | undefined;
-  if (tier && tier !== 'property_owner') {
-    const permitted = await canPublish({
-      listerTier: tier,
-      listerPartyId: listing.property.ownerPartyId,
-      propertyId: listing.propertyId,
-    });
-    if (!permitted) blockedBy.push('mandate');
-  }
-  if (listing.listingAgreements.length === 0) blockedBy.push('listing_agreement');
+  const mandateVerified = tier
+    ? await canPublish({ listerTier: tier, listerPartyId: listing.property.ownerPartyId, propertyId: listing.propertyId })
+    : true;
+  const blockedBy = publishBlockers({
+    verificationState: listing.verificationState,
+    inServiceArea: listing.property.neighbourhood.inServiceArea,
+    hasAcceptedAgreement: listing.listingAgreements.length > 0,
+    listerTier: tier,
+    mandateVerified,
+  });
 
   if (!dryRun && blockedBy.length === 0) {
     await db.$transaction(async (tx) => {
@@ -522,18 +543,17 @@ export async function findForLister(listerPartyId: string) {
 
   return Promise.all(
     listings.map(async (listing) => {
-      const blockedBy: string[] = [];
-      if (listing.verificationState !== 'verified') blockedBy.push('field_verification');
-      if (!listing.property.neighbourhood.inServiceArea) blockedBy.push('outside_service_area');
-      if (!listing.listingAgreements.some((a) => a.accepted)) blockedBy.push('listing_agreement');
-      if (tier && tier !== 'property_owner') {
-        const permitted = await canPublish({
-          listerTier: tier as ListerTier,
-          listerPartyId,
-          propertyId: listing.propertyId,
-        });
-        if (!permitted) blockedBy.push('mandate');
-      }
+      const tierCast = tier as ListerTier | undefined;
+      const mandateVerified = tierCast
+        ? await canPublish({ listerTier: tierCast, listerPartyId, propertyId: listing.propertyId })
+        : true;
+      const blockedBy = publishBlockers({
+        verificationState: listing.verificationState,
+        inServiceArea: listing.property.neighbourhood.inServiceArea,
+        hasAcceptedAgreement: listing.listingAgreements.some((a) => a.accepted),
+        listerTier: tierCast,
+        mandateVerified,
+      });
       const accepted = listing.listingAgreements.find((a) => a.accepted);
 
       return {
@@ -568,6 +588,66 @@ export async function findForLister(listerPartyId: string) {
 export async function getListingForLister(listingId: string, listerPartyId: string) {
   const all = await findForLister(listerPartyId);
   return all.find((l) => l.id === listingId) ?? null;
+}
+
+/**
+ * FR-10.2 — the admin verification queue: every listing not yet live (and
+ * not withdrawn), with what each is actually waiting on.
+ *
+ * The previous implementation hard-coded `verificationState: 'unverified'`,
+ * `mandateState: null` and `hasAcceptedAgreement: false` — so the console
+ * showed a mandate column that could never hold a value and a queue that
+ * could never name its real blockers. This version reads the states and
+ * computes `blockedBy` through the same `publishBlockers` gate the publish
+ * endpoint enforces, so the console and the gate cannot disagree.
+ */
+export async function adminVerificationQueue() {
+  const listings = await db.listing.findMany({
+    where: { publicationState: { in: ['draft', 'awaiting_verification'] } },
+    include: {
+      property: { include: { neighbourhood: true, owner: { include: { listerProfile: true } } } },
+      listingAgreements: { where: { accepted: true }, take: 1 },
+    },
+    orderBy: { createdAt: 'asc' },
+  });
+
+  return Promise.all(
+    listings.map(async (listing) => {
+      const tier = listing.property.owner.listerProfile?.tier as ListerTier | undefined;
+      const mandateVerified = tier
+        ? await canPublish({ listerTier: tier, listerPartyId: listing.property.ownerPartyId, propertyId: listing.propertyId })
+        : true;
+      const blockedBy = publishBlockers({
+        verificationState: listing.verificationState,
+        inServiceArea: listing.property.neighbourhood.inServiceArea,
+        hasAcceptedAgreement: listing.listingAgreements.length > 0,
+        listerTier: tier,
+        mandateVerified,
+      });
+      const mandate = tier && tier !== 'property_owner'
+        ? await db.propertyMandate.findFirst({
+            where: { propertyId: listing.propertyId, listerPartyId: listing.property.ownerPartyId },
+            orderBy: { createdAt: 'desc' },
+          })
+        : null;
+
+      return {
+        listingId: listing.id,
+        propertyId: listing.propertyId,
+        listerPartyId: listing.property.ownerPartyId,
+        listerName: listing.property.owner.displayName,
+        listerTier: tier ?? null,
+        neighbourhood: listing.property.neighbourhood.name,
+        inServiceArea: listing.property.neighbourhood.inServiceArea,
+        verificationState: listing.verificationState,
+        publicationState: listing.publicationState,
+        mandateState: mandate?.state ?? null,
+        hasAcceptedAgreement: listing.listingAgreements.length > 0,
+        blockedBy,
+        createdAt: listing.createdAt.toISOString(),
+      };
+    }),
+  );
 }
 
 // ── taxonomy ─────────────────────────────────────────────────────────────

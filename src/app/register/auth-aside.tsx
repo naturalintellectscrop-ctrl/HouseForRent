@@ -1,4 +1,4 @@
-import { Icon } from '@/app/ui';
+import { Icon, TAGLINE } from '@/app/ui';
 
 /**
  * The panel beside the sign-in and registration forms.
@@ -13,7 +13,9 @@ export function AuthAside() {
   return (
     <aside className="auth-aside">
       <div className="stack">
-        <p className="eyebrow">House For Rent</p>
+        {/* The tagline rides in the eyebrow, uppercase, exactly as the logo
+            paints it — the identity surface should speak in the logo's voice. */}
+        <p className="eyebrow">House For Rent — {TAGLINE}</p>
         <h2 className="h1" style={{ maxWidth: '16ch' }}>
           Every home here has been visited by someone who works for us.
         </h2>

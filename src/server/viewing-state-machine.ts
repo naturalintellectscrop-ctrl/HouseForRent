@@ -27,12 +27,24 @@ export const TERMINAL_VIEWING_STATUSES: readonly string[] = Object.freeze([
   'cancelled',
 ]);
 
+/**
+ * A viewing transition the frozen graph refuses. Typed so the HTTP edge can
+ * answer 409 instead of a generic 500 — the caller's page is stale or the
+ * request is wrong, and either way the state did not change.
+ */
+export class IllegalViewingTransitionError extends Error {
+  constructor(from: string, to: string) {
+    super(`viewing transition ${from} → ${to} is not permitted`);
+    this.name = 'IllegalViewingTransitionError';
+  }
+}
+
 export function isViewingTransitionAllowed(from: string, to: string): boolean {
   return (ALLOWED_VIEWING_TRANSITIONS[from] ?? []).includes(to);
 }
 
 export function assertViewingTransitionAllowed(from: string, to: string): void {
   if (!isViewingTransitionAllowed(from, to)) {
-    throw new Error(`viewing transition ${from} → ${to} is not permitted`);
+    throw new IllegalViewingTransitionError(from, to);
   }
 }
