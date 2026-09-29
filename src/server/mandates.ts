@@ -177,6 +177,7 @@ export async function findMandatesForLister(listerPartyId: string) {
       id: m.property.id,
       landmarkText: m.property.landmarkText,
       neighbourhoodName: m.property.neighbourhood.name,
+      ownerName: null,
     },
     listerName: null,
     listerTier: null,

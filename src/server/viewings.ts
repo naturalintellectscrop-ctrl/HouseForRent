@@ -49,6 +49,15 @@ export class NotAssignedOfficerError extends Error {
     this.name = 'NotAssignedOfficerError';
   }
 }
+export class NotYourViewingError extends Error {
+  constructor(viewingId: string) {
+    super(
+      `viewing ${viewingId} belongs to a different tenant. A viewing is ` +
+        'cancelled by the tenant who requested it.',
+    );
+    this.name = 'NotYourViewingError';
+  }
+}
 
 // ── tenant side ──────────────────────────────────────────────────────────
 
@@ -128,6 +137,8 @@ function nextStepFor(status: string): string {
       return 'The visit happened and your introduction to the landlord is on record. You can open a deal from this viewing when you are ready.';
     case 'no_show':
       return 'The officer could not reach you at the scheduled time. Request another viewing when you are ready.';
+    case 'cancelled':
+      return 'You cancelled this viewing. You can request another one whenever you are ready.';
     default:
       return 'This viewing is closed.';
   }
@@ -356,6 +367,53 @@ export async function markNoShow(params: { viewingId: string; fooPartyId: string
   if (!viewing) throw new ViewingNotFoundError(params.viewingId);
   assertViewingTransitionAllowed(viewing.status as never, 'no_show');
   return db.viewing.update({ where: { id: params.viewingId }, data: { status: 'no_show' } });
+}
+
+/**
+ * The tenant withdraws a viewing while it is still `requested` or
+ * `scheduled`.
+ *
+ * ── The rules the state machine already decided ──
+ * The transition graph allows requested/scheduled → cancelled and nothing
+ * else out of those states; `conducted` is terminal, so a visit that
+ * happened can never be retroactively "cancelled" — that record is the
+ * circumvention evidence and it does not bend to anyone's convenience.
+ * The cancelled row is kept, not deleted: the landlord's viewing activity
+ * shows it as cancelled, which is the honest version of "nobody turned
+ * up".
+ *
+ * The decision is the tenant's, so the audit trail carries the actor —
+ * ops can distinguish a tenant's own cancellation from an officer's
+ * no_show without guessing.
+ */
+export async function cancelViewing(params: { viewingId: string; tenantPartyId: string }) {
+  const viewing = await db.viewing.findUnique({ where: { id: params.viewingId } });
+  if (!viewing) throw new ViewingNotFoundError(params.viewingId);
+  if (viewing.tenantPartyId !== params.tenantPartyId) {
+    throw new NotYourViewingError(params.viewingId);
+  }
+  assertViewingTransitionAllowed(viewing.status as never, 'cancelled');
+
+  const [updated] = await db.$transaction([
+    db.viewing.update({
+      where: { id: params.viewingId },
+      data: { status: 'cancelled' },
+    }),
+    db.auditEvent.create({
+      data: {
+        actorPartyId: params.tenantPartyId,
+        actorRole: 'tenant',
+        action: 'viewing_cancelled',
+        entityType: 'viewing',
+        entityId: params.viewingId,
+        detail: JSON.stringify({
+          from: viewing.status,
+          listingId: viewing.listingId,
+        }),
+      },
+    }),
+  ]);
+  return updated;
 }
 
 /**

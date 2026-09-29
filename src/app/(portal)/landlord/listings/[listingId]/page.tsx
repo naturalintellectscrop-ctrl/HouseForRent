@@ -15,6 +15,7 @@ import {
   shillings,
 } from '@/app/ui';
 import { AgreementPanel } from './agreement-panel';
+import { MandatePanel } from './mandate-panel';
 import { PublishPanel } from './publish-panel';
 import { PhotoManager } from './photo-manager';
 
@@ -216,6 +217,14 @@ export default async function LandlordListingPage({
             canPublish={listing.canPublish}
             isLive={listing.publicationState === 'live'}
           />
+
+          {/* The server's own blocker list decides whether the mandate card
+              exists: a property owner never sees it, and a verified mandate
+              stops the blocker, so the card disappears exactly when it
+              should. */}
+          {listing.blockedBy.includes('mandate') ? (
+            <MandatePanel propertyId={listing.propertyId} state={listing.mandateState} />
+          ) : null}
 
           {terms ? (
             <AgreementPanel listingId={listingId} terms={terms} />

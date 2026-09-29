@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { api } from '@/lib/api';
 import type { TenantViewing } from '@/lib/portal';
 import { Empty, shillings, StatusPill, when } from '@/app/ui';
+import { CancelViewingButton } from './cancel-viewing';
 
 export const metadata = { title: 'Your viewings' };
 
@@ -73,8 +74,20 @@ export default async function ViewingsPage({
                   {v.whatHappensNext}
                 </span>
               </span>
-              <span className="num" style={{ fontWeight: 580 }}>
-                {shillings(v.listing.monthlyRent)}
+              <span
+                className="stack-sm"
+                style={{ alignItems: 'flex-end', flex: 'none' }}
+              >
+                <span className="num" style={{ fontWeight: 580 }}>
+                  {shillings(v.listing.monthlyRent)}
+                </span>
+                {/* The server decides which rows offer the control: only a
+                    viewing the frozen graph can still cancel shows one — a
+                    conducted visit never grows a button here, no matter how
+                    stale this tab is. */}
+                {v.status === 'requested' || v.status === 'scheduled' ? (
+                  <CancelViewingButton viewingId={v.id} />
+                ) : null}
               </span>
             </li>
           ))}
