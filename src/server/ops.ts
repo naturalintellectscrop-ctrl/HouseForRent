@@ -535,6 +535,27 @@ export async function adminPartyDetail(partyId: string): Promise<AdminPartyDetai
 
   const ownDealIds = [...new Set([...dealsAsTenant, ...dealsAsLandlord].map((d) => d.id))];
 
+  // Viewing events on the SUBJECT's own visits: for a tenant, the visits
+  // they requested (ids in hand from the count read above); for a field
+  // officer, the visits assigned to them (a bounded read like the
+  // tenant's). Dispatch and ops cancellations act with an admin as the
+  // audit actor, so without this clause the trail would show only what the
+  // account did — never what was done to its visits. Subject-scoping stays
+  // by construction: only ids from the subject's own viewing queries enter
+  // the clause.
+  const assignedViewingRows =
+    account.role === 'foo'
+      ? await db.viewing.findMany({
+          where: { conductedByPartyId: partyId },
+          select: { id: true },
+          orderBy: { updatedAt: 'desc' },
+          take: 200,
+        })
+      : [];
+  const ownViewingIds = [
+    ...new Set([...viewingRows.map((v) => v.id), ...assignedViewingRows.map((v) => v.id)]),
+  ];
+
   // Identity checks run BY OPERATIONS have the admin as their audit actor,
   // so they would not match `actorPartyId: partyId` — but they are exactly
   // what this trail exists to show. Their ids are already in hand from the
@@ -551,6 +572,9 @@ export async function adminPartyDetail(partyId: string): Promise<AdminPartyDetai
         // about "my money" needs to see, and they stay subject-scoped by
         // construction (only ids from the queries above enter this list).
         ...(ownDealIds.length ? [{ entityType: 'deal', entityId: { in: ownDealIds } }] : []),
+        ...(ownViewingIds.length
+          ? [{ entityType: 'viewing', entityId: { in: ownViewingIds } }]
+          : []),
         ...(identityRecordIds.length
           ? [{ entityType: 'identity_verification', entityId: { in: identityRecordIds } }]
           : []),

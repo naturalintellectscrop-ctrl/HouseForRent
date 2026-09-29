@@ -28,7 +28,7 @@ import {
   adminVerificationQueue,
   type PhotoView,
 } from '@/server/listings';
-import { findForTenant, findForOfficer, dispatchQueue, getViewingDetail, findIntroductions } from '@/server/viewings';
+import { findForTenant, findForOfficer, dispatchQueue, getViewingDetail, findIntroductions, assignableOfficers } from '@/server/viewings';
 import { findMandatesForLister, findMandatesForOps } from '@/server/mandates';
 import { findForParty, getDealForCaller, listDealsForOps, landlordFinancials } from '@/server/deals';
 import { isSaved, listSaved } from '@/server/saved';
@@ -359,6 +359,9 @@ export interface ViewingDetailListing {
 export interface ViewingDetail {
   viewing: Viewing;
   listing: ViewingDetailListing;
+  /** The officer on the visit, once dispatch has named one — the record
+   * should say who is going, not just where. */
+  officerName: string | null;
   fieldReport: FieldReport | null;
   introduction: IntroductionRecord | null;
   canConduct: boolean;
@@ -572,6 +575,18 @@ async function resolveOpsNeighbourhoods() {
   return { neighbourhoods: await adminNeighbourhoodDirectory() };
 }
 
+/**
+ * The officers dispatch can send, with their open load (Task 16). One
+ * implementation lives in the service (`assignableOfficers`) — the queue
+ * and the reassign control both read it, so the two selects can never
+ * disagree about who is sendable.
+ */
+async function resolveOpsOfficers() {
+  const caller = await requireCaller();
+  if (caller.role !== 'admin') throw new ApiError(403, 'FORBIDDEN', 'admin surface');
+  return assignableOfficers();
+}
+
 async function resolvePresentedTerms(listingId: string): Promise<PresentedTerms> {
   const caller = await requireCaller();
   if (caller.role !== 'lister') throw new ApiError(403, 'FORBIDDEN', 'landlord surface');
@@ -716,21 +731,15 @@ async function resolveDispatchQueue(): Promise<DispatchQueue> {
   }
   void staleCutoff;
 
-  const officers = (await db.userAccount.findMany({
-    where: { role: 'foo', status: 'active' },
-    include: { party: { select: { displayName: true } } },
-  })).map(async (a) => ({
-    partyId: a.partyId,
-    displayName: a.party.displayName,
-    assignedCount: await db.viewing.count({
-      where: { conductedByPartyId: a.partyId, status: 'scheduled' },
-    }),
-  }));
+  // One implementation of "who can be sent": shared with the reassign
+  // control on the visit record (Task 16), so the two selects can never
+  // disagree about who is an assignable officer.
+  const officers = await assignableOfficers();
 
   return {
     total: dispatchRows.length,
     rows: dispatchRows,
-    officers: await Promise.all(officers),
+    officers,
   };
 }
 
@@ -810,6 +819,7 @@ async function resolveViewingDetail(viewingId: string): Promise<ViewingDetail> {
     },
     fieldReport,
     introduction,
+    officerName: detail.conductedByName ?? null,
     canConduct: detail.status === 'scheduled' && Boolean(fieldReport),
     whatIsMissing,
   };
@@ -1113,6 +1123,8 @@ function resolverFor(path: string, authenticated: boolean): Resolver {
   }
   if (parts[1] === 'admin' && parts[2] === 'users') return () => resolveAdminUsers(u.searchParams);
   if (parts[1] === 'ops' && parts[2] === 'neighbourhoods') return () => resolveOpsNeighbourhoods();
+  // Task 16: who dispatch can send — the reassign control's select data.
+  if (parts[1] === 'ops' && parts[2] === 'officers') return () => resolveOpsOfficers();
   // TASK 7-b (additive): the deal queue's "Show only" filter passes ?status=
   // — must precede the unfiltered admin deals route below. The distribution
   // stays whole (it is the shape of the whole book); only the rows narrow.

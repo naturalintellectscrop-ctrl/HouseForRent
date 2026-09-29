@@ -207,8 +207,8 @@ check('tenant 403 on filtered read', (await tenant('GET', '/admin/users?role=ten
 console.log('\nviewing detail:');
 const myViewings = await tenant('GET', '/viewings/mine');
 check('tenant viewings list 200', myViewings.status === 200 && Array.isArray(myViewings.json) && myViewings.json.length > 0);
-if (myViewings.json.length > 0) {
-  const vid = myViewings.json[0].id;
+const vid = myViewings.json.length > 0 ? myViewings.json[0].id : null;
+if (vid) {
   const asAdmin = await admin('GET', `/viewings/${vid}`);
   check('admin 200 with listing block', asAdmin.status === 200 && asAdmin.json.listing && typeof asAdmin.json.listing.expectedUpfront === 'string');
   check('expectedUpfront = rent×months + deposit', await (async () => {
@@ -222,6 +222,25 @@ if (myViewings.json.length > 0) {
   check('anon 401', (await anon('GET', `/viewings/${vid}`)).status === 401);
   check('unknown viewing 404', (await admin('GET', '/viewings/qa-journey-nonexistent')).status === 404);
 }
+
+// ── assignable officers + dispatch refusals (Task 16) ────────────────────
+// Refusals only: an assertion that actually assigns would move a real
+// visit; reassignment semantics were verified by hand in the browser this
+// round (move, keep-slot, and the same-officer no-op that records nothing).
+console.log('\nassignable officers + dispatch refusals:');
+const officersRes = await admin('GET', '/ops/officers');
+check('admin 200 roster with load', officersRes.status === 200 && Array.isArray(officersRes.json) && officersRes.json.length > 0 && officersRes.json.every((o) => typeof o.assignedCount === 'number'));
+check('tenant 403', (await tenant('GET', '/ops/officers')).status === 403);
+check('anon 401', (await anon('GET', '/ops/officers')).status === 401);
+check('dispatch anon 401', (await anon('POST', '/ops/dispatch', { viewingId: 'x', fooPartyId: 'y' })).status === 401);
+check('dispatch tenant 403', (await tenant('POST', '/ops/dispatch', { viewingId: 'x', fooPartyId: 'y' })).status === 403);
+check('dispatch unknown viewing 404', (await admin('POST', '/ops/dispatch', { viewingId: 'qa-journey-nonexistent', fooPartyId: 'y' })).status === 404);
+check('dispatch non-officer party 404 OFFICER_NOT_FOUND', vid ? await (async () => {
+  // The QA tenant's own party id is a REAL party with an account that is
+  // not a field officer — the exact account the service must refuse.
+  const r = await admin('POST', '/ops/dispatch', { viewingId: vid, fooPartyId: qaTenant.partyId });
+  return r.status === 404 && r.json.error?.code === 'OFFICER_NOT_FOUND';
+})() : false, 'needs a viewing id from /viewings/mine');
 
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed === 0 ? 0 : 1);

@@ -40,6 +40,7 @@ export function jsonError(err: unknown): NextResponse {
   const map: Record<string, { status: number; code: string }> = {
     DealNotFoundError: { status: 404, code: 'DEAL_NOT_FOUND' },
     ViewingNotFoundError: { status: 404, code: 'VIEWING_NOT_FOUND' },
+    OfficerNotFoundError: { status: 404, code: 'OFFICER_NOT_FOUND' },
     IllegalViewingTransitionError: { status: 409, code: 'ILLEGAL_VIEWING_TRANSITION' },
     NotYourViewingError: { status: 403, code: 'NOT_YOUR_VIEWING' },
     IntroductionRecordNotFoundError: { status: 404, code: 'INTRODUCTION_NOT_FOUND' },
