@@ -1,0 +1,995 @@
+     1→/**
+     2→ * The API contract: the shapes the backend returns, and the helpers that
+     3→ * fetch them.
+     4→ *
+     5→ * SANDBOX ADAPTATION (worklog.md §D-1): in the real repository this module
+     6→ * performs HTTP against the NestJS API (`API_BASE_URL`). Here the web app
+     7→ * and the API are one Next.js process, so `apiGet`/`api` dispatch
+     8→ * IN-PROCESS to the same service layer the /api/v1 route handlers use —
+     9→ * one implementation of the business rules, reached through the same
+    10→ * contract shapes. The browser mutations still go over real HTTP
+    11→ * (/api/v1/...), so every user journey crosses an API boundary exactly as
+    12→ * it does in production.
+    13→ *
+    14→ * `contract.ts` imports nothing server-only, so client components can take
+    15→ * its TYPES; this module resolves sessions and reads the database, so it
+    16→ * must never be imported from a client component.
+    17→ */
+    18→import { redirect } from 'next/navigation';
+    19→import { db } from '@/lib/db';
+    20→import {
+    21→  publicSearch,
+    22→  publicDetail,
+    23→  findForLister,
+    24→  getListingForLister,
+    25→  effectiveCommissionRate,
+    26→  freshnessWindowDays,
+    27→  listServiceAreaNeighbourhoods,
+    28→  type PhotoView,
+    29→} from '@/server/listings';
+    30→import { findForTenant, findForOfficer, dispatchQueue, getViewingDetail, findIntroductions } from '@/server/viewings';
+    31→import { findForParty, getDealForCaller, listDealsForOps } from '@/server/deals';
+    32→import { recentAuditEvents, verificationQueue, recentReconciliationChecks } from '@/server/ops';
+    33→import { everyPostingBalances } from '@/server/ledger';
+    34→import { resolveSession } from '@/server/auth';
+    35→import type { SearchResponse } from './contract';
+    36→
+    37→export * from './contract';
+    38→export * from './portal';
+    39→
+    40→/**
+    41→ * A backend rejection, carrying the code the error filter assigned it. The
+    42→ * console shows the backend's own message rather than inventing one, so an
+    43→ * officer sees the actual reason (`FIELD_REPORT_REQUIRED`) and not a guess.
+    44→ */
+    45→export class ApiError extends Error {
+    46→  constructor(
+    47→    readonly status: number,
+    48→    readonly code: string,
+    49→    message: string,
+    50→  ) {
+    51→    super(message);
+    52→    this.name = 'ApiError';
+    53→  }
+    54→}
+    55→
+    56→function unauthenticated(): ApiError {
+    57→  return new ApiError(401, 'UNAUTHENTICATED', 'not signed in');
+    58→}
+    59→
+    60→// ── shapes (identical to the real API contract) ──────────────────────────
+    61→
+    62→export interface Viewing {
+    63→  id: string;
+    64→  listingId: string;
+    65→  tenantPartyId: string;
+    66→  conductedByPartyId: string | null;
+    67→  conductedByRole: 'foo';
+    68→  scheduledFor: string;
+    69→  status: 'requested' | 'scheduled' | 'conducted' | 'no_show' | 'cancelled';
+    70→  /** When the tenant asked — distinct from the slot they asked for. */
+    71→  createdAt: string;
+    72→  /** Display context so a row can be recognised without a second fetch. */
+    73→  tenantName?: string;
+    74→  neighbourhood?: string;
+    75→  landmarkText?: string;
+    76→  bedrooms?: number;
+    77→  monthlyRent?: string;
+    78→}
+    79→
+    80→export interface DispatchRow {
+    81→  viewing: Viewing;
+    82→  listingId: string;
+    83→  neighbourhood: string;
+    84→  inServiceArea: boolean;
+    85→  blockedBy: string[];
+    86→}
+    87→
+    88→export interface AssignableOfficer {
+    89→  partyId: string;
+    90→  displayName: string;
+    91→  /** Visits already on their board — dispatch should not be blind to load. */
+    92→  assignedCount: number;
+    93→}
+    94→
+    95→export interface DispatchQueue {
+    96→  total: number;
+    97→  rows: DispatchRow[];
+    98→  officers: AssignableOfficer[];
+    99→}
+   100→
+   101→export interface FieldReport {
+   102→  id: string;
+   103→  viewingId: string;
+   104→  conditionRating: 'excellent' | 'good' | 'fair' | 'poor';
+   105→  matchesListing: boolean;
+   106→  isAvailable: boolean;
+   107→  issuesText: string | null;
+   108→  timingNote: string | null;
+   109→  mediaAssetIds: string[];
+   110→  reportedAt: string;
+   111→}
+   112→
+   113→export interface IntroductionRecord {
+   114→  id: string;
+   115→  viewingId: string;
+   116→  tenantPartyId: string;
+   117→  listingId: string;
+   118→  landlordPartyId: string;
+   119→  fooPartyId: string;
+   120→  introducedAt: string;
+   121→  /** Display context. */
+   122→  tenantName?: string;
+   123→  landlordName?: string;
+   124→  neighbourhood?: string;
+   125→  landmarkText?: string;
+   126→  dealId?: string | null;
+   127→}
+   128→
+   129→export interface LaunchGate {
+   130→  gate: number;
+   131→  qualifying: number;
+   132→  staleExcluded: number;
+   133→  freshnessWindowDays: number;
+   134→  gateMet: boolean;
+   135→  shortfall: number;
+   136→  asOf: string;
+   137→}
+   138→
+   139→export interface QueueRow {
+   140→  listingId: string;
+   141→  propertyId: string;
+   142→  listerPartyId: string;
+   143→  listerTier: string | null;
+   144→  neighbourhood: string;
+   145→  inServiceArea: boolean;
+   146→  verificationState: string;
+   147→  mandateState: string | null;
+   148→  hasAcceptedAgreement: boolean;
+   149→  blockedBy: string[];
+   150→  createdAt: string;
+   151→}
+   152→
+   153→export interface VerificationQueue {
+   154→  total: number;
+   155→  rows: QueueRow[];
+   156→}
+   157→
+   158→export interface ReconciliationCheck {
+   159→  id: string;
+   160→  runAt: string;
+   161→  /** Money, so it arrives as a string (API Spec §2). */
+   162→  ledgerBalance: string;
+   163→  pspBalance: string;
+   164→  isReconciled: boolean;
+   165→  discrepancyNote: string | null;
+   166→}
+   167→
+   168→export interface Reconciliation {
+   169→  latest: ReconciliationCheck | null;
+   170→  /** The ledger agreeing with ITSELF — a different problem from the above. */
+   171→  internallyConsistent: boolean;
+   172→  history: ReconciliationCheck[];
+   173→}
+   174→
+   175→export interface DealRow {
+   176→  id: string;
+   177→  status: string;
+   178→  neighbourhood: string;
+   179→  tenantName: string;
+   180→  landlordName: string;
+   181→  monthlyRent: string;
+   182→  commissionAmount: string | null;
+   183→  createdAt: string;
+   184→  updatedAt: string;
+   185→}
+   186→
+   187→export interface DealStates {
+   188→  distribution: Record<string, number>;
+   189→  total: number;
+   190→  rows: DealRow[];
+   191→}
+   192→
+   193→export interface DealActionField {
+   194→  name: string;
+   195→  kind: 'shillings' | 'text';
+   196→  label: string;
+   197→  hint?: string;
+   198→  required: boolean;
+   199→}
+   200→
+   201→export interface AvailableDealAction {
+   202→  action: string;
+   203→  label: string;
+   204→  /** Plain-language consequence, written server-side. Shown before acting. */
+   205→  consequence: string;
+   206→  reversible: boolean;
+   207→  movesMoney: boolean;
+   208→  fields: DealActionField[];
+   209→}
+   210→
+   211→export interface DealFinancial {
+   212→  expectedUpfront: string;
+   213→  monthlyRentSnapshot: string | null;
+   214→  commissionRateBpSnapshot: number | null;
+   215→  commissionAmount: string | null;
+   216→  heldInEscrow: string;
+   217→  owedToLandlord: string;
+   218→  commissionRecognised: string;
+   219→  funded: string;
+   220→  releasedToLandlord: string;
+   221→  refunded: string;
+   222→  escrowDischarged: boolean;
+   223→}
+   224→
+   225→export interface DealTransitionRow {
+   226→  id: string;
+   227→  fromStatus: string;
+   228→  toStatus: string;
+   229→  actorPartyId: string;
+   230→  actorRole?: string | null;
+   231→  reason: string | null;
+   232→  occurredAt: string;
+   233→}
+   234→
+   235→export interface DealDetail {
+   236→  deal: {
+   237→    id: string;
+   238→    status: string;
+   239→    listingId: string;
+   240→    tenantPartyId: string;
+   241→    landlordPartyId: string;
+   242→    introductionRecordId: string | null;
+   243→    agreementId: string | null;
+   244→    createdAt: string;
+   245→    updatedAt: string;
+   246→  };
+   247→  transitions: DealTransitionRow[];
+   248→  listing: {
+   249→    id: string;
+   250→    monthlyRent: string;
+   251→    requiredMonthsUpfront: number;
+   252→    depositAmount: string;
+   253→    publicationState: string;
+   254→    availabilityStatus: string;
+   255→    verificationState: string;
+   256→  };
+   257→  property: {
+   258→    id: string;
+   259→    propertyType: string;
+   260→    bedrooms: number;
+   261→    bathrooms: number;
+   262→    furnished: string;
+   263→    landmarkText: string | null;
+   264→    neighbourhood: string;
+   265→    inServiceArea: boolean;
+   266→  };
+   267→  parties: {
+   268→    tenant: { partyId: string; displayName: string };
+   269→    landlord: { partyId: string; displayName: string };
+   270→  };
+   271→  financial: DealFinancial;
+   272→  availableActions: AvailableDealAction[];
+   273→}
+   274→
+   275→export interface ConfigVersion {
+   276→  id: string;
+   277→  parameterId: string;
+   278→  value: unknown;
+   279→  effectiveFrom: string;
+   280→  createdByPartyId: string | null;
+   281→  createdAt: string;
+   282→}
+   283→
+   284→export interface AuditEvent {
+   285→  id: string;
+   286→  eventType: string;
+   287→  actorPartyId: string | null;
+   288→  actorName?: string;
+   289→  actorRole?: string | null;
+   290→  subjectRef: string | null;
+   291→  payload: Record<string, unknown> | null;
+   292→  occurredAt: string;
+   293→}
+   294→
+   295→export interface PresentedTerms {
+   296→  monthlyRent: string;
+   297→  commissionRateBp: number;
+   298→  commissionIfLet: string;
+   299→  clause: { version: string; heading: string; body: string };
+   300→  payer: 'landlord';
+   301→  tenantPays: false;
+   302→  alreadyAccepted: boolean;
+   303→  rateVersionId?: string;
+   304→}
+   305→
+   306→export interface ViewingDetail {
+   307→  viewing: Viewing;
+   308→  fieldReport: FieldReport | null;
+   309→  introduction: IntroductionRecord | null;
+   310→  canConduct: boolean;
+   311→  whatIsMissing: string[];
+   312→}
+   313→
+   314→// ── resolvers ────────────────────────────────────────────────────────────
+   315→
+   316→async function requireCaller() {
+   317→  const session = await resolveSession();
+   318→  if (!session) throw unauthenticated();
+   319→  return session;
+   320→}
+   321→
+   322→async function resolveListingsSearch(sp: URLSearchParams): Promise<SearchResponse> {
+   323→  const filters: Parameters<typeof publicSearch>[0] = {};
+   324→  const nid = sp.get('neighbourhoodId') ?? sp.get('neighbourhoodIds');
+   325→  if (nid) filters.neighbourhoodIds = nid.split(',').filter(Boolean);
+   326→  const minRent = sp.get('minRent');
+   327→  if (minRent && /^[0-9]+$/.test(minRent)) filters.minRent = BigInt(minRent);
+   328→  const maxRent = sp.get('maxRent');
+   329→  if (maxRent && /^[0-9]+$/.test(maxRent)) filters.maxRent = BigInt(maxRent);
+   330→  const bedrooms = sp.get('bedrooms');
+   331→  if (bedrooms && /^[0-9]+$/.test(bedrooms)) filters.bedrooms = parseInt(bedrooms, 10);
+   332→  const furnished = sp.get('furnished');
+   333→  if (furnished) filters.furnished = furnished;
+   334→  const propertyType = sp.get('propertyType');
+   335→  if (propertyType) filters.propertyType = propertyType as never;
+   336→  const q = sp.get('q');
+   337→  if (q) filters.q = q;
+   338→  const sort = sp.get('sort');
+   339→  if (sort && ['fresh', 'rent_asc', 'rent_desc', 'newest'].includes(sort)) {
+   340→    filters.sort = sort as never;
+   341→  }
+   342→  const limit = sp.get('limit');
+   343→  if (limit && /^[0-9]+$/.test(limit)) filters.limit = parseInt(limit, 10);
+   344→  const offset = sp.get('offset');
+   345→  if (offset && /^[0-9]+$/.test(offset)) filters.offset = parseInt(offset, 10);
+   346→  return publicSearch(filters);
+   347→}
+   348→
+   349→async function resolveListingDetail(id: string) {
+   350→  const detail = await publicDetail(id);
+   351→  if (!detail) throw new ApiError(404, 'LISTING_NOT_FOUND', 'that listing does not exist or is not public');
+   352→  // The officer's structured verdict on this home, when one exists — the
+   353→  // same record the verification queue writes.
+   354→  const lastConducted = await db.viewing.findFirst({
+   355→    where: { listingId: id, status: 'conducted', fieldReport: { isNot: null } },
+   356→    orderBy: { updatedAt: 'desc' },
+   357→    include: { fieldReport: true },
+   358→  });
+   359→  const fieldConfirmed = lastConducted?.fieldReport
+   360→    ? {
+   361→        conditionRating: lastConducted.fieldReport.conditionRating as 'excellent' | 'good' | 'fair' | 'poor',
+   362→        matchesListing: lastConducted.fieldReport.matchesListing,
+   363→        isAvailable: lastConducted.fieldReport.isAvailable,
+   364→        reportedAt: lastConducted.fieldReport.reportedAt.toISOString(),
+   365→      }
+   366→    : null;
+   367→  return {
+   368→    ...detail,
+   369→    neighbourhoodId: '',
+   370→    geoLat: null,
+   371→    geoLng: null,
+   372→    amenities: detail.amenities.map((name, i) => ({ id: String(i), name })),
+   373→    fieldConfirmed,
+   374→  };
+   375→}
+   376→
+   377→async function resolveNeighbourhoods() {
+   378→  const rows = await listServiceAreaNeighbourhoods();
+   379→  const withCounts = await Promise.all(
+   380→    rows.map(async (n) => ({
+   381→      id: n.id,
+   382→      name: n.name,
+   383→      district: n.district,
+   384→      parentId: null as string | null,
+   385→      parentName: n.district,
+   386→      inServiceArea: n.inServiceArea,
+   387→      liveListingCount: await db.listing.count({
+   388→        where: {
+   389→          publicationState: 'live',
+   390→          verificationState: 'verified',
+   391→          property: { neighbourhoodId: n.id },
+   392→        },
+   393→      }),
+   394→    })),
+   395→  );
+   396→  return { neighbourhoods: withCounts };
+   397→}
+   398→
+   399→async function resolveCommissionRate() {
+   400→  const rate = await effectiveCommissionRate();
+   401→  return { rateBpOfMonth: rate.rateBp, effectiveFrom: rate.effectiveFrom.toISOString() };
+   402→}
+   403→
+   404→async function resolveMyListings() {
+   405→  const caller = await requireCaller();
+   406→  if (caller.role !== 'lister') throw new ApiError(403, 'FORBIDDEN', 'landlord surface');
+   407→  return findForLister(caller.partyId);
+   408→}
+   409→
+   410→async function resolvePresentedTerms(listingId: string): Promise<PresentedTerms> {
+   411→  const caller = await requireCaller();
+   412→  if (caller.role !== 'lister') throw new ApiError(403, 'FORBIDDEN', 'landlord surface');
+   413→  const mine = await getListingForLister(listingId, caller.partyId);
+   414→  if (!mine) throw new ApiError(404, 'LISTING_NOT_FOUND', 'not your listing');
+   415→
+   416→  const rate = await effectiveCommissionRate();
+   417→  const monthlyRent = BigInt(mine.monthlyRent);
+   418→  const commissionIfLet = (monthlyRent * BigInt(rate.rateBp)) / 10000n;
+   419→  return {
+   420→    monthlyRent: mine.monthlyRent,
+   421→    commissionRateBp: rate.rateBp,
+   422→    commissionIfLet: commissionIfLet.toString(),
+   423→    clause: {
+   424→      version: 'v1',
+   425→      heading: 'The circumvention clause',
+   426→      body:
+   427→        'If the tenant we introduced you to rents this home directly, without going through House For Rent, the full commission becomes payable. Our officers record every introduction with a timestamp and the parties present — that record is what makes this enforceable, and it is why we can keep tenants free and charge you only on success.',
+   428→    },
+   429→    payer: 'landlord',
+   430→    tenantPays: false,
+   431→    alreadyAccepted: mine.hasAcceptedAgreement,
+   432→    rateVersionId: rate.id,
+   433→  };
+   434→}
+   435→
+   436→async function resolveListingPhotos(listingId: string) {
+   437→  const caller = await requireCaller();
+   438→  if (caller.role !== 'lister' && caller.role !== 'admin' && caller.role !== 'foo') {
+   439→    throw new ApiError(403, 'FORBIDDEN', 'staff or lister surface');
+   440→  }
+   441→  const photos = await db.listingPhoto.findMany({
+   442→    where: { listingId },
+   443→    orderBy: { position: 'asc' },
+   444→    include: { asset: true },
+   445→  });
+   446→  return { photos: photos.map(toContractPhoto) };
+   447→}
+   448→
+   449→function toContractPhoto(p: {
+   450→  id: string;
+   451→  mediaAssetId: string;
+   452→  position: number;
+   453→  asset: { source: string };
+   454→}): PhotoView {
+   455→  return {
+   456→    id: p.id,
+   457→    mediaAssetId: p.mediaAssetId,
+   458→    url: `/api/v1/media/${p.mediaAssetId}`,
+   459→    caption: null,
+   460→    sortOrder: p.position,
+   461→    source: p.asset.source,
+   462→    isFieldVerified: p.asset.source === 'field_officer',
+   463→    isDevelopmentFixture: p.asset.source === 'development_fixture',
+   464→  };
+   465→}
+   466→
+   467→async function resolveMyViewings() {
+   468→  const caller = await requireCaller();
+   469→  if (caller.role !== 'tenant') throw new ApiError(403, 'FORBIDDEN', 'tenant surface');
+   470→  const rows = await findForTenant(caller.partyId);
+   471→  return rows.map((v) => ({
+   472→    id: v.id,
+   473→    listingId: v.listingId,
+   474→    status: v.status as never,
+   475→    scheduledFor: v.scheduledFor.toISOString(),
+   476→    createdAt: v.scheduledFor.toISOString(),
+   477→    officerAssigned: Boolean(v.conductedBy),
+   478→    listing: {
+   479→      monthlyRent: v.listing.monthlyRent,
+   480→      bedrooms: v.listing.bedrooms,
+   481→      bathrooms: 0,
+   482→      propertyType: v.listing.propertyType,
+   483→      neighbourhoodName: v.listing.neighbourhoodName,
+   484→      landmarkText: v.listing.landmarkText,
+   485→      publicationState: 'live',
+   486→    },
+   487→    whatHappensNext: v.whatHappensNext,
+   488→  }));
+   489→}
+   490→
+   491→async function resolveAssignedViewings() {
+   492→  const caller = await requireCaller();
+   493→  if (caller.role !== 'foo' && caller.role !== 'admin') throw new ApiError(403, 'FORBIDDEN', 'staff surface');
+   494→  const rows = await findForOfficer(caller.partyId);
+   495→  return rows.map((v) => ({
+   496→    id: v.id,
+   497→    listingId: v.listing.id,
+   498→    tenantPartyId: '',
+   499→    conductedByPartyId: caller.partyId,
+   500→    conductedByRole: 'foo' as const,
+   501→    scheduledFor: v.scheduledFor.toISOString(),
+   502→    status: v.status as never,
+   503→    createdAt: v.scheduledFor.toISOString(),
+   504→    tenantName: v.tenantName,
+   505→    neighbourhood: v.listing.neighbourhoodName,
+   506→    landmarkText: v.listing.landmarkText,
+   507→    bedrooms: v.listing.bedrooms,
+   508→    monthlyRent: v.listing.monthlyRent,
+   509→  }));
+   510→}
+   511→
+   512→async function resolveDispatchQueue(): Promise<DispatchQueue> {
+   513→  const caller = await requireCaller();
+   514→  if (caller.role !== 'admin' && caller.role !== 'foo') throw new ApiError(403, 'FORBIDDEN', 'staff surface');
+   515→
+   516→  const rows = await dispatchQueue();
+   517→  const windowDays = await freshnessWindowDays();
+   518→  const staleCutoff = new Date(Date.now() - windowDays * 24 * 60 * 60 * 1000);
+   519→
+   520→  const dispatchRows: DispatchRow[] = [];
+   521→  for (const row of rows) {
+   522→    const listing = await db.listing.findUnique({
+   523→      where: { id: row.listingId },
+   524→      include: { property: { include: { neighbourhood: true } } },
+   525→    });
+   526→    if (!listing) continue;
+   527→    const blockedBy: string[] = [];
+   528→    if (!listing.property.neighbourhood.inServiceArea) blockedBy.push('outside_service_area');
+   529→    if (listing.verificationState !== 'verified') blockedBy.push('field_verification');
+   530→    dispatchRows.push({
+   531→      viewing: {
+   532→        id: row.id,
+   533→        listingId: row.listingId,
+   534→        tenantPartyId: '',
+   535→        conductedByPartyId: null,
+   536→        conductedByRole: 'foo',
+   537→        scheduledFor: row.scheduledFor.toISOString(),
+   538→        status: 'requested',
+   539→        createdAt: row.requestedAt.toISOString(),
+   540→        tenantName: row.tenantName,
+   541→        neighbourhood: row.neighbourhood,
+   542→        landmarkText: row.landmarkText,
+   543→        bedrooms: row.bedrooms,
+   544→        monthlyRent: row.monthlyRent,
+   545→      },
+   546→      listingId: row.listingId,
+   547→      neighbourhood: row.neighbourhood,
+   548→      inServiceArea: listing.property.neighbourhood.inServiceArea,
+   549→      blockedBy,
+   550→    });
+   551→  }
+   552→  void staleCutoff;
+   553→
+   554→  const officers = (await db.userAccount.findMany({
+   555→    where: { role: 'foo', status: 'active' },
+   556→    include: { party: { select: { displayName: true } } },
+   557→  })).map(async (a) => ({
+   558→    partyId: a.partyId,
+   559→    displayName: a.party.displayName,
+   560→    assignedCount: await db.viewing.count({
+   561→      where: { conductedByPartyId: a.partyId, status: 'scheduled' },
+   562→    }),
+   563→  }));
+   564→
+   565→  return {
+   566→    total: dispatchRows.length,
+   567→    rows: dispatchRows,
+   568→    officers: await Promise.all(officers),
+   569→  };
+   570→}
+   571→
+   572→async function resolveViewingDetail(viewingId: string): Promise<ViewingDetail> {
+   573→  const caller = await requireCaller();
+   574→  if (caller.role !== 'foo' && caller.role !== 'admin') throw new ApiError(403, 'FORBIDDEN', 'staff surface');
+   575→  const detail = await getViewingDetail(viewingId);
+   576→  if (detail.conductedByName && caller.role === 'foo' && detail.conductedByName !== caller.displayName) {
+   577→    // Assigned to another officer: an admin may look, an officer may not.
+   578→    throw new ApiError(403, 'NOT_ASSIGNED_OFFICER', 'this visit is assigned to another officer');
+   579→  }
+   580→  const fieldReport: FieldReport | null = detail.fieldReport
+   581→    ? {
+   582→        id: '',
+   583→        viewingId: detail.id,
+   584→        conditionRating: detail.fieldReport.conditionRating as never,
+   585→        matchesListing: detail.fieldReport.matchesListing,
+   586→        isAvailable: detail.fieldReport.isAvailable,
+   587→        issuesText: detail.fieldReport.issuesText,
+   588→        timingNote: detail.fieldReport.timingNote,
+   589→        mediaAssetIds: [],
+   590→        reportedAt: detail.fieldReport.reportedAt.toISOString(),
+   591→      }
+   592→    : null;
+   593→  const introduction = detail.introductionRecord
+   594→    ? {
+   595→        id: detail.introductionRecord.id,
+   596→        viewingId: detail.id,
+   597→        tenantPartyId: '',
+   598→        listingId: detail.listing.id,
+   599→        landlordPartyId: detail.listing.listerPartyId,
+   600→        fooPartyId: caller.partyId,
+   601→        introducedAt: detail.introductionRecord.introducedAt.toISOString(),
+   602→      }
+   603→    : null;
+   604→  const whatIsMissing: string[] = [];
+   605→  if (!fieldReport) whatIsMissing.push('field report');
+   606→  return {
+   607→    viewing: {
+   608→      id: detail.id,
+   609→      listingId: detail.listing.id,
+   610→      tenantPartyId: '',
+   611→      conductedByPartyId: null,
+   612→      conductedByRole: 'foo',
+   613→      scheduledFor: detail.scheduledFor.toISOString(),
+   614→      status: detail.status as never,
+   615→      createdAt: detail.scheduledFor.toISOString(),
+   616→      tenantName: detail.tenantName,
+   617→      neighbourhood: detail.listing.neighbourhoodName,
+   618→      landmarkText: detail.listing.landmarkText,
+   619→      bedrooms: detail.listing.bedrooms,
+   620→      monthlyRent: detail.listing.monthlyRent,
+   621→    },
+   622→    fieldReport,
+   623→    introduction,
+   624→    canConduct: detail.status === 'scheduled' && Boolean(fieldReport),
+   625→    whatIsMissing,
+   626→  };
+   627→}
+   628→
+   629→async function resolveIntroductions() {
+   630→  const caller = await requireCaller();
+   631→  const rows = await findIntroductions(
+   632→    caller.role === 'foo' ? { fooPartyId: caller.partyId } : {},
+   633→  );
+   634→  return rows.map((r) => {
+   635→    let dealId: string | null = null;
+   636→    void dealId;
+   637→    return {
+   638→      id: r.id,
+   639→      viewingId: r.viewingId,
+   640→      tenantPartyId: r.tenantPartyId,
+   641→      listingId: r.listingId,
+   642→      landlordPartyId: r.landlordPartyId,
+   643→      fooPartyId: r.fooPartyId,
+   644→      introducedAt: r.introducedAt.toISOString(),
+   645→      tenantName: r.tenantParty.displayName,
+   646→      landlordName: r.landlordParty.displayName,
+   647→      neighbourhood: r.listing.property.neighbourhood.name,
+   648→      landmarkText: r.listing.property.landmarkText,
+   649→      dealId,
+   650→    };
+   651→  });
+   652→}
+   653→
+   654→/**
+   655→ * TASK 7-b (additive): the introduction EVIDENCE page filters by party id
+   656→ * and listing id in its query string; the unfiltered resolver above cannot
+   657→ * honour that. This one applies the same filters the real API accepted
+   658→ * (tenantPartyId, listingId via the service's where-clause; landlordPartyId
+   659→ * against the included relation). Its routing line sits immediately before
+   660→ * the unfiltered introductions line — order matters, nothing existing was
+   661→ * moved or rewritten, and the mapping is repeated rather than shared for
+   662→ * exactly that reason.
+   663→ */
+   664→function hasIntroductionFilters(sp: URLSearchParams): boolean {
+   665→  return (
+   666→    sp.has('tenantPartyId') || sp.has('landlordPartyId') || sp.has('listingId')
+   667→  );
+   668→}
+   669→
+   670→async function resolveIntroductionsFiltered(sp: URLSearchParams) {
+   671→  const caller = await requireCaller();
+   672→  if (caller.role !== 'foo' && caller.role !== 'admin') {
+   673→    throw new ApiError(403, 'FORBIDDEN', 'staff surface');
+   674→  }
+   675→  const rows = await findIntroductions({
+   676→    ...(caller.role === 'foo' ? { fooPartyId: caller.partyId } : {}),
+   677→    tenantPartyId: sp.get('tenantPartyId') ?? undefined,
+   678→    listingId: sp.get('listingId') ?? undefined,
+   679→  });
+   680→  const landlordPartyId = sp.get('landlordPartyId');
+   681→  return rows
+   682→    .filter((r) => !landlordPartyId || r.landlordPartyId === landlordPartyId)
+   683→    .map((r) => ({
+   684→      id: r.id,
+   685→      viewingId: r.viewingId,
+   686→      tenantPartyId: r.tenantPartyId,
+   687→      listingId: r.listingId,
+   688→      landlordPartyId: r.landlordPartyId,
+   689→      fooPartyId: r.fooPartyId,
+   690→      introducedAt: r.introducedAt.toISOString(),
+   691→      tenantName: r.tenantParty.displayName,
+   692→      landlordName: r.landlordParty.displayName,
+   693→      neighbourhood: r.listing.property.neighbourhood.name,
+   694→      landmarkText: r.listing.property.landmarkText,
+   695→      dealId: null,
+   696→    }));
+   697→}
+   698→
+   699→/** Viewing activity on the landlord's own listings (read-only; ops dispatches). */
+   700→async function resolveListerViewings() {
+   701→  const caller = await requireCaller();
+   702→  if (caller.role !== 'lister') throw new ApiError(403, 'FORBIDDEN', 'landlord surface');
+   703→  const { findViewingsForLister } = await import('@/server/viewings');
+   704→  return findViewingsForLister(caller.partyId);
+   705→}
+   706→
+   707→async function resolveIdentityMe() {
+   708→  const caller = await requireCaller();
+   709→  const consent = await db.consentRecord.findFirst({
+   710→    where: { partyId: caller.partyId },
+   711→    orderBy: { acceptedAt: 'desc' },
+   712→  });
+   713→  return {
+   714→    partyId: caller.partyId,
+   715→    displayName: caller.displayName,
+   716→    identityVerified: caller.verificationState === 'verified',
+   717→    screeningState: caller.verificationState,
+   718→    screeningModulesRun: ['identity'],
+   719→    consentRecordedAt: consent?.acceptedAt.toISOString() ?? null,
+   720→    consentPolicyVersion: consent?.version ?? null,
+   721→  };
+   722→}
+   723→
+   724→async function resolvePartyDeals() {
+   725→  const caller = await requireCaller();
+   726→  if (caller.role === 'foo') return [];
+   727→  return findForParty(caller.partyId);
+   728→}
+   729→
+   730→async function resolveDealDetail(dealId: string): Promise<DealDetail> {
+   731→  const caller = await requireCaller();
+   732→  const d = await getDealForCaller(dealId, caller.partyId, caller.role);
+   733→  return {
+   734→    deal: {
+   735→      id: d.id,
+   736→      status: d.status,
+   737→      listingId: d.listing.id,
+   738→      tenantPartyId: d.parties.tenant.partyId,
+   739→      landlordPartyId: d.parties.landlord.partyId,
+   740→      introductionRecordId: null,
+   741→      agreementId: null,
+   742→      createdAt: d.createdAt.toISOString(),
+   743→      updatedAt: d.updatedAt.toISOString(),
+   744→    },
+   745→    transitions: d.transitions.map((t) => ({
+   746→      id: t.id,
+   747→      fromStatus: t.fromStatus,
+   748→      toStatus: t.toStatus,
+   749→      actorPartyId: t.actorPartyId ?? '',
+   750→      actorRole: t.actorRole,
+   751→      reason: t.reason,
+   752→      occurredAt: t.createdAt.toISOString(),
+   753→    })),
+   754→    listing: d.listing,
+   755→    property: d.property,
+   756→    parties: d.parties,
+   757→    financial: d.financials,
+   758→    availableActions: d.availableActions,
+   759→  };
+   760→}
+   761→
+   762→/** The launch gate: verified-fresh live inventory against the configured bar. */
+   763→async function resolveLaunchGate(): Promise<LaunchGate> {
+   764→  const windowDays = await freshnessWindowDays();
+   765→  const cutoff = new Date(Date.now() - windowDays * 24 * 60 * 60 * 1000);
+   766→  const gateParam = await db.configParameter.findUnique({ where: { key: 'launch_gate_listings' } });
+   767→  const gate = gateParam ? parseInt(gateParam.value, 10) || 12 : 12;
+   768→
+   769→  const live = await db.listing.count({
+   770→    where: {
+   771→      publicationState: 'live',
+   772→      verificationState: 'verified',
+   773→      availabilityConfirmedAt: { gte: cutoff },
+   774→      property: { neighbourhood: { inServiceArea: true } },
+   775→    },
+   776→  });
+   777→  const staleExcluded = await db.listing.count({
+   778→    where: {
+   779→      publicationState: 'live',
+   780→      verificationState: 'verified',
+   781→      property: { neighbourhood: { inServiceArea: true } },
+   782→    },
+   783→  });
+   784→
+   785→  return {
+   786→    gate,
+   787→    qualifying: live,
+   788→    staleExcluded,
+   789→    freshnessWindowDays: windowDays,
+   790→    gateMet: live >= gate,
+   791→    shortfall: Math.max(0, gate - live),
+   792→    asOf: new Date().toISOString(),
+   793→  };
+   794→}
+   795→
+   796→async function resolveVerificationQueue(): Promise<VerificationQueue> {
+   797→  const rows = await verificationQueue();
+   798→  return {
+   799→    total: rows.length,
+   800→    rows: await Promise.all(rows.map(async (r) => {
+   801→      const property = await db.property.findUnique({
+   802→        where: { id: r.propertyId },
+   803→        include: { neighbourhood: true, owner: { include: { listerProfile: true } } },
+   804→      });
+   805→      const blockedBy: string[] = [];
+   806→      if (property && !property.neighbourhood.inServiceArea) blockedBy.push('outside_service_area');
+   807→      return {
+   808→        listingId: r.id,
+   809→        propertyId: r.propertyId,
+   810→        listerPartyId: '',
+   811→        listerTier: property?.owner.listerProfile?.tier ?? null,
+   812→        neighbourhood: r.neighbourhood,
+   813→        inServiceArea: property?.neighbourhood.inServiceArea ?? false,
+   814→        verificationState: 'unverified',
+   815→        mandateState: null,
+   816→        hasAcceptedAgreement: false,
+   817→        blockedBy,
+   818→        createdAt: r.createdAt.toISOString(),
+   819→      };
+   820→    })),
+   821→  };
+   822→}
+   823→
+   824→async function resolveDealStates(): Promise<DealStates> {
+   825→  const rows = await listDealsForOps();
+   826→  const withCommission = await Promise.all(rows.map(async (r) => {
+   827→    const deal = await db.deal.findUnique({ where: { id: r.id }, select: { commissionAmount: true } });
+   828→    return {
+   829→      id: r.id,
+   830→      status: r.status,
+   831→      neighbourhood: r.neighbourhood,
+   832→      tenantName: r.tenantName,
+   833→      landlordName: r.landlordName,
+   834→      monthlyRent: r.monthlyRent,
+   835→      commissionAmount: deal?.commissionAmount?.toString() ?? null,
+   836→      createdAt: r.updatedAt.toISOString(),
+   837→      updatedAt: r.updatedAt.toISOString(),
+   838→    };
+   839→  }));
+   840→  const distribution: Record<string, number> = {};
+   841→  for (const row of withCommission) {
+   842→    distribution[row.status] = (distribution[row.status] ?? 0) + 1;
+   843→  }
+   844→  return { distribution, total: withCommission.length, rows: withCommission };
+   845→}
+   846→
+   847→function toAuditEvents(rows: Awaited<ReturnType<typeof recentAuditEvents>>): AuditEvent[] {
+   848→  return rows.map((r) => ({
+   849→    id: r.id,
+   850→    eventType: r.action,
+   851→    actorPartyId: null,
+   852→    actorName: r.actorName,
+   853→    actorRole: r.actorRole,
+   854→    subjectRef: r.entityId,
+   855→    payload: r.detail,
+   856→    occurredAt: r.createdAt.toISOString(),
+   857→  }));
+   858→}
+   859→
+   860→async function resolveReconciliation(): Promise<Reconciliation> {
+   861→  const history = await recentReconciliationChecks();
+   862→  const checks: ReconciliationCheck[] = history.map((c) => ({
+   863→    id: c.id,
+   864→    runAt: c.runAt.toISOString(),
+   865→    ledgerBalance: c.ledgerBalance.toString(),
+   866→    pspBalance: c.pspBalance.toString(),
+   867→    isReconciled: c.isReconciled,
+   868→    discrepancyNote: c.discrepancyNote,
+   869→  }));
+   870→  return {
+   871→    latest: checks[0] ?? null,
+   872→    internallyConsistent: await everyPostingBalances(),
+   873→    history: checks,
+   874→  };
+   875→}
+   876→
+   877→async function resolveConfigVersions(key: string): Promise<ConfigVersion[]> {
+   878→  const param = await db.configParameter.findUnique({ where: { key }, include: { versions: true } });
+   879→  if (!param) return [];
+   880→  return param.versions.map((v) => ({
+   881→    id: v.id,
+   882→    parameterId: v.parameterId,
+   883→    value: v.value,
+   884→    effectiveFrom: v.createdAt.toISOString(),
+   885→    createdByPartyId: v.changedBy,
+   886→    createdAt: v.createdAt.toISOString(),
+   887→  }));
+   888→}
+   889→
+   890→async function resolveCommissionRates() {
+   891→  const rows = await db.commissionRateVersion.findMany({ orderBy: { effectiveFrom: 'desc' } });
+   892→  return rows.map((r) => ({ id: r.id, rateBp: r.rateBp, effectiveFrom: r.effectiveFrom.toISOString() }));
+   893→}
+   894→
+   895→// ── the dispatcher ───────────────────────────────────────────────────────
+   896→
+   897→type Resolver = () => Promise<unknown>;
+   898→
+   899→/**
+   900→ * Resolves an API path in-process. Route ORDER MATTERS: `/v1/listings/mine`
+   901→ * must be tried before `/v1/listings/:id`, or "mine" would be read as an id.
+   902→ */
+   903→function resolverFor(path: string, authenticated: boolean): Resolver {
+   904→  const u = new URL(path, 'http://in-process');
+   905→  const parts = u.pathname.split('/').filter(Boolean); // ['v1', ...]
+   906→
+   907→  // public reads
+   908→  if (parts[1] === 'listings' && parts.length === 2) return () => resolveListingsSearch(u.searchParams);
+   909→  if (parts[1] === 'listings' && parts[2] === 'mine') return () => resolveMyListings();
+   910→  if (parts[1] === 'listings' && parts.length === 3) return () => resolveListingDetail(parts[2]);
+   911→  if (parts[1] === 'listings' && parts[3] === 'agreement') return () => resolvePresentedTerms(parts[2]);
+   912→  if (parts[1] === 'listings' && parts[3] === 'photos' && parts.length === 4) return () => resolveListingPhotos(parts[2]);
+   913→  if (parts[1] === 'neighbourhoods') return () => resolveNeighbourhoods();
+   914→  if (parts[1] === 'commission-rate') return () => resolveCommissionRate();
+   915→
+   916→  // authenticated reads
+   917→  if (!authenticated) return () => { throw unauthenticated(); };
+   918→  if (parts[1] === 'viewings' && parts[2] === 'mine') return () => resolveMyViewings();
+   919→  if (parts[1] === 'viewings' && parts[2] === 'assigned' && parts[3] === 'me') return () => resolveAssignedViewings();
+   920→  if (parts[1] === 'viewings' && parts[2] === 'dispatch-queue') return () => resolveDispatchQueue();
+   921→  if (parts[1] === 'viewings' && parts[2] === 'for-lister') return () => resolveListerViewings();
+   922→  // TASK 7-b (additive): filtered evidence lookup — must precede the
+   923→  // unfiltered introductions route below.
+   924→  if (parts[1] === 'viewings' && parts[2] === 'introductions' && hasIntroductionFilters(u.searchParams)) {
+   925→    return () => resolveIntroductionsFiltered(u.searchParams);
+   926→  }
+   927→  if (parts[1] === 'viewings' && parts[2] === 'introductions') return () => resolveIntroductions();
+   928→  if (parts[1] === 'viewings' && parts.length === 3) return () => resolveViewingDetail(parts[2]);
+   929→  if (parts[1] === 'identity' && parts[2] === 'me') return () => resolveIdentityMe();
+   930→  if (parts[1] === 'deals' && parts.length === 2) return () => resolvePartyDeals();
+   931→  if (parts[1] === 'deals' && parts.length === 3) return () => resolveDealDetail(parts[2]);
+   932→  if (parts[1] === 'admin' && parts[2] === 'launch-gate') return () => resolveLaunchGate();
+   933→  if (parts[1] === 'admin' && parts[2] === 'verification-queue') return () => resolveVerificationQueue();
+   934→  // TASK 7-b (additive): the deal queue's "Show only" filter passes ?status=
+   935→  // — must precede the unfiltered admin deals route below. The distribution
+   936→  // stays whole (it is the shape of the whole book); only the rows narrow.
+   937→  if (parts[1] === 'admin' && parts[2] === 'deals' && u.searchParams.has('status')) {
+   938→    return async () => {
+   939→      const status = u.searchParams.get('status') ?? '';
+   940→      const states = await resolveDealStates();
+   941→      const rows = states.rows.filter((r) => r.status === status);
+   942→      return { ...states, total: rows.length, rows };
+   943→    };
+   944→  }
+   945→  if (parts[1] === 'admin' && parts[2] === 'deals') return () => resolveDealStates();
+   946→  if (parts[1] === 'admin' && parts[2] === 'reconciliation') return () => resolveReconciliation();
+   947→  if (parts[1] === 'admin' && parts[2] === 'audit' && parts.length === 4) {
+   948→    return async () => toAuditEvents(await recentAuditEvents(50)).filter((e) => e.subjectRef === parts[3]);
+   949→  }
+   950→  if (parts[1] === 'admin' && parts[2] === 'audit') return async () => toAuditEvents(await recentAuditEvents(100));
+   951→  if (parts[1] === 'admin' && parts[2] === 'commission-rates') return () => resolveCommissionRates();
+   952→  if (parts[1] === 'admin' && parts[2] === 'config' && parts[4] === 'versions') return () => resolveConfigVersions(parts[3]);
+   953→
+   954→  throw new ApiError(404, 'UNKNOWN_PATH', `no in-process resolver for GET ${path}`);
+   955→}
+   956→
+   957→/**
+   958→ * An unauthenticated GET against the public API. The marketplace is
+   959→ * browsable without an account (Decision 3).
+   960→ */
+   961→export async function apiGet<T>(path: string, _opts: { revalidate?: number } = {}): Promise<T> {
+   962→  return resolverFor(path, false)() as Promise<T>;
+   963→}
+   964→
+   965→/**
+   966→ * Authenticated GET, in-process. Runs the role check here that the API's
+   967→ * guards would run — same rules, one implementation.
+   968→ *
+   969→ * MUTATIONS DO NOT BELONG HERE: any POST/PUT goes through `postJson()`
+   970→ * from '@/lib/client' in a CLIENT component, over real HTTP to /api/v1 —
+   971→ * this module is server-only (it imports the database), and every state
+   972→ * change must cross an API boundary.
+   973→ */
+   974→export async function api<T>(path: string, init?: { method?: string; body?: Record<string, unknown> }): Promise<T> {
+   975→  const method = init?.method ?? 'GET';
+   976→  if (method !== 'GET') {
+   977→    throw new ApiError(
+   978→      500,
+   979→      'MUTATION_NOT_ALLOWED',
+   980→      'server-side mutations must go through /api/v1 route handlers via postJson()',
+   981→    );
+   982→  }
+   983→  return resolverFor(path, true)() as Promise<T>;
+   984→}
+   985→
+   986→// ── session helpers re-exported for pages ────────────────────────────────
+   987→
+   988→export { resolveSession };
+   989→export async function requirePortalRole(allowed: readonly string[], returnTo?: string) {
+   990→  const session = await resolveSession();
+   991→  if (!session) redirect(returnTo ? `/login?next=${encodeURIComponent(returnTo)}` : '/login');
+   992→  else if (!allowed.includes(session.role)) redirect('/login');
+   993→  return session;
+   994→}
+   995→

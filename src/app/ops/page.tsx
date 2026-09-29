@@ -105,7 +105,7 @@ export default async function OpsPage() {
           <p className="kpi-label">Freshness window</p>
           <p className="kpi-value">
             {gate.freshnessWindowDays}
-            <span className="hero-unit"> days</span>
+            <span className="kpi-state"> days</span>
           </p>
         </div>
       </div>

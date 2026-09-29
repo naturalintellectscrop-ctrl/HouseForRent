@@ -127,6 +127,20 @@ export const Icon = {
       <path d="M7 9h.01M7 13h.01M15 12h.01M15 16h.01" />
     </Svg>
   ),
+  /* Bookmark (QA round: the saved-homes toggle). Deliberately NOT on the
+     property card — see the PropertyCard note about invented social proof.
+     A bookmark is a private fact the system actually holds; a heart count
+     is not. */
+  bookmark: (p: { size?: number }) => (
+    <Svg {...p}>
+      <path d="M19 21l-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+    </Svg>
+  ),
+  bookmarkFilled: (p: { size?: number }) => (
+    <Svg {...p}>
+      <path d="M19 21l-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" fill="currentColor" />
+    </Svg>
+  ),
 };
 
 /* ── brand ──────────────────────────────────────────────────────────── */
@@ -134,7 +148,7 @@ export const Icon = {
 export function Brand({ sub, href = '/' }: { sub?: string; href?: string }) {
   return (
     <Link href={href} className="brand">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
+      { }
       <img src="/logo.png" alt="" width={28} height={28} className="brand-mark" />
       House For Rent
       {sub ? <span className="brand-sub">· {sub}</span> : null}
@@ -244,7 +258,7 @@ export function PropertyMedia({
 
   return (
     <div className="media">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
+      { }
       <img
         src={mediaUrl(photo.url)}
         alt={alt}

@@ -29,7 +29,9 @@ import {
 } from '@/server/listings';
 import { findForTenant, findForOfficer, dispatchQueue, getViewingDetail, findIntroductions } from '@/server/viewings';
 import { findForParty, getDealForCaller, listDealsForOps } from '@/server/deals';
-import { recentAuditEvents, verificationQueue, recentReconciliationChecks } from '@/server/ops';
+import { isSaved, listSaved } from '@/server/saved';
+import { recentActivity } from '@/server/activity';
+import { adminUserDirectory, recentAuditEvents, recentReconciliationChecks, verificationQueue } from '@/server/ops';
 import { everyPostingBalances } from '@/server/ledger';
 import { resolveSession } from '@/server/auth';
 import type { SearchResponse } from './contract';
@@ -292,6 +294,19 @@ export interface AuditEvent {
   occurredAt: string;
 }
 
+/** One row of the admin account directory (GET /v1/admin/users). */
+export interface DirectoryRow {
+  partyId: string;
+  displayName: string;
+  primaryPhone: string;
+  role: string;
+  accountStatus: string;
+  identityVerified: boolean;
+  listingCount: number;
+  dealCount: number;
+  createdAt: string;
+}
+
 export interface PresentedTerms {
   monthlyRent: string;
   commissionRateBp: number;
@@ -364,6 +379,10 @@ async function resolveListingDetail(id: string) {
         reportedAt: lastConducted.fieldReport.reportedAt.toISOString(),
       }
     : null;
+  // The caller's bookmark state, only when the caller is a signed-in tenant
+  // (saving is a tenant surface — anonymous visitors get no toggle).
+  const caller = await resolveSession();
+  const savedByCaller = caller?.role === 'tenant' ? await isSaved(caller.partyId, id) : null;
   return {
     ...detail,
     neighbourhoodId: '',
@@ -371,6 +390,7 @@ async function resolveListingDetail(id: string) {
     geoLng: null,
     amenities: detail.amenities.map((name, i) => ({ id: String(i), name })),
     fieldConfirmed,
+    savedByCaller,
   };
 }
 
@@ -405,6 +425,29 @@ async function resolveMyListings() {
   const caller = await requireCaller();
   if (caller.role !== 'lister') throw new ApiError(403, 'FORBIDDEN', 'landlord surface');
   return findForLister(caller.partyId);
+}
+
+/** The signed-in tenant's bookmarked homes (QA round: saved listings). */
+async function resolveSavedListings() {
+  const caller = await requireCaller();
+  if (caller.role !== 'tenant') throw new ApiError(403, 'FORBIDDEN', 'tenant surface');
+  return listSaved(caller.partyId);
+}
+
+/** The signed-in party's recent real events (QA round: activity feed). */
+async function resolveActivityMine() {
+  const caller = await requireCaller();
+  if (caller.role === 'tenant') return recentActivity(caller.partyId, 'tenant');
+  if (caller.role === 'lister') return recentActivity(caller.partyId, 'landlord');
+  throw new ApiError(403, 'FORBIDDEN', 'activity is a tenant and landlord surface');
+}
+
+/** The admin's account directory (QA round: /ops/users). */
+async function resolveAdminUsers(sp: URLSearchParams) {
+  const caller = await requireCaller();
+  if (caller.role !== 'admin') throw new ApiError(403, 'FORBIDDEN', 'admin surface');
+  const rows = await adminUserDirectory(sp.get('q') ?? undefined);
+  return rows.map((r) => ({ ...r, createdAt: r.createdAt.toISOString() }));
 }
 
 async function resolvePresentedTerms(listingId: string): Promise<PresentedTerms> {
@@ -907,6 +950,8 @@ function resolverFor(path: string, authenticated: boolean): Resolver {
   // public reads
   if (parts[1] === 'listings' && parts.length === 2) return () => resolveListingsSearch(u.searchParams);
   if (parts[1] === 'listings' && parts[2] === 'mine') return () => resolveMyListings();
+  // saved must precede /:id — same ordering rule as /mine above.
+  if (parts[1] === 'listings' && parts[2] === 'saved') return () => resolveSavedListings();
   if (parts[1] === 'listings' && parts.length === 3) return () => resolveListingDetail(parts[2]);
   if (parts[1] === 'listings' && parts[3] === 'agreement') return () => resolvePresentedTerms(parts[2]);
   if (parts[1] === 'listings' && parts[3] === 'photos' && parts.length === 4) return () => resolveListingPhotos(parts[2]);
@@ -927,10 +972,12 @@ function resolverFor(path: string, authenticated: boolean): Resolver {
   if (parts[1] === 'viewings' && parts[2] === 'introductions') return () => resolveIntroductions();
   if (parts[1] === 'viewings' && parts.length === 3) return () => resolveViewingDetail(parts[2]);
   if (parts[1] === 'identity' && parts[2] === 'me') return () => resolveIdentityMe();
+  if (parts[1] === 'activity' && parts[2] === 'mine') return () => resolveActivityMine();
   if (parts[1] === 'deals' && parts.length === 2) return () => resolvePartyDeals();
   if (parts[1] === 'deals' && parts.length === 3) return () => resolveDealDetail(parts[2]);
   if (parts[1] === 'admin' && parts[2] === 'launch-gate') return () => resolveLaunchGate();
   if (parts[1] === 'admin' && parts[2] === 'verification-queue') return () => resolveVerificationQueue();
+  if (parts[1] === 'admin' && parts[2] === 'users') return () => resolveAdminUsers(u.searchParams);
   // TASK 7-b (additive): the deal queue's "Show only" filter passes ?status=
   // — must precede the unfiltered admin deals route below. The distribution
   // stays whole (it is the shape of the whole book); only the rows narrow.

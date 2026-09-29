@@ -54,7 +54,7 @@ export default async function LandlordDealsPage() {
                     {dealHeadline(deal.status, 'landlord')}
                   </span>
                 </span>
-                <span className="stack-sm" style={{ textAlign: 'right' }}>
+                <span className="stack-sm" style={{ textAlign: 'right', alignItems: 'flex-end' }}>
                   <span className="num" style={{ fontWeight: 600 }}>
                     {shillings(
                       deal.monthlyRentSnapshot ?? deal.listing.monthlyRent,

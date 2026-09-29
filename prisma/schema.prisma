@@ -59,6 +59,7 @@ model Party {
   ledgerAccounts LedgerAccount[]
   auditEvents    AuditEvent[]
   mediaAssets    MediaAsset[]
+  savedListings  SavedListing[]
 
   @@map("party")
 }
@@ -277,6 +278,7 @@ model Listing {
   deals           Deal[]
   listingAgreements ListingAgreement[]
   photos          ListingPhoto[]
+  savedBy         SavedListing[]
 
   @@map("listing")
 }
@@ -590,4 +592,21 @@ model AuditEvent {
   actor Party? @relation(fields: [actorPartyId], references: [id])
 
   @@map("audit_event")
+}
+
+/// A tenant's bookmarked listing. Purely additive (QA round): no existing
+/// table is touched. One row per (party, listing); the listing side is the
+/// public listing id, and a saved listing that later leaves search simply
+/// stops being shown — the row keeps no truth of its own.
+model SavedListing {
+  id        String   @id @default(uuid())
+  partyId   String   @map("party_id")
+  listingId String   @map("listing_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  party   Party   @relation(fields: [partyId], references: [id])
+  listing Listing @relation(fields: [listingId], references: [id])
+
+  @@unique([partyId, listingId])
+  @@map("saved_listing")
 }

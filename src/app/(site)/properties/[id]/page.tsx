@@ -6,11 +6,12 @@ import {
   FURNISHED_LABEL,
   Icon,
   onDay,
-  PropertyMedia,
   shillings,
   TYPE_LABEL,
 } from '@/app/ui';
 import { currentRole, isSignedIn } from '@/lib/session';
+import { SaveToggle } from './save-toggle';
+import { PhotoGallery } from './photo-gallery';
 
 const CONDITION_LABEL: Record<string, string> = {
   excellent: 'Excellent',
@@ -78,7 +79,6 @@ export default async function PropertyPage({
   const signedIn = await isSignedIn();
   const role = await currentRole();
   const confirmed = daysAgo(listing.daysSinceConfirmed);
-  const heroPhotos = listing.photos.slice(0, 3);
   const isFixture = listing.photos.some((p) => p.isDevelopmentFixture);
 
   const viewingHref = signedIn
@@ -95,27 +95,13 @@ export default async function PropertyPage({
         </Link>
       </p>
 
-      <div
-        className={
-          heroPhotos.length > 1 ? 'gallery gallery-multi' : 'gallery'
-        }
-      >
-        {heroPhotos.length > 0 ? (
-          heroPhotos.map((photo, i) => (
-            <PropertyMedia
-              key={photo.id}
-              photo={photo}
-              alt={
-                photo.caption ??
-                `${TYPE_LABEL[listing.propertyType] ?? 'Home'} in ${listing.neighbourhoodName}`
-              }
-              priority={i === 0}
-            />
-          ))
-        ) : (
-          <PropertyMedia alt="" />
-        )}
-      </div>
+      {/* The gallery is the one client-interactive element here: swapping
+          photographs is presentation, not business state. Props are plain
+          data — functions cannot cross the server→client boundary. */}
+      <PhotoGallery
+        photos={listing.photos}
+        altBase={`${TYPE_LABEL[listing.propertyType] ?? 'Home'} in ${listing.neighbourhoodName}`}
+      />
 
       {isFixture ? (
         <p
@@ -265,9 +251,27 @@ export default async function PropertyPage({
                 requested from a tenant account.
               </p>
             ) : (
-              <Link href={viewingHref} className="btn btn-primary btn-lg btn-block">
-                Request a viewing
-              </Link>
+              <>
+                <Link href={viewingHref} className="btn btn-primary btn-lg btn-block">
+                  Request a viewing
+                </Link>
+                {/* Saved-homes toggle (QA round). `savedByCaller` is null for
+                    anonymous visitors — for them this is a quiet sign-in
+                    affordance, not a button that pretends it worked. */}
+                {listing.savedByCaller === null || listing.savedByCaller === undefined ? (
+                  <p style={{ textAlign: 'center' }}>
+                    <Link href="/login" className="btn btn-secondary btn-block">
+                      <Icon.bookmark size={16} />
+                      Sign in to save this home
+                    </Link>
+                  </p>
+                ) : (
+                  <SaveToggle
+                    listingId={listing.listingId}
+                    initiallySaved={listing.savedByCaller}
+                  />
+                )}
+              </>
             )}
 
             <p className="hint" style={{ textAlign: 'center' }}>
