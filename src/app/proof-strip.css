@@ -1,0 +1,45 @@
+/* Proof strip styles are imported by the public shell. */
+.proof-strip {
+  border-block: 1px solid var(--line);
+  background: var(--bg-soft);
+}
+
+.proof-grid {
+  display: grid;
+  gap: 0;
+}
+
+.proof-grid > div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 1.25rem 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.proof-grid > div:last-child {
+  border-bottom: 0;
+}
+
+.proof-grid strong {
+  font-size: 0.9375rem;
+  letter-spacing: -0.01em;
+}
+
+.proof-grid span {
+  color: var(--ink-soft);
+  font-size: 0.875rem;
+}
+
+@media (min-width: 42rem) {
+  .proof-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 2rem;
+  }
+
+  .proof-grid > div,
+  .proof-grid > div:last-child {
+    padding: 1.5rem 0;
+    border-bottom: 0;
+  }
+}
