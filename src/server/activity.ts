@@ -115,7 +115,10 @@ function viewingEventLine(status: string, side: 'tenant' | 'landlord'): string {
     scheduled: 'A field officer was assigned and a time confirmed.',
     conducted: 'The visit happened. The introduction to the landlord is on record.',
     no_show: 'The officer could not reach you at the scheduled time.',
-    cancelled: 'You cancelled this viewing.',
+    // Neutral on purpose: operations also cancels viewings, and "You
+    // cancelled" would be false when they did. WHO cancelled is audit
+    // content, not feed content.
+    cancelled: 'This viewing was cancelled.',
   };
   const landlord: Record<string, string> = {
     requested: 'A prospective tenant asked for a viewing of this home.',

@@ -138,7 +138,11 @@ function nextStepFor(status: string): string {
     case 'no_show':
       return 'The officer could not reach you at the scheduled time. Request another viewing when you are ready.';
     case 'cancelled':
-      return 'You cancelled this viewing. You can request another one whenever you are ready.';
+      // Deliberately NOT "You cancelled" — operations also cancels
+      // viewings (the landlord-reported case), and a sentence addressed to
+      // the wrong actor is a small lie. WHO cancelled lives in the audit
+      // trail; the tenant sees the state and the way back.
+      return 'This viewing was cancelled. You can request another one whenever you are ready.';
     default:
       return 'This viewing is closed.';
   }
@@ -409,6 +413,47 @@ export async function cancelViewing(params: { viewingId: string; tenantPartyId: 
         detail: JSON.stringify({
           from: viewing.status,
           listingId: viewing.listingId,
+        }),
+      },
+    }),
+  ]);
+  return updated;
+}
+
+/**
+ * Operations cancels a viewing — the landlord-reported case. The owner
+ * says the home is let, or the arrangement fell through; the request must
+ * leave the queue without rewriting history. The same frozen graph
+ * applies (requested/scheduled only — a conducted visit is evidence), and
+ * the audit detail names OPERATIONS as the actor so a tenant's own
+ * cancellation and an ops cancellation stay distinguishable forever.
+ */
+export async function opsCancelViewing(params: {
+  viewingId: string;
+  adminPartyId: string;
+  note?: string;
+}) {
+  const viewing = await db.viewing.findUnique({ where: { id: params.viewingId } });
+  if (!viewing) throw new ViewingNotFoundError(params.viewingId);
+  assertViewingTransitionAllowed(viewing.status as never, 'cancelled');
+
+  const [updated] = await db.$transaction([
+    db.viewing.update({
+      where: { id: params.viewingId },
+      data: { status: 'cancelled' },
+    }),
+    db.auditEvent.create({
+      data: {
+        actorPartyId: params.adminPartyId,
+        actorRole: 'admin',
+        action: 'viewing_cancelled',
+        entityType: 'viewing',
+        entityId: params.viewingId,
+        detail: JSON.stringify({
+          from: viewing.status,
+          listingId: viewing.listingId,
+          by: 'operations',
+          note: params.note ?? null,
         }),
       },
     }),

@@ -11,7 +11,7 @@
 import { createHash } from 'node:crypto';
 import { db } from '@/lib/db';
 import { everyPostingBalances } from './ledger';
-import { AUTH_ROLES, type AuthRole } from './domain';
+import { AUTH_ROLES, LISTER_TIERS, type AuthRole, type ListerTier } from './domain';
 
 // ── identity (MOCK provider) ─────────────────────────────────────────────
 
@@ -233,6 +233,8 @@ export interface DirectoryRow {
   role: string;
   accountStatus: string;
   identityVerified: boolean;
+  /** Landlord accounts only: the relationship they list under. */
+  listerTier: string | null;
   listingCount: number;
   dealCount: number;
   createdAt: Date;
@@ -268,6 +270,7 @@ export async function adminUserDirectory(query?: string): Promise<DirectoryRow[]
       party: {
         include: {
           identityVerifications: { orderBy: { createdAt: 'desc' }, take: 1 },
+          listerProfile: true,
           _count: { select: { properties: true, dealsAsTenant: true, dealsAsLandlord: true } },
         },
       },
@@ -283,6 +286,7 @@ export async function adminUserDirectory(query?: string): Promise<DirectoryRow[]
     role: a.role,
     accountStatus: a.status,
     identityVerified: a.party.identityVerifications[0]?.state === 'verified',
+    listerTier: a.party.listerProfile?.tier ?? null,
     listingCount: a.party._count.properties,
     dealCount: a.party._count.dealsAsTenant + a.party._count.dealsAsLandlord,
     createdAt: a.createdAt,
@@ -290,3 +294,74 @@ export async function adminUserDirectory(query?: string): Promise<DirectoryRow[]
 }
 
 export { AUTH_ROLES };
+
+// ── listing tier administration ─────────────────────────────────────────
+
+/** A tier was asked for an account it cannot apply to. */
+export class ListerTierNotApplicableError extends Error {
+  constructor(partyId: string, role: string) {
+    super(
+      `account ${partyId} is a ${role}, not a landlord. A listing tier ` +
+        'belongs to landlord accounts only — it states the relationship ' +
+        'they have to the property they list.',
+    );
+    this.name = 'ListerTierNotApplicableError';
+  }
+}
+
+/**
+ * Operations sets one landlord account's listing tier.
+ *
+ * ── Why this is an operations decision, not a signup question ──
+ * Registration cannot be allowed to self-declare "I am a broker": the
+ * tier is exactly what gates the mandate requirement (SSOT Decision 8 —
+ * a non-owner may not publish without the owner's written authority),
+ * so letting a caller choose their own tier would let a middleman skip
+ * the one control that restrains them. Operations sets it, the audit
+ * trail carries who set it and what it was, and the publish gates read
+ * the value live — the effect is immediate and traceable.
+ */
+export async function setListerTier(params: {
+  adminPartyId: string;
+  partyId: string;
+  tier: string;
+}) {
+  if (!(LISTER_TIERS as readonly string[]).includes(params.tier)) {
+    throw new Error(`"${params.tier}" is not a listing tier`);
+  }
+
+  const account = await db.userAccount.findUnique({
+    where: { partyId: params.partyId },
+    include: { party: { include: { listerProfile: true } } },
+  });
+  if (!account) throw new Error(`account ${params.partyId} not found`);
+  if (account.role !== 'lister') {
+    throw new ListerTierNotApplicableError(params.partyId, account.role);
+  }
+
+  const from = account.party.listerProfile?.tier ?? null;
+  if (from === params.tier) {
+    // Idempotent by intent: a double-click re-records nothing.
+    return { partyId: params.partyId, tier: params.tier, previous: from, changed: false };
+  }
+
+  const [, profile] = await db.$transaction([
+    db.auditEvent.create({
+      data: {
+        actorPartyId: params.adminPartyId,
+        actorRole: 'admin',
+        action: 'lister_tier_changed',
+        entityType: 'party',
+        entityId: params.partyId,
+        detail: JSON.stringify({ from: from ?? null, to: params.tier }),
+      },
+    }),
+    db.listerProfile.upsert({
+      where: { partyId: params.partyId },
+      update: { tier: params.tier },
+      create: { partyId: params.partyId, tier: params.tier as ListerTier },
+    }),
+  ]);
+
+  return { partyId: params.partyId, tier: profile.tier, previous: from, changed: true };
+}

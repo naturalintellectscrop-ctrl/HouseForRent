@@ -65,6 +65,7 @@ export function jsonError(err: unknown): NextResponse {
     PropertyNotFoundError: { status: 404, code: 'PROPERTY_NOT_FOUND' },
     NotYourPropertyError: { status: 403, code: 'NOT_YOUR_PROPERTY' },
     MandateNotNeededError: { status: 422, code: 'MANDATE_NOT_NEEDED' },
+    ListerTierNotApplicableError: { status: 422, code: 'TIER_NOT_APPLICABLE' },
     MandateNotFoundError: { status: 404, code: 'MANDATE_NOT_FOUND' },
     MandateAlreadyDecidedError: { status: 409, code: 'MANDATE_ALREADY_DECIDED' },
     InvalidMandateDecisionError: { status: 422, code: 'INVALID_MANDATE_DECISION' },

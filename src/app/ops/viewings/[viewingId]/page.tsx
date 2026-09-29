@@ -6,10 +6,12 @@ import {
   type ViewingDetail,
 } from '@/lib/api';
 import { ApiAlert, StatusPill, when } from '@/app/ui';
+import { currentRole } from '@/lib/session';
 import { FieldReportForm } from './field-report-form';
 import { MediaCapture } from './media-capture';
 import { CloseVisit } from './close-visit';
 import { OpenDeal } from './open-deal';
+import { OpsCancelViewing } from './ops-cancel-viewing';
 
 /**
  * One field visit, and the step it is actually on.
@@ -53,7 +55,13 @@ export default async function ViewingPage(props: {
   }
 
   const { viewing, fieldReport, introduction, canConduct } = detail;
-  const closed = viewing.status !== 'scheduled';
+  // A REQUESTED viewing is not a closed one — it has simply not been
+  // scheduled yet. Treating "not scheduled" as "closed" made the page tell
+  // an operator that a waiting request had "closed without a report", which
+  // is a lie about the state of the world.
+  const closed = ['conducted', 'no_show', 'cancelled'].includes(viewing.status);
+  const scheduled = viewing.status === 'scheduled';
+  const role = await currentRole();
 
   return (
     <>
@@ -76,6 +84,22 @@ export default async function ViewingPage(props: {
           the pattern stays visible.
         </p>
       )}
+
+      {viewing.status === 'requested' && (
+        <p className="alert alert-note">
+          Not yet scheduled. This request is waiting for the operations desk
+          to assign a field officer and confirm the time — the dispatch
+          queue is where that happens.
+        </p>
+      )}
+
+      {/* Operations may withdraw a request that cannot go ahead — the
+          landlord-reported case. Officers cannot: dispatch is the admin's
+          decision, and the tenant's own cancel lives on their side. */}
+      {(viewing.status === 'requested' || viewing.status === 'scheduled') &&
+        role === 'admin' && (
+          <OpsCancelViewing viewingId={viewing.id} status={viewing.status} />
+        )}
 
       {/* ── Step 1: the structured report (FR-5.4) ── */}
       <h2>Field report</h2>
@@ -114,12 +138,17 @@ export default async function ViewingPage(props: {
         <p className="alert alert-note">
           This visit closed without a report on file.
         </p>
+      ) : !scheduled ? (
+        <p className="alert alert-note">
+          A report is filed on the visit itself. This one has no confirmed
+          time yet, so there is nothing to report on.
+        </p>
       ) : (
         <FieldReportForm viewingId={viewing.id} />
       )}
 
       {/* ── Media capture (FR-5.5) ── */}
-      {!closed && !fieldReport && (
+      {scheduled && !fieldReport && (
         <>
           <h2>Photos &amp; video</h2>
           <MediaCapture viewingId={viewing.id} />
@@ -151,6 +180,11 @@ export default async function ViewingPage(props: {
         <p className="alert alert-note">
           This visit is closed as <strong>{viewing.status}</strong>. No
           introduction record was created.
+        </p>
+      ) : !scheduled ? (
+        <p className="alert alert-note">
+          A visit is closed only once it has happened. This one has no
+          confirmed time yet.
         </p>
       ) : (
         <CloseVisit viewingId={viewing.id} canConduct={canConduct} />
