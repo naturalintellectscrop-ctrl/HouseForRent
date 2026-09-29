@@ -243,3 +243,41 @@ Stage Summary:
 - New files: src/server/{saved,activity}.ts, api/v1/listings/{saved,[id]/{agreement,photos,saved}}, api/v1/activity/mine, api/v1/admin/users, (portal)/account/saved/page.tsx, (portal)/activity-feed.tsx, ops/users/page.tsx, (site)/properties/[id]/{save-toggle,photo-gallery}.tsx, scripts/qa-reset-password.mjs.
 - External risks unchanged: real PSP, real identity provider, API host provisioning, Vercel credentials (see Task 0 checklist).
 - Next steps: mandate submission route (F-003 second half) still the first backlog item for the real repo; ops deal queue bulk actions; neighbourhood admin (P3); consider saved-search alerts only after a real notification channel exists.
+
+---
+Task ID: 9
+Agent: main agent (takeover, QA + feature round)
+Task: Status assessment + agent-browser QA, then new features (password change, landlord earnings, areas directory) + styling detail pass
+
+Work Log:
+- STATUS ASSESSMENT: swept every route (8 public, 5 tenant, 4 landlord, 10 ops) — all 200 with correct role redirects; tsc 0 errors; ESLint clean; dev.log had one historical runtime error (function-prop across server→client boundary on /properties/[id]) already fixed in a prior round; no new 5xx. Verdict: STABLE, so the round moved to features per instructions.
+- Dev server note: the auto-run `bun run dev` died twice mid-session (log ends, port refused). Restarted with `setsid nohup bun run dev >> dev.log 2>&1 < /dev/null &` from /home/z/my-project. Future agents: if curl returns 000, check the process first; the previous background job does not survive the session.
+- FEATURE A — password change (security):
+  - src/server/auth.ts: `changePassword(session, current, next)` — current password re-verified through the same dummy-hash path as sign-in (stolen cookie alone cannot replace credentials); 8-char policy + must-differ checks; transaction updates credential hash, revokes all OTHER sessions (current survives — deliberate asymmetry), writes `password_changed` audit row.
+  - POST /api/v1/auth/password (route handler): 403 INVALID_CURRENT_PASSWORD (session valid, person typing may not be), 422 PASSWORD_POLICY, 401 anonymous.
+  - Shared form src/app/(portal)/password-form.tsx rendered by BOTH /account/security (tenant) and /landlord/security (landlord) — the account layout restricts to tenant+admin, so the landlord surface needed its own path; fraud-warning copy differs per side.
+  - Portal nav updated: Security link for tenant/admin/landlord in desktop nav + mobile <details> menu.
+- FEATURE C — landlord earnings (server-derived, ledger-authoritative):
+  - src/server/deals.ts: refactored financialSummary's inline closures into reusable `ledgerBalance`/`ledgerCreditsByReference`/`ledgerEntriesFor` (no behaviour change); added `landlordFinancials(partyId)` — per-deal held/owed/reduced flows from ledger postings, totals summed server-side in BigInt; money stays string-on-the-wire.
+  - GET /v1/landlord/financials added to the in-process resolver (role gate: lister) + HTTP route src/app/api/v1/landlord/financials/route.ts (requireRole(['lender'→'lister'])). NOTE: requireRole(['lister']) is correct in the file.
+  - /landlord/earnings page: four metrics (Paid to you / Waiting to be paid / Held in escrow / Commission charged) + per-deal rows linking to deal detail + "How money reaches you" explainer. Admin gets an honest redirect-to-ops note instead of a fake empty state. No projections, no benchmarks, no invented statistics.
+- FEATURE B — public areas directory /areas:
+  - Server component groups in-service neighbourhoods by district using the taxonomy endpoint's live counts (same counts search uses — cannot drift). Zero-count areas stay visible with "No verified homes here yet" (honest, and the right answer for landlords asking where we operate).
+  - New CSS: .area-grid/.area-card(+ -empty)/.area-count appended to globals.css (responsive 1/2/3 columns). Footer "Areas we cover" link + home page "All areas →" chip (and a chip when no areas have homes).
+- STYLING DETAIL PASS:
+  - PropertyCard copy: "Available yesterday" → "Confirmed available yesterday" (the claim is about the last visit; the verb now carries that — matches the detail page's "Confirmed {x}").
+  - PhotoGallery: arrow/Home/End keyboard navigation between thumbnails (focus follows selection), aria-live "Photo X of Y" announcement, adjacent-image preload via <link rel=preload> (presentation only, cleaned up on change).
+  - globals.css already had text-wrap balance/pretty, :focus-visible ring, prefers-reduced-motion — verified, nothing duplicated.
+- VERIFICATION (real HTTP + browser):
+  - Password endpoint: wrong-current 403 / short 422 / same-as-current 422 / anon 401; successful change → other session 401, current session 200, old password login 401, new password login 200.
+  - Browser (agent-browser): form fill → submit → success notice "…any other device signed in to this account has been signed out", session survived. First attempt accidentally clicked the header Sign out (`button[type="submit"]` matches it first in DOM) — QA tooling lesson, not an app bug; redo with specific selector.
+  - Audit trail shows two `password_changed` rows (actorRole tenant). Passwords reset back to QA_PASSWORD via scripts/qa-reset-password.mjs after testing (7 rows).
+  - Landlord financials HTTP: totals {released 3,240,000, held 0, owed 0, commission 360,000} for Sarah — reconciles exactly with the known ledger (funded 3.6M = commission 360k + released 3.24M); tenant caller → 401.
+  - /areas 200 desktop + mobile; districts grouped (Kampala: Ntinda 2, Bugolobi 1; Wakiso: Kira 1, Naalya 0 honest).
+  - Mobile 412px: home, properties, detail, areas, security, how-it-works — zero horizontal overflow.
+  - tsc 0 errors; ESLint clean; dev.log no new errors.
+
+Stage Summary:
+- Product now has: tenant/landlord password management with session-revocation semantics and audit; a landlord-facing earnings page whose every figure comes from the ledger; a public areas directory. All four role journeys still verified; nothing regressed.
+- Remaining known gaps (unchanged from Task 8): real PSP + identity provider are mocks behind seams; API host + Vercel deployment unverified (external); photo upload intentionally officer-only; no rate limiting yet.
+- Next-step recommendations: (1) tenant viewing cancellation flow if the service state machine allows it; (2) ops verification-queue page surfacing mandate submissions (the open half of F-003); (3) mobile polish pass on ops console tables; (4) before any deployment attempt, run scripts/journey-http.mjs equivalent against a provisioned API host.

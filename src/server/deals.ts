@@ -519,6 +519,44 @@ export async function resolveDispute(params: { dealId: string; actorPartyId: str
 
 // ── reads ────────────────────────────────────────────────────────────────
 
+/** Balance of one account type across a deal's postings (debit-positive). */
+function ledgerBalance(
+  entries: Array<{
+    direction: string;
+    amount: bigint;
+    account: { accountType: string };
+  }>,
+  type: string,
+): bigint {
+  return entries
+    .filter((e) => e.account.accountType === type)
+    .reduce((sum, e) => (e.direction === 'debit' ? sum + e.amount : sum - e.amount), 0n);
+}
+
+/** Credit total of one posting reference across a deal's ledger entries. */
+function ledgerCreditsByReference(
+  entries: Array<{ direction: string; amount: bigint; reference: string | null }>,
+  reference: string,
+): bigint {
+  return entries
+    .filter((e) => e.reference === reference && e.direction === 'credit')
+    .reduce((sum, e) => sum + e.amount, 0n);
+}
+
+async function ledgerEntriesFor(dealId: string) {
+  return db.ledgerEntry.findMany({
+    where: { dealId },
+    select: {
+      direction: true,
+      amount: true,
+      reference: true,
+      occurredAt: true,
+      account: { select: { accountType: true } },
+    },
+    orderBy: { occurredAt: 'asc' },
+  });
+}
+
 /**
  * Everything an operator needs to understand this deal, computed HERE from
  * the ledger — the same rows reconciliation reads — so the console and the
@@ -531,27 +569,7 @@ export async function financialSummary(dealId: string) {
   });
   if (!deal) throw new DealNotFoundError(dealId);
 
-  const entries = await db.ledgerEntry.findMany({
-    where: { dealId },
-    select: {
-      direction: true,
-      amount: true,
-      reference: true,
-      occurredAt: true,
-      account: { select: { accountType: true } },
-    },
-    orderBy: { occurredAt: 'asc' },
-  });
-
-  const balance = (type: string) =>
-    entries
-      .filter((e) => e.account.accountType === type)
-      .reduce((sum, e) => (e.direction === 'debit' ? sum + e.amount : sum - e.amount), 0n);
-
-  const byReference = (reference: string) =>
-    entries
-      .filter((e) => e.reference === reference && e.direction === 'credit')
-      .reduce((sum, e) => sum + e.amount, 0n);
+  const entries = await ledgerEntriesFor(dealId);
 
   const expectedUpfront =
     deal.listing.monthlyRent * BigInt(deal.listing.requiredMonthsUpfront) + deal.listing.depositAmount;
@@ -561,13 +579,74 @@ export async function financialSummary(dealId: string) {
     monthlyRentSnapshot: deal.monthlyRentSnapshot?.toString() ?? null,
     commissionRateBpSnapshot: deal.commissionRateBpSnapshot,
     commissionAmount: deal.commissionAmount?.toString() ?? null,
-    heldInEscrow: (-balance('escrow_liability')).toString(),
-    owedToLandlord: (-balance('landlord_payable')).toString(),
-    commissionRecognised: (-balance('commission_revenue')).toString(),
-    funded: byReference('fund_escrow').toString(),
-    releasedToLandlord: byReference('release_to_landlord').toString(),
-    refunded: byReference('refund').toString(),
-    escrowDischarged: balance('escrow_liability') === 0n,
+    heldInEscrow: (-ledgerBalance(entries, 'escrow_liability')).toString(),
+    owedToLandlord: (-ledgerBalance(entries, 'landlord_payable')).toString(),
+    commissionRecognised: (-ledgerBalance(entries, 'commission_revenue')).toString(),
+    funded: ledgerCreditsByReference(entries, 'fund_escrow').toString(),
+    releasedToLandlord: ledgerCreditsByReference(entries, 'release_to_landlord').toString(),
+    refunded: ledgerCreditsByReference(entries, 'refund').toString(),
+    escrowDischarged: ledgerBalance(entries, 'escrow_liability') === 0n,
+  };
+}
+
+/**
+ * A landlord's money position, aggregated from the same ledger rows the
+ * operator console reads — never from the deal's status field.
+ *
+ * ── Why this is derived per deal, then summed ──
+ * `heldInEscrow`/`owedToLandlord` are LIABILITY balances (credit-negative
+ * in the debit-positive convention), while `releasedToLandlord` is a flow.
+ * Summing flows and liabilities blindly would mix two different kinds of
+ * number, so each deal is reduced to the three figures the page shows and
+ * the totals sum THOSE: what has been paid out, what is waiting to be
+ * paid, and what is still held. Commission is the amount booked against
+ * the deal, which is also what the landlord was quoted in the agreement.
+ */
+export async function landlordFinancials(partyId: string) {
+  const deals = await db.deal.findMany({
+    where: { landlordPartyId: partyId },
+    include: {
+      listing: {
+        include: { property: { include: { neighbourhood: true } } },
+      },
+    },
+    orderBy: { updatedAt: 'desc' },
+  });
+
+  const rows = await Promise.all(
+    deals.map(async (d) => {
+      const entries = await ledgerEntriesFor(d.id);
+      const held = -ledgerBalance(entries, 'escrow_liability');
+      const owed = -ledgerBalance(entries, 'landlord_payable');
+      const released = ledgerCreditsByReference(entries, 'release_to_landlord');
+      return {
+        dealId: d.id,
+        status: d.status,
+        updatedAt: d.updatedAt.toISOString(),
+        bedrooms: d.listing.property.bedrooms,
+        propertyType: d.listing.property.propertyType,
+        neighbourhoodName: d.listing.property.neighbourhood.name,
+        landmarkText: d.listing.property.landmarkText,
+        monthlyRentSnapshot: d.monthlyRentSnapshot?.toString() ?? null,
+        commissionAmount: d.commissionAmount?.toString() ?? null,
+        heldInEscrow: held.toString(),
+        owedToLandlord: owed.toString(),
+        releasedToLandlord: released.toString(),
+      };
+    }),
+  );
+
+  const sum = (pick: (r: (typeof rows)[number]) => bigint) =>
+    rows.reduce((acc, r) => acc + pick(r), 0n).toString();
+
+  return {
+    totals: {
+      releasedToLandlord: sum((r) => BigInt(r.releasedToLandlord)),
+      heldInEscrow: sum((r) => BigInt(r.heldInEscrow)),
+      owedToLandlord: sum((r) => BigInt(r.owedToLandlord)),
+      commissionCharged: sum((r) => BigInt(r.commissionAmount ?? '0')),
+    },
+    deals: rows,
   };
 }
 

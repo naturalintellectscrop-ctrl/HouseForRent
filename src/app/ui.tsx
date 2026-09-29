@@ -342,7 +342,9 @@ export function PropertyCard({
             {listing.bathrooms} {listing.bathrooms === 1 ? 'bath' : 'baths'}
           </span>
           <span>{FURNISHED_LABEL[listing.furnished] ?? listing.furnished}</span>
-          {confirmed ? <span>Available {confirmed}</span> : null}
+          {/* "Confirmed available yesterday", not "available yesterday":
+              the claim is about the last visit, and the verb carries that. */}
+          {confirmed ? <span>Confirmed available {confirmed}</span> : null}
         </p>
       </div>
     </Link>
