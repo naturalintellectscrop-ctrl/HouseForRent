@@ -306,6 +306,8 @@ export interface DirectoryRow {
   role: string;
   accountStatus: string;
   identityVerified: boolean;
+  /** Landlord accounts only: the relationship they list under. */
+  listerTier: string | null;
   listingCount: number;
   dealCount: number;
   createdAt: string;

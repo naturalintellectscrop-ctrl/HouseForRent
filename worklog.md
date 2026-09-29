@@ -336,3 +336,30 @@ Stage Summary:
 - Known gap found, deferred deliberately: no admin surface to SET a lister tier (registration is always property_owner) — the QA script bridges it for sandbox rounds; /ops/users tier management is the natural next feature.
 - tsc 0 / ESLint 0 / dev.log 0 errors; demo data grew by: 2 QA listings + 2 mandates + 3 cancelled viewings (all labelled QA in landmark/identity where visible).
 - Next steps: /ops/users tier management; ops viewing-detail cancel (landlord-reported case); journey-http script update to cover cancel + mandate endpoints; external items unchanged (PSP, identity provider, API host, Vercel).
+
+---
+Task ID: 12
+Agent: cron webDevReview (autonomous round)
+Task: Assessment + two admin/ops features: lister tier management (/ops/users) and operations viewing cancellation; fixed requested-viewing state lie on the ops detail page
+
+Work Log:
+- ASSESSMENT: server up (survived this time), 5 public routes 200, tsc 0, ESLint 0, dev.log 0 errors. Started from Task 11's deferred backlog.
+- FEATURE A — lister tier management (closes the mandate story: how an account BECOMES a broker):
+  - src/server/ops.ts: setListerTier({adminPartyId, partyId, tier}) — tier validated against LISTER_TIERS; account must be role 'lister' (else ListerTierNotApplicableError → 422 TIER_NOT_APPLICABLE); same-value submit is an idempotent no-op recording NOTHING; real changes write `lister_tier_changed` AuditEvent (actorRole admin, detail {from, to}) in the same transaction as the upsert. Rationale in code: tier gates the mandate requirement, so it is never self-declared at signup.
+  - DirectoryRow gained listerTier (service + adapter type + resolveAdminUsers spreads it through).
+  - HTTP: POST /v1/admin/users/[partyId]/tier (admin-only; invalid tier value → 422 VALIDATION with the allowed list in the message).
+  - UI: /ops/users gained a "Lists as" column — landlord rows render TierControl (select + Set → confirm step stating the consequence per tier: owner = no mandate; broker/mgmt = every listing needs the owner's verified mandate), non-lister rows show an em-dash. Idempotent submit surfaces "That was already the tier — nothing changed."
+  - VERIFIED (real HTTP): invalid tier 422 · tenant 422 TIER_NOT_APPLICABLE · FOO 403 · change 200 with previous returned · no-op changed:false · audit rows {from,to} with actorRole admin. BROWSER: full UI change broker_agent → property_mgmt_company → confirm → success notice + "Change again"; directory selects render per lister; mobile 412 table-scroll fine.
+- FEATURE B — operations viewing cancellation (landlord-reported case):
+  - src/server/viewings.ts: opsCancelViewing({viewingId, adminPartyId, note?}) — same frozen graph (requested/scheduled → cancelled; conducted 409s, evidence preserved), audit `viewing_cancelled` with actorRole admin + detail.by='operations' + note, so a tenant's and operations' cancellations stay distinguishable forever.
+  - HTTP: POST /v1/ops/viewings/[viewingId]/cancel (admin-only, optional note).
+  - COPY CORRECTNESS: tenant-side cancelled sentences were "You cancelled this viewing." — FALSE when operations cancels. Made neutral ("This viewing was cancelled.") in nextStepFor + activity feed, with comments; the actor distinction lives in the audit trail where it belongs.
+  - UI: /ops/viewings/[id] renders an admin-only OpsCancelViewing card (confirm step + reason textarea for the audit) for requested|scheduled viewings. FIXED A STATE LIE on that page: `closed` was `status !== 'scheduled'`, so a REQUESTED viewing said "This visit closed without a report on file" and offered the field-report form + CloseVisit controls. Now closed = conducted|no_show|cancelled; requested shows "Not yet scheduled…" and the report/media/close sections explain themselves only for scheduled viewings.
+  - Dispatch queue rows now link "open record" to the viewing detail — the path for admins to reach REQUESTED viewings (previously unreachable outside the queue card).
+  - VERIFIED (real HTTP): ops cancel 200 with note · conducted 409 ILLEGAL_VIEWING_TRANSITION · FOO 403 · tenant feed neutral · audit admin row carries by='operations' + note, tenant rows do not. BROWSER: admin opened a requested record (all four gating assertions true), cancelled via UI with a landlord-called note, page flipped to cancelled pill + correct closed-state notes; queue link verified with a fresh requested viewing (left in queue as demo state).
+
+Stage Summary:
+- The tier → mandate → publish gate is now a closed operational loop with no QA-script dependency: ops sets tier → the mandate blocker appears on publish → landlord submits → ops decides → publish unlocks. Every state change audited.
+- Operations can now take the landlord-reported cancellation through the real UI, and the ops console no longer lies about requested viewings.
+- tsc 0 / ESLint 0 / dev.log 0 errors. Demo state: 1 requested viewing in dispatch (Grace, Bugolobi), QA broker tier back to broker_agent, tier-change audit rows present.
+- Next: update scripts/journey-http.mjs to cover cancel + tier + mandate endpoints; consider /ops/users detail drawer (deeper than a table row); external items unchanged (real PSP, identity provider, API host, Vercel).

@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { api, ApiError, type DirectoryRow } from '@/lib/api';
 import { AdminOnly, onDay } from '@/app/ui';
+import { TierControl } from './tier-control';
 
 /**
  * The account directory (admin).
@@ -81,6 +82,7 @@ export default async function UsersPage(props: {
                 <th scope="col">Name</th>
                 <th scope="col">Phone</th>
                 <th scope="col">Role</th>
+                <th scope="col">Lists as</th>
                 <th scope="col">Status</th>
                 <th scope="col">Identity</th>
                 <th scope="col" className="num">
@@ -98,6 +100,13 @@ export default async function UsersPage(props: {
                   <td>{r.displayName}</td>
                   <td className="mono">{r.primaryPhone}</td>
                   <td>{ROLE_LABEL[r.role] ?? r.role}</td>
+                  <td>
+                    {r.role === 'lister' ? (
+                      <TierControl partyId={r.partyId} currentTier={r.listerTier} />
+                    ) : (
+                      <span className="faint">—</span>
+                    )}
+                  </td>
                   <td>
                     {r.accountStatus === 'active' ? (
                       'active'

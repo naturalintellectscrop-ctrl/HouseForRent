@@ -101,7 +101,13 @@ export default async function DispatchPage() {
                 {row.neighbourhood} · listing{' '}
                 <ShortId value={row.listingId} /> · tenant{' '}
                 {row.viewing.tenantName ?? row.viewing.tenantPartyId.slice(0, 8)}{' '}
-                · requested {when(row.viewing.createdAt)}
+                · requested {when(row.viewing.createdAt)} ·{' '}
+                {/* The row links to the full record: the landlord-reported
+                    cancellation and any later audit question start from
+                    here, not from a scrolling queue. */}
+                <Link href={`/ops/viewings/${row.viewing.id}`}>
+                  open record
+                </Link>
               </p>
 
               <AssignForm
