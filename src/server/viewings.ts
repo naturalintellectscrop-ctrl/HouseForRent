@@ -173,27 +173,104 @@ export async function dispatchQueue() {
   }));
 }
 
-/** FR-5.1 — an admin assigns an officer and confirms the time. */
+/**
+ * FR-5.1 — an admin assigns an officer and confirms the time. Also the
+ * reassignment path the frozen graph permits (`scheduled → scheduled`):
+ * moving a visit between officers before it happens is ordinary dispatch
+ * work, not a state change.
+ *
+ * Thrown when the party an admin tries to dispatch has no active
+ * field-officer account. A 4xx, not a 500: choosing the wrong id is a
+ * caller mistake the record never allowed to happen.
+ */
+export class OfficerNotFoundError extends Error {
+  constructor(partyId: string) {
+    super(`party ${partyId} has no active field officer account`);
+    this.name = 'OfficerNotFoundError';
+  }
+}
+
+/** The officers dispatch can send: active field officers, with their open load. */
+export async function assignableOfficers() {
+  const accounts = await db.userAccount.findMany({
+    where: { role: 'foo', status: 'active' },
+    include: { party: { select: { displayName: true } } },
+  });
+  return Promise.all(
+    accounts.map(async (a) => ({
+      partyId: a.partyId,
+      displayName: a.party.displayName,
+      assignedCount: await db.viewing.count({
+        where: { conductedByPartyId: a.partyId, status: 'scheduled' },
+      }),
+    })),
+  );
+}
+
 export async function dispatchViewing(params: {
   viewingId: string;
+  /** The admin making the call — the audit row's actor. */
+  adminPartyId: string;
   fooPartyId: string;
-  scheduledFor: Date;
+  /** Absent means "keep the slot the tenant proposed" — dispatch never
+   * invents a time. (The HTTP edge used to default this to `new Date()`,
+   * silently stomping the tenant's proposal while the form promised it
+   * would keep it.) */
+  scheduledFor?: Date;
 }) {
   const viewing = await db.viewing.findUnique({ where: { id: params.viewingId } });
   if (!viewing) throw new ViewingNotFoundError(params.viewingId);
   assertViewingTransitionAllowed(viewing.status as never, 'scheduled');
 
-  const officer = await db.party.findUnique({ where: { id: params.fooPartyId } });
-  if (!officer) throw new Error('officer not found');
+  // Server-authoritative: only an ACTIVE field officer can be sent. The
+  // route is admin-only, but "who conducted a visit" is exactly what an
+  // audit question turns on, so the service refuses anything else rather
+  // than trusting the caller's select box.
+  const account = await db.userAccount.findUnique({ where: { partyId: params.fooPartyId } });
+  if (!account || account.role !== 'foo' || account.status !== 'active') {
+    throw new OfficerNotFoundError(params.fooPartyId);
+  }
 
-  return db.viewing.update({
-    where: { id: params.viewingId },
-    data: {
-      status: 'scheduled',
-      conductedByPartyId: params.fooPartyId,
-      scheduledFor: params.scheduledFor,
-    },
+  const reassigned = viewing.status === 'scheduled';
+  const sameOfficer = viewing.conductedByPartyId === params.fooPartyId;
+  const timeChanged = params.scheduledFor
+    ? params.scheduledFor.getTime() !== viewing.scheduledFor.getTime()
+    : false;
+  // Same officer, same slot: an idempotent no-op that records nothing —
+  // the same discipline the tier and service-area toggles follow.
+  if (reassigned && sameOfficer && !timeChanged) {
+    return { viewing, changed: false };
+  }
+
+  const updated = await db.$transaction(async (tx) => {
+    const row = await tx.viewing.update({
+      where: { id: params.viewingId },
+      data: {
+        status: 'scheduled',
+        conductedByPartyId: params.fooPartyId,
+        ...(params.scheduledFor ? { scheduledFor: params.scheduledFor } : {}),
+      },
+    });
+    await tx.auditEvent.create({
+      data: {
+        actorPartyId: params.adminPartyId,
+        actorRole: 'admin',
+        action: 'viewing_assigned',
+        entityType: 'viewing',
+        entityId: params.viewingId,
+        detail: JSON.stringify({
+          listingId: viewing.listingId,
+          officerPartyId: params.fooPartyId,
+          previousOfficerPartyId: viewing.conductedByPartyId,
+          reassigned,
+          scheduledFor: row.scheduledFor.toISOString(),
+          timeChanged,
+        }),
+      },
+    });
+    return row;
   });
+  return { viewing: updated, changed: true };
 }
 
 /** Today's field list for an officer (and everything still open). */

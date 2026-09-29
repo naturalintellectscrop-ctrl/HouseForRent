@@ -3,6 +3,7 @@ import { notFound, redirect } from 'next/navigation';
 import {
   api,
   ApiError,
+  type AssignableOfficer,
   type ViewingDetail,
 } from '@/lib/api';
 import { ApiAlert, FURNISHED_LABEL, shillings, StatusPill, TYPE_LABEL, when } from '@/app/ui';
@@ -12,6 +13,7 @@ import { MediaCapture } from './media-capture';
 import { CloseVisit } from './close-visit';
 import { OpenDeal } from './open-deal';
 import { OpsCancelViewing } from './ops-cancel-viewing';
+import { ReassignViewing } from './reassign-viewing';
 
 /**
  * One field visit, and the step it is actually on.
@@ -54,7 +56,7 @@ export default async function ViewingPage(props: {
     throw err;
   }
 
-  const { viewing, listing, fieldReport, introduction, canConduct } = detail;
+  const { viewing, listing, fieldReport, introduction, canConduct, officerName } = detail;
   // A REQUESTED viewing is not a closed one — it has simply not been
   // scheduled yet. Treating "not scheduled" as "closed" made the page tell
   // an operator that a waiting request had "closed without a report", which
@@ -62,6 +64,13 @@ export default async function ViewingPage(props: {
   const closed = ['conducted', 'no_show', 'cancelled'].includes(viewing.status);
   const scheduled = viewing.status === 'scheduled';
   const role = await currentRole();
+
+  // The reassign control needs the sendable officers; only an admin on a
+  // SCHEDULED visit ever renders it, so only that combination pays for the
+  // read. A failure fails the page like any other read — an empty roster
+  // renders the honest "nobody to send" note instead of a dead select.
+  const officers: AssignableOfficer[] =
+    role === 'admin' && scheduled ? await api<AssignableOfficer[]>('/v1/ops/officers') : [];
 
   return (
     <>
@@ -78,6 +87,7 @@ export default async function ViewingPage(props: {
         {(TYPE_LABEL[listing.propertyType] ?? listing.propertyType).toLowerCase()} in{' '}
         {viewing.neighbourhood} · tenant{' '}
         {viewing.tenantName ?? viewing.tenantPartyId.slice(0, 8)}
+        {officerName ? ` · officer ${officerName}` : ''}
       </p>
 
       {/* ── Where the visit happens (Task 15) ──
@@ -139,6 +149,28 @@ export default async function ViewingPage(props: {
           Not yet scheduled. This request is waiting for the operations desk
           to assign a field officer and confirm the time — the dispatch
           queue is where that happens.
+        </p>
+      )}
+
+      {/* ── Operations controls on an open visit ──
+          Reassignment (Task 16): the promise "re-assigning before the
+          visit is permitted" was always true in the graph and never
+          reachable in the product — the queue only lists REQUESTED rows,
+          so a scheduled visit was stuck with its officer. Cancellation
+          (Task 12): the landlord-reported case. Officers see neither. */}
+      {scheduled && role === 'admin' && officers.length > 0 && (
+        <ReassignViewing
+          viewingId={viewing.id}
+          officers={officers}
+          tenantName={viewing.tenantName ?? 'The tenant'}
+          officerName={officerName ?? 'Nobody'}
+        />
+      )}
+      {scheduled && role === 'admin' && officers.length === 0 && (
+        <p className="alert alert-error" role="alert">
+          No active field officer accounts exist, so this visit cannot be
+          reassigned — and a new assignment cannot happen either until an
+          officer is provisioned.
         </p>
       )}
 

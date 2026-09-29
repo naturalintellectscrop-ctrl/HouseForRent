@@ -101,6 +101,13 @@ function auditSentence(a: PartyDetail['audit'][number]): string {
       return `Mandate ${String(d.decision ?? 'decided')}.`;
     case 'viewing_cancelled':
       return d.by === 'operations' ? 'A viewing was cancelled by operations.' : 'Cancelled a viewing.';
+    case 'viewing_assigned':
+      // Neutral on purpose: the row renders on the tenant's trail (a
+      // visit of theirs got an officer) and on the officer's trail (a
+      // visit was put on, or moved off, their board) with the same payload.
+      return `Dispatch ${d.reassigned ? 'reassigned' : 'assigned'} the field officer for a viewing.${
+        d.timeChanged ? ' The confirmed time changed.' : ''
+      }`;
     case 'identity_verification':
       return d.by === 'operations'
         ? `Operations ran an identity check: ${String(d.state ?? '')}.`
