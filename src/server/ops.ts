@@ -10,8 +10,8 @@
  */
 import { createHash } from 'node:crypto';
 import { db } from '@/lib/db';
-import { everyPostingBalances } from './ledger';
-import { AUTH_ROLES, LISTER_TIERS, type AuthRole, type ListerTier } from './domain';
+import { derivedPspState, everyPostingBalances } from './ledger';
+import { AUTH_ROLES, IDENTITY_METHODS, LISTER_TIERS, type AuthRole, type IdentityMethod, type ListerTier } from './domain';
 import { ApiError } from './http';
 import { NeighbourhoodNotFoundError } from './listings';
 
@@ -49,44 +49,49 @@ async function recordIdentityCheck(params: {
   fullName: string;
   /** Audit actor: the subject themselves (self-service) or the admin (ops run). */
   actorPartyId: string;
-  actorRole: AuthRole | null;
   /** Set when operations ran the check, so the trail can tell the two apart forever. */
   byOperations?: boolean;
 }) {
+  // The method is a native enum now: an unknown value is refused at the
+  // service, never stored.
+  if (!(IDENTITY_METHODS as readonly string[]).includes(params.method)) {
+    throw new ApiError(422, 'VALIDATION', `method must be one of: ${IDENTITY_METHODS.join(', ')}`);
+  }
   const state = mockIdentityOutcome(params.nin, params.fullName, params.displayName);
 
   const record = await db.identityVerification.create({
     data: {
       partyId: params.partyId,
-      method: params.method,
+      method: params.method as IdentityMethod,
       state,
-      reference: createHash('sha256').update(params.nin.trim().toUpperCase()).digest('hex').slice(0, 16),
+      // The mock provider's reference to this check: a salted-hash of the
+      // NIN, as before — the column is provider_ref on the production row.
+      providerRef: createHash('sha256').update(params.nin.trim().toUpperCase()).digest('hex').slice(0, 16),
       verifiedAt: state === 'verified' ? new Date() : null,
     },
   });
 
   if (state === 'verified') {
-    // Completing identity activation makes the account active.
+    // Completing identity activation makes the account active — the status
+    // lives on the PARTY; user_account mirrors nothing anymore.
     const party = await db.party.findUnique({ where: { id: params.partyId } });
     if (party && party.status === 'pending_verification') {
       await db.party.update({ where: { id: params.partyId }, data: { status: 'active' } });
-      await db.userAccount.updateMany({ where: { partyId: params.partyId }, data: { status: 'active' } });
     }
   }
 
   await db.auditEvent.create({
     data: {
       actorPartyId: params.actorPartyId,
-      ...(params.actorRole ? { actorRole: params.actorRole } : {}),
-      action: 'identity_verification',
-      entityType: 'identity_verification',
-      entityId: record.id,
-      detail: JSON.stringify({
+      eventType: 'identity_verification',
+      subjectRef: record.id,
+      payload: {
         state,
         method: params.method,
         provider: 'sandbox-mock',
         ...(params.byOperations ? { by: 'operations' } : {}),
-      }),
+      },
+      occurredAt: new Date(),
     },
   });
 
@@ -107,7 +112,6 @@ export async function submitIdentityVerification(params: {
     nin: params.nin,
     fullName: params.fullName,
     actorPartyId: params.partyId,
-    actorRole: null,
   });
 }
 
@@ -146,11 +150,12 @@ export async function runIdentityCheckForParty(params: {
 }) {
   const party = await db.party.findUnique({
     where: { id: params.partyId },
-    include: { account: true },
+    include: { userAccounts: true },
   });
-  if (!party || !party.account) throw new PartyNotFoundError(params.partyId);
-  if (party.account.role !== 'tenant' && party.account.role !== 'lister') {
-    throw new IdentityCheckNotApplicableError(party.account.role);
+  if (!party || !party.userAccounts[0]) throw new PartyNotFoundError(params.partyId);
+  const account = party.userAccounts[0];
+  if (account.authRole !== 'tenant' && account.authRole !== 'lister') {
+    throw new IdentityCheckNotApplicableError(account.authRole);
   }
 
   return recordIdentityCheck({
@@ -160,7 +165,6 @@ export async function runIdentityCheckForParty(params: {
     nin: params.nin,
     fullName: params.fullName,
     actorPartyId: params.adminPartyId,
-    actorRole: 'admin',
     byOperations: true,
   });
 }
@@ -190,7 +194,7 @@ export async function provisionStaff(params: {
       data: { displayName: params.displayName, primaryPhone: params.primaryPhone, status: 'active' },
     });
     const account = await tx.userAccount.create({
-      data: { partyId: party.id, role: params.role, status: 'active' },
+      data: { partyId: party.id, authRole: params.role },
     });
     await tx.userCredential.create({
       data: { userAccountId: account.id, passwordHash: await hashPassword(params.password) },
@@ -198,11 +202,10 @@ export async function provisionStaff(params: {
     await tx.auditEvent.create({
       data: {
         actorPartyId: params.actorPartyId,
-        actorRole: 'admin',
-        action: 'staff_provisioned',
-        entityType: 'user_account',
-        entityId: account.id,
-        detail: JSON.stringify({ role: params.role }),
+        eventType: 'staff_provisioned',
+        subjectRef: account.id,
+        payload: { role: params.role },
+        occurredAt: new Date(),
       },
     });
     return { party, account };
@@ -213,19 +216,21 @@ export async function provisionStaff(params: {
 
 export async function recentAuditEvents(limit = 100) {
   const rows = await db.auditEvent.findMany({
-    orderBy: { createdAt: 'desc' },
+    orderBy: { occurredAt: 'desc' },
     take: limit,
-    include: { actor: { select: { displayName: true } } },
+    include: { actorParty: { select: { displayName: true } } },
   });
   return rows.map((r) => ({
     id: r.id,
-    action: r.action,
-    entityType: r.entityType,
-    entityId: r.entityId,
-    actorName: r.actor?.displayName ?? 'system',
-    actorRole: r.actorRole,
-    detail: r.detail ? (JSON.parse(r.detail) as Record<string, unknown>) : null,
-    createdAt: r.createdAt,
+    eventType: r.eventType,
+    subjectRef: r.subjectRef,
+    actorPartyId: r.actorPartyId,
+    actorName: r.actorParty?.displayName ?? 'system',
+    payload:
+      r.payload && typeof r.payload === 'object' && !Array.isArray(r.payload)
+        ? (r.payload as Record<string, unknown>)
+        : null,
+    occurredAt: r.occurredAt,
   }));
 }
 
@@ -254,14 +259,23 @@ export async function markListingAwaitingVerification(listingId: string) {
 export async function runReconciliation() {
   const postingsBalance = await everyPostingBalances();
 
-  const pspTotal = await db.pspInstruction.aggregate({ where: { kind: 'collect', state: 'succeeded' }, _sum: { amount: true } });
+  // PspInstruction rows are IMMUTABLE and `state` only ever holds the
+  // initial `pending` — the CURRENT state is the toState of the newest
+  // event, so the succeeded total is derived, never read off the column.
+  const collectInstructions = await db.pspInstruction.findMany({
+    where: { kind: 'collect' },
+    include: { events: { orderBy: [{ occurredAt: 'desc' }, { createdAt: 'desc' }], take: 1 } },
+  });
+  const pspBalance = collectInstructions.reduce(
+    (sum, instruction) => (derivedPspState(instruction) === 'succeeded' ? sum + instruction.amount : sum),
+    0n,
+  );
   const ledgerInflow = await db.ledgerEntry.aggregate({
     where: { reference: 'fund_escrow', direction: 'credit' },
     _sum: { amount: true },
   });
 
   const ledgerBalance = ledgerInflow._sum.amount ?? 0n;
-  const pspBalance = pspTotal._sum.amount ?? 0n;
   const isReconciled = postingsBalance && ledgerBalance === pspBalance;
 
   const check = await db.reconciliationCheck.create({
@@ -292,13 +306,13 @@ export async function listCommissionRateVersions() {
 
 export async function listStaff() {
   const accounts = await db.userAccount.findMany({
-    where: { role: { in: ['foo', 'admin'] } },
+    where: { authRole: { in: ['foo', 'admin'] } },
     include: { party: { select: { displayName: true, primaryPhone: true } } },
     orderBy: { createdAt: 'desc' },
   });
   return accounts.map((a) => ({
     id: a.id,
-    role: a.role,
+    role: a.authRole,
     displayName: a.party.displayName,
     primaryPhone: a.party.primaryPhone,
     createdAt: a.createdAt,
@@ -307,7 +321,7 @@ export async function listStaff() {
 
 export async function listOfficers() {
   const accounts = await db.userAccount.findMany({
-    where: { role: 'foo', status: 'active' },
+    where: { authRole: 'foo', party: { status: 'active' } },
     include: { party: { select: { displayName: true } } },
     orderBy: { createdAt: 'asc' },
   });
@@ -365,7 +379,7 @@ export async function adminUserDirectory(query?: string, role?: string): Promise
               ],
             }
           : {},
-        r ? { role: r as AuthRole } : {},
+        r ? { authRole: r as AuthRole } : {},
       ],
     },
     include: {
@@ -373,7 +387,7 @@ export async function adminUserDirectory(query?: string, role?: string): Promise
         include: {
           identityVerifications: { orderBy: { createdAt: 'desc' }, take: 1 },
           listerProfile: true,
-          _count: { select: { properties: true, dealsAsTenant: true, dealsAsLandlord: true } },
+          _count: { select: { propertiesOwned: true, dealsAsTenant: true, dealsAsLandlord: true } },
         },
       },
     },
@@ -385,11 +399,13 @@ export async function adminUserDirectory(query?: string, role?: string): Promise
     partyId: a.partyId,
     displayName: a.party.displayName,
     primaryPhone: a.party.primaryPhone,
-    role: a.role,
-    accountStatus: a.status,
+    role: a.authRole,
+    // The account's standing IS the party's status — user_account carries
+    // no status column of its own.
+    accountStatus: a.party.status,
     identityVerified: a.party.identityVerifications[0]?.state === 'verified',
     listerTier: a.party.listerProfile?.tier ?? null,
-    listingCount: a.party._count.properties,
+    listingCount: a.party._count.propertiesOwned,
     dealCount: a.party._count.dealsAsTenant + a.party._count.dealsAsLandlord,
     createdAt: a.createdAt,
   }));
@@ -431,7 +447,8 @@ export interface AdminPartyDetail {
     id: string;
     label: string;
     neighbourhood: string;
-    district: string;
+    /** The parent neighbourhood's name — there is no district column. */
+    district: string | null;
     listingCount: number;
     liveListings: number;
     createdAt: Date;
@@ -454,9 +471,11 @@ export interface AdminPartyDetail {
    */
   audit: Array<{
     id: string;
+    /** The event type — the audit row's own vocabulary. */
     action: string;
-    entityType: string;
-    entityId: string;
+    /** No longer recorded: the production audit row carries only subjectRef. */
+    entityType: string | null;
+    entityId: string | null;
     actorName: string;
     actorRole: string | null;
     detail: Record<string, unknown> | null;
@@ -479,19 +498,19 @@ export async function adminPartyDetail(partyId: string): Promise<AdminPartyDetai
   const party = await db.party.findUnique({
     where: { id: partyId },
     include: {
-      account: true,
+      userAccounts: true,
       identityVerifications: { orderBy: { createdAt: 'desc' } },
       listerProfile: true,
     },
   });
-  if (!party || !party.account) throw new PartyNotFoundError(partyId);
-  const account = party.account;
+  if (!party || !party.userAccounts[0]) throw new PartyNotFoundError(partyId);
+  const account = party.userAccounts[0];
 
   const [properties, dealsAsTenant, dealsAsLandlord] = await Promise.all([
     db.property.findMany({
       where: { ownerPartyId: partyId },
       include: {
-        neighbourhood: true,
+        neighbourhood: { include: { parent: true } },
         _count: { select: { listings: true } },
       },
       orderBy: { createdAt: 'desc' },
@@ -544,7 +563,7 @@ export async function adminPartyDetail(partyId: string): Promise<AdminPartyDetai
   // by construction: only ids from the subject's own viewing queries enter
   // the clause.
   const assignedViewingRows =
-    account.role === 'foo'
+    account.authRole === 'foo'
       ? await db.viewing.findMany({
           where: { conductedByPartyId: partyId },
           select: { id: true },
@@ -566,23 +585,25 @@ export async function adminPartyDetail(partyId: string): Promise<AdminPartyDetai
     where: {
       OR: [
         { actorPartyId: partyId },
-        { entityType: 'party', entityId: partyId },
+        // The audit row's subject is a bare string ref now (no entity-type
+        // column) — ids stay subject-scoped by construction.
+        { subjectRef: partyId },
         // Money/consent events carried on this party's OWN deals still
         // belong on this account's trail — they are what a landlord calling
         // about "my money" needs to see, and they stay subject-scoped by
         // construction (only ids from the queries above enter this list).
-        ...(ownDealIds.length ? [{ entityType: 'deal', entityId: { in: ownDealIds } }] : []),
+        ...(ownDealIds.length ? [{ subjectRef: { in: ownDealIds } }] : []),
         ...(ownViewingIds.length
-          ? [{ entityType: 'viewing', entityId: { in: ownViewingIds } }]
+          ? [{ subjectRef: { in: ownViewingIds } }]
           : []),
         ...(identityRecordIds.length
-          ? [{ entityType: 'identity_verification', entityId: { in: identityRecordIds } }]
+          ? [{ subjectRef: { in: identityRecordIds } }]
           : []),
       ],
     },
-    orderBy: { createdAt: 'desc' },
+    orderBy: { occurredAt: 'desc' },
     take: 20,
-    include: { actor: { select: { displayName: true } } },
+    include: { actorParty: { select: { displayName: true } } },
   });
 
   const identity = party.identityVerifications;
@@ -596,8 +617,8 @@ export async function adminPartyDetail(partyId: string): Promise<AdminPartyDetai
       status: party.status,
       createdAt: party.createdAt,
     },
-    role: account.role,
-    accountStatus: account.status,
+    role: account.authRole,
+    accountStatus: party.status,
     listerTier: party.listerProfile?.tier ?? null,
     identity: {
       state: latestVerified?.state ?? identity[0]?.state ?? null,
@@ -610,7 +631,8 @@ export async function adminPartyDetail(partyId: string): Promise<AdminPartyDetai
       id: p.id,
       label: `${p.bedrooms}-bed ${p.propertyType}`,
       neighbourhood: p.neighbourhood.name,
-      district: p.neighbourhood.district,
+      // No district column: the parent's name is the district-level label.
+      district: p.neighbourhood.parent?.name ?? null,
       listingCount: p._count.listings,
       liveListings: liveCountFor(p.id),
       createdAt: p.createdAt,
@@ -636,13 +658,18 @@ export async function adminPartyDetail(partyId: string): Promise<AdminPartyDetai
     viewings: viewingsByState,
     audit: auditRows.map((r) => ({
       id: r.id,
-      action: r.action,
-      entityType: r.entityType,
-      entityId: r.entityId,
-      actorName: r.actor?.displayName ?? 'system',
-      actorRole: r.actorRole,
-      detail: r.detail ? (JSON.parse(r.detail) as Record<string, unknown>) : null,
-      createdAt: r.createdAt,
+      action: r.eventType,
+      // The production audit row has no entity-type column — the subject is
+      // a bare string ref, so nothing honest can fill this any more.
+      entityType: null as string | null,
+      entityId: r.subjectRef,
+      actorName: r.actorParty?.displayName ?? 'system',
+      actorRole: null,
+      detail:
+        r.payload && typeof r.payload === 'object' && !Array.isArray(r.payload)
+          ? (r.payload as Record<string, unknown>)
+          : null,
+      createdAt: r.occurredAt,
     })),
   };
 }
@@ -660,20 +687,23 @@ export async function adminPartyDetail(partyId: string): Promise<AdminPartyDetai
  */
 export async function adminNeighbourhoodDirectory() {
   const rows = await db.neighbourhood.findMany({
-    orderBy: [{ district: 'asc' }, { name: 'asc' }],
-    include: { _count: { select: { properties: true } } },
+    // No district column: the parent's name is the district-level label,
+    // so group ordering follows it.
+    orderBy: [{ parent: { name: 'asc' } }, { name: 'asc' }],
+    include: { parent: true, _count: { select: { properties: true } } },
   });
   return Promise.all(
     rows.map(async (n) => ({
       id: n.id,
       name: n.name,
-      district: n.district,
+      district: n.parent?.name ?? null,
       inServiceArea: n.inServiceArea,
       propertyCount: n._count.properties,
       liveListingCount: await db.listing.count({
         where: { publicationState: 'live', property: { neighbourhoodId: n.id } },
       }),
-      hasCoordinates: n.latitude !== null && n.longitude !== null,
+      // The production neighbourhood has no coordinates columns.
+      hasCoordinates: false,
     })),
   );
 }
@@ -687,8 +717,14 @@ export class DuplicateNeighbourhoodError extends Error {
 
 /**
  * F-015's create path, hardened for its first real UI: names are required,
- * a duplicate name+district is a 409 rather than a silent second row, and
- * the creation is audited like every other boundary move.
+ * a duplicate name within the same district is a 409 rather than a silent
+ * second row, and the creation is audited like every other boundary move.
+ *
+ * The production taxonomy has NO district column — a district is the
+ * neighbourhood's PARENT row (the hierarchy is how corridors group). The
+ * admin's district string therefore resolves to an existing neighbourhood
+ * of that name, or materialises one as a grouping parent; the entered
+ * string also stays in the audit payload verbatim.
  */
 export async function createServiceAreaNeighbourhood(params: {
   adminPartyId: string;
@@ -701,23 +737,28 @@ export async function createServiceAreaNeighbourhood(params: {
   if (!name || !district) {
     throw new ApiError(400, 'VALIDATION', 'neighbourhood name and district are required');
   }
-  const existing = await db.neighbourhood.findFirst({ where: { name, district } });
+  const parent = await db.neighbourhood.findFirst({ where: { name: district } });
+  const existing = await db.neighbourhood.findFirst({
+    where: { name, parentId: parent?.id ?? null },
+  });
   if (existing) throw new DuplicateNeighbourhoodError(name, district);
 
   // Interactive transaction: the audit row needs the created row's id, so
   // both writes happen inside one callback (all-or-nothing).
   return db.$transaction(async (tx) => {
+    const parentId = parent
+      ? parent.id
+      : (await tx.neighbourhood.create({ data: { name: district, inServiceArea: false } })).id;
     const row = await tx.neighbourhood.create({
-      data: { name, district, inServiceArea: params.inServiceArea },
+      data: { name, parentId, inServiceArea: params.inServiceArea },
     });
     await tx.auditEvent.create({
       data: {
         actorPartyId: params.adminPartyId,
-        actorRole: 'admin',
-        action: 'neighbourhood_created',
-        entityType: 'neighbourhood',
-        entityId: row.id,
-        detail: JSON.stringify({ name, district, inServiceArea: params.inServiceArea }),
+        eventType: 'neighbourhood_created',
+        subjectRef: row.id,
+        payload: { name, district, inServiceArea: params.inServiceArea },
+        occurredAt: new Date(),
       },
     });
     return row;
@@ -729,7 +770,10 @@ export async function setNeighbourhoodServiceArea(params: {
   neighbourhoodId: string;
   inServiceArea: boolean;
 }) {
-  const row = await db.neighbourhood.findUnique({ where: { id: params.neighbourhoodId } });
+  const row = await db.neighbourhood.findUnique({
+    where: { id: params.neighbourhoodId },
+    include: { parent: true },
+  });
   if (!row) throw new NeighbourhoodNotFoundError(params.neighbourhoodId);
 
   if (row.inServiceArea === params.inServiceArea) {
@@ -750,17 +794,16 @@ export async function setNeighbourhoodServiceArea(params: {
     db.auditEvent.create({
       data: {
         actorPartyId: params.adminPartyId,
-        actorRole: 'admin',
-        action: 'service_area_changed',
-        entityType: 'neighbourhood',
-        entityId: params.neighbourhoodId,
-        detail: JSON.stringify({
+        eventType: 'service_area_changed',
+        subjectRef: params.neighbourhoodId,
+        payload: {
           neighbourhood: row.name,
-          district: row.district,
+          district: row.parent?.name ?? null,
           from: row.inServiceArea,
           to: params.inServiceArea,
           liveListingsAffected: params.inServiceArea ? 0 : liveListings,
-        }),
+        },
+        occurredAt: new Date(),
       },
     }),
   ]);
@@ -802,13 +845,13 @@ export async function setListerTier(params: {
     throw new Error(`"${params.tier}" is not a listing tier`);
   }
 
-  const account = await db.userAccount.findUnique({
+  const account = await db.userAccount.findFirst({
     where: { partyId: params.partyId },
     include: { party: { include: { listerProfile: true } } },
   });
   if (!account) throw new Error(`account ${params.partyId} not found`);
-  if (account.role !== 'lister') {
-    throw new ListerTierNotApplicableError(params.partyId, account.role);
+  if (account.authRole !== 'lister') {
+    throw new ListerTierNotApplicableError(params.partyId, account.authRole);
   }
 
   const from = account.party.listerProfile?.tier ?? null;
@@ -821,16 +864,15 @@ export async function setListerTier(params: {
     db.auditEvent.create({
       data: {
         actorPartyId: params.adminPartyId,
-        actorRole: 'admin',
-        action: 'lister_tier_changed',
-        entityType: 'party',
-        entityId: params.partyId,
-        detail: JSON.stringify({ from: from ?? null, to: params.tier }),
+        eventType: 'lister_tier_changed',
+        subjectRef: params.partyId,
+        payload: { from: from ?? null, to: params.tier },
+        occurredAt: new Date(),
       },
     }),
     db.listerProfile.upsert({
       where: { partyId: params.partyId },
-      update: { tier: params.tier },
+      update: { tier: params.tier as ListerTier },
       create: { partyId: params.partyId, tier: params.tier as ListerTier },
     }),
   ]);

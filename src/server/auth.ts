@@ -1,14 +1,12 @@
 /**
  * Authentication — credentials, sessions, and the server-resolved caller.
  *
- * SANDBOX DIVERGENCE (recorded in worklog.md §D-1): the real repository
- * fronts this with Supabase Auth (commits 22a60e5, 44d1f6f) and the API
- * verifies the Supabase JWT. This working copy cannot reach a Supabase
- * project, so it runs the SAME session table design first-party: an opaque
- * random token in an httpOnly cookie, a SHA-256 hash in the `session` row,
- * server-side revocation on sign-out. Password hashing is scrypt from
- * node:crypto — no dependency, no committed secrets (F-009's rule holds:
- * nothing here ships a password).
+ * RUNS AGAINST THE PRODUCTION DATABASE (Supabase Postgres): password hashes
+ * are bcrypt ($2b$) as issued by the real API — hashing and verification use
+ * bcryptjs so the 765 existing credentials keep working. Sessions use the
+ * production `session` table shape: an opaque random token in an httpOnly
+ * cookie, its SHA-256 hash in `refresh_token_hash`, revocation via
+ * `revoked_at` (the table is deliberately NOT in the immutable set).
  *
  * What is NOT diverged: identity comes from the session, never the body;
  * a missing account and a wrong password are indistinguishable (dummy-hash
@@ -17,40 +15,34 @@
  */
 import { cookies } from 'next/headers';
 import { cache } from 'react';
-import { createHash, randomBytes, scrypt as _scrypt, timingSafeEqual } from 'node:crypto';
-import { promisify } from 'node:util';
+import { createHash, randomBytes } from 'node:crypto';
+import bcrypt from 'bcryptjs';
 import { db } from '@/lib/db';
 import { maySignIn, type AuthRole } from './domain';
 
 export { maySignIn };
 
-const scrypt = promisify(_scrypt) as (
-  password: string,
-  salt: string,
-  keylen: number,
-) => Promise<Buffer>;
-
 export const SESSION_COOKIE = 'hfr_session';
 /** Mirrors the real deployment's 30-day refresh-token lifetime. */
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
-/** A constant dummy hash so a missing account costs the same as a wrong one. */
-const DUMMY_HASH =
-  'scrypt$aaaaaaaaaaaaaaaa$' + '0'.repeat(64);
+/**
+ * A constant VALID dummy bcrypt hash so a missing account costs the same
+ * bcrypt expansion work as a wrong password — timing reveals nothing.
+ */
+const DUMMY_BCRYPT_HASH = '$2b$10$WoP7X/zlmvmpfuP7WC/kbeX/CPGmuDuhbWsRpyd.xZ0dwt5UgO/JO';
 
 export async function hashPassword(password: string): Promise<string> {
-  const salt = randomBytes(16).toString('hex');
-  const derived = await scrypt(password, salt, 32);
-  return `scrypt$${salt}$${derived.toString('hex')}`;
+  return bcrypt.hash(password, 10);
 }
 
 export async function verifyPassword(password: string, stored: string | null): Promise<boolean> {
-  const candidate = stored ?? DUMMY_HASH;
-  const [algo, salt, hex] = candidate.split('$');
-  if (algo !== 'scrypt' || !salt || !hex) return false;
-  const derived = await scrypt(password, salt, 32);
-  const expected = Buffer.from(hex, 'hex');
-  return derived.length === expected.length && timingSafeEqual(derived, expected);
+  try {
+    return await bcrypt.compare(password, stored ?? DUMMY_BCRYPT_HASH);
+  } catch {
+    // Malformed stored hash (never expected): fail closed.
+    return false;
+  }
 }
 
 function hashToken(token: string): string {
@@ -77,8 +69,10 @@ export const resolveSession = cache(async (): Promise<ResolvedSession | null> =>
   const token = jar.get(SESSION_COOKIE)?.value;
   if (!token) return null;
 
-  const row = await db.session.findUnique({
-    where: { tokenHash: hashToken(token) },
+  // The production `session` table keeps the token hash in
+  // `refresh_token_hash` with no unique constraint — lookup is findFirst.
+  const row = await db.session.findFirst({
+    where: { refreshTokenHash: hashToken(token) },
     include: {
       userAccount: {
         include: {
@@ -101,14 +95,14 @@ export const resolveSession = cache(async (): Promise<ResolvedSession | null> =>
   const account = row.userAccount;
   const party = account.party;
   // An account blocked after the session was issued cannot act on it.
-  if (!maySignIn(party.status, account.role as AuthRole)) return null;
+  if (!maySignIn(party.status, account.authRole as AuthRole)) return null;
 
   return {
     sessionId: row.id,
     partyId: party.id,
     displayName: party.displayName,
     phone: party.primaryPhone,
-    role: account.role as AuthRole,
+    role: account.authRole as AuthRole,
     partyStatus: party.status,
     verificationState: party.identityVerifications[0]?.state ?? null,
   };
@@ -120,7 +114,7 @@ export async function issueSession(userAccountId: string): Promise<void> {
   await db.session.create({
     data: {
       userAccountId,
-      tokenHash: hashToken(token),
+      refreshTokenHash: hashToken(token),
       expiresAt: new Date(Date.now() + SESSION_TTL_MS),
     },
   });
@@ -140,7 +134,7 @@ export async function revokeCurrentSession(): Promise<void> {
   const token = jar.get(SESSION_COOKIE)?.value;
   if (token) {
     await db.session.updateMany({
-      where: { tokenHash: hashToken(token), revokedAt: null },
+      where: { refreshTokenHash: hashToken(token), revokedAt: null },
       data: { revokedAt: new Date() },
     });
   }
@@ -192,7 +186,9 @@ export async function changePassword(
     throw new PasswordPolicyError('The new password must be different from the current one.');
   }
 
-  const account = await db.userAccount.findUnique({
+  // partyId is not a unique constraint on user_account in the production
+  // schema — the 1:1 with party is semantic, so lookup is findFirst.
+  const account = await db.userAccount.findFirst({
     where: { partyId: session.partyId },
     include: { credential: true },
   });
@@ -214,11 +210,10 @@ export async function changePassword(
     db.auditEvent.create({
       data: {
         actorPartyId: session.partyId,
-        actorRole: session.role,
-        action: 'password_changed',
-        entityType: 'user_credential',
-        entityId: account.id,
-        detail: JSON.stringify({ otherSessionsRevoked: true }),
+        eventType: 'password_changed',
+        subjectRef: account.id,
+        payload: { otherSessionsRevoked: true },
+        occurredAt: new Date(),
       },
     }),
   ]);

@@ -26,8 +26,7 @@ export const GET = route(async (_req: NextRequest, ctx: { params: Promise<{ id: 
 
   const photos = await db.listingPhoto.findMany({
     where: { listingId: id },
-    orderBy: { position: 'asc' },
-    include: { asset: true },
+    orderBy: { sortOrder: 'asc' },
   });
 
   return NextResponse.json({
@@ -35,11 +34,12 @@ export const GET = route(async (_req: NextRequest, ctx: { params: Promise<{ id: 
       id: p.id,
       mediaAssetId: p.mediaAssetId,
       url: `/api/v1/media/${p.mediaAssetId}`,
-      caption: null,
-      sortOrder: p.position,
-      source: p.asset.source,
-      isFieldVerified: p.asset.source === 'field_officer',
-      isDevelopmentFixture: p.asset.source === 'development_fixture',
+      caption: p.caption,
+      sortOrder: p.sortOrder,
+      // Provenance is on the photo row itself (PhotoSource) — no media join.
+      source: p.source,
+      isFieldVerified: p.source === 'field_officer',
+      isDevelopmentFixture: p.source === 'development_fixture',
     })),
   });
 });

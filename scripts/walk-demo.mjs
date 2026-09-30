@@ -6,12 +6,14 @@
  * Run: DEMO_PASSWORD=… bun scripts/walk-demo.mjs
  */
 import { PrismaClient } from '@prisma/client';
+import { assertSandboxDatabase } from './production-guard.mjs';
 
 const prisma = new PrismaClient();
 if (!process.env.DEMO_PASSWORD) {
   console.error('DEMO_PASSWORD required (guards against accidental runs)');
   process.exit(1);
 }
+assertSandboxDatabase('scripts/walk-demo.mjs');
 
 const deals = await import('../src/server/deals.ts');
 

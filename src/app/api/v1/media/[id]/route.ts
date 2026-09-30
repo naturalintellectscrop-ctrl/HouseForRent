@@ -21,10 +21,10 @@ export const GET = route(async (_req: NextRequest, ctx: { params: Promise<{ id: 
 
   const root = process.env.MEDIA_ROOT ?? path.join(process.cwd(), 'media');
   try {
-    const bytes = await readFile(path.join(root, asset.filename));
+    const bytes = await readFile(path.join(root, asset.storageRef));
     return new NextResponse(new Uint8Array(bytes), {
       headers: {
-        'Content-Type': asset.mime,
+        'Content-Type': asset.mimeType ?? 'application/octet-stream',
         'Cache-Control': 'public, max-age=31536000, immutable',
         'X-Content-Type-Options': 'nosniff',
       },

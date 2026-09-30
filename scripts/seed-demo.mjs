@@ -14,10 +14,13 @@
  * Run: DEMO_PASSWORD=… bun scripts/seed-demo.mjs
  */
 import { PrismaClient } from '@prisma/client';
+import { assertSandboxDatabase } from './production-guard.mjs';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { scryptSync, randomBytes } from 'node:crypto';
+
+assertSandboxDatabase('scripts/seed-demo.mjs');
 
 const prisma = new PrismaClient();
 const __dirname = dirname(fileURLToPath(import.meta.url));

@@ -24,6 +24,7 @@ import {
   getListingForLister,
   effectiveCommissionRate,
   freshnessWindowDays,
+  configIntValue,
   listServiceAreaNeighbourhoods,
   adminVerificationQueue,
   type PhotoView,
@@ -442,9 +443,10 @@ async function resolveNeighbourhoods() {
     rows.map(async (n) => ({
       id: n.id,
       name: n.name,
-      district: n.district,
-      parentId: null as string | null,
-      parentName: n.district,
+      // No district column: the parent's name is the district-level label.
+      district: n.parent?.name ?? null,
+      parentId: n.parentId,
+      parentName: n.parent?.name ?? null,
       inServiceArea: n.inServiceArea,
       liveListingCount: await db.listing.count({
         where: {
@@ -460,7 +462,7 @@ async function resolveNeighbourhoods() {
 
 async function resolveCommissionRate() {
   const rate = await effectiveCommissionRate();
-  return { rateBpOfMonth: rate.rateBp, effectiveFrom: rate.effectiveFrom.toISOString() };
+  return { rateBpOfMonth: rate.rateBpOfMonth, effectiveFrom: rate.effectiveFrom.toISOString() };
 }
 
 async function resolveMyListings() {
@@ -593,12 +595,12 @@ async function resolvePresentedTerms(listingId: string): Promise<PresentedTerms>
   const mine = await getListingForLister(listingId, caller.partyId);
   if (!mine) throw new ApiError(404, 'LISTING_NOT_FOUND', 'not your listing');
 
-  const rate = await effectiveCommissionRate();
+  const rate = await effectiveCommissionRate(new Date(), caller.partyId);
   const monthlyRent = BigInt(mine.monthlyRent);
-  const commissionIfLet = (monthlyRent * BigInt(rate.rateBp)) / 10000n;
+  const commissionIfLet = (monthlyRent * BigInt(rate.rateBpOfMonth)) / 10000n;
   return {
     monthlyRent: mine.monthlyRent,
-    commissionRateBp: rate.rateBp,
+    commissionRateBp: rate.rateBpOfMonth,
     commissionIfLet: commissionIfLet.toString(),
     clause: {
       version: 'v1',
@@ -620,8 +622,7 @@ async function resolveListingPhotos(listingId: string) {
   }
   const photos = await db.listingPhoto.findMany({
     where: { listingId },
-    orderBy: { position: 'asc' },
-    include: { asset: true },
+    orderBy: { sortOrder: 'asc' },
   });
   return { photos: photos.map(toContractPhoto) };
 }
@@ -629,18 +630,19 @@ async function resolveListingPhotos(listingId: string) {
 function toContractPhoto(p: {
   id: string;
   mediaAssetId: string;
-  position: number;
-  asset: { source: string };
+  sortOrder: number;
+  caption: string | null;
+  source: string;
 }): PhotoView {
   return {
     id: p.id,
     mediaAssetId: p.mediaAssetId,
     url: `/api/v1/media/${p.mediaAssetId}`,
-    caption: null,
-    sortOrder: p.position,
-    source: p.asset.source,
-    isFieldVerified: p.asset.source === 'field_officer',
-    isDevelopmentFixture: p.asset.source === 'development_fixture',
+    caption: p.caption,
+    sortOrder: p.sortOrder,
+    source: p.source,
+    isFieldVerified: p.source === 'field_officer',
+    isDevelopmentFixture: p.source === 'development_fixture',
   };
 }
 
@@ -907,7 +909,7 @@ async function resolveIdentityMe() {
   const caller = await requireCaller();
   const consent = await db.consentRecord.findFirst({
     where: { partyId: caller.partyId },
-    orderBy: { acceptedAt: 'desc' },
+    orderBy: { grantedAt: 'desc' },
   });
   return {
     partyId: caller.partyId,
@@ -915,8 +917,8 @@ async function resolveIdentityMe() {
     identityVerified: caller.verificationState === 'verified',
     screeningState: caller.verificationState,
     screeningModulesRun: ['identity'],
-    consentRecordedAt: consent?.acceptedAt.toISOString() ?? null,
-    consentPolicyVersion: consent?.version ?? null,
+    consentRecordedAt: consent?.grantedAt.toISOString() ?? null,
+    consentPolicyVersion: consent?.policyVersion ?? null,
   };
 }
 
@@ -946,7 +948,6 @@ async function resolveDealDetail(dealId: string): Promise<DealDetail> {
       fromStatus: t.fromStatus,
       toStatus: t.toStatus,
       actorPartyId: t.actorPartyId ?? '',
-      actorRole: t.actorRole,
       reason: t.reason,
       occurredAt: t.createdAt.toISOString(),
     })),
@@ -962,8 +963,9 @@ async function resolveDealDetail(dealId: string): Promise<DealDetail> {
 async function resolveLaunchGate(): Promise<LaunchGate> {
   const windowDays = await freshnessWindowDays();
   const cutoff = new Date(Date.now() - windowDays * 24 * 60 * 60 * 1000);
-  const gateParam = await db.configParameter.findUnique({ where: { key: 'launch_gate_listings' } });
-  const gate = gateParam ? parseInt(gateParam.value, 10) || 12 : 12;
+  // The parameter row carries no value — the current value is the latest
+  // config version's.
+  const gate = await configIntValue('launch_gate_listings', 12);
 
   const live = await db.listing.count({
     where: {
@@ -1025,13 +1027,13 @@ async function resolveDealStates(): Promise<DealStates> {
 function toAuditEvents(rows: Awaited<ReturnType<typeof recentAuditEvents>>): AuditEvent[] {
   return rows.map((r) => ({
     id: r.id,
-    eventType: r.action,
-    actorPartyId: null,
+    eventType: r.eventType,
+    actorPartyId: r.actorPartyId,
     actorName: r.actorName,
-    actorRole: r.actorRole,
-    subjectRef: r.entityId,
-    payload: r.detail,
-    occurredAt: r.createdAt.toISOString(),
+    actorRole: null,
+    subjectRef: r.subjectRef,
+    payload: r.payload,
+    occurredAt: r.occurredAt.toISOString(),
   }));
 }
 
@@ -1059,15 +1061,15 @@ async function resolveConfigVersions(key: string): Promise<ConfigVersion[]> {
     id: v.id,
     parameterId: v.parameterId,
     value: v.value,
-    effectiveFrom: v.createdAt.toISOString(),
-    createdByPartyId: v.changedBy,
+    effectiveFrom: v.effectiveFrom.toISOString(),
+    createdByPartyId: v.createdByPartyId,
     createdAt: v.createdAt.toISOString(),
   }));
 }
 
 async function resolveCommissionRates() {
   const rows = await db.commissionRateVersion.findMany({ orderBy: { effectiveFrom: 'desc' } });
-  return rows.map((r) => ({ id: r.id, rateBp: r.rateBp, effectiveFrom: r.effectiveFrom.toISOString() }));
+  return rows.map((r) => ({ id: r.id, rateBp: r.rateBpOfMonth, effectiveFrom: r.effectiveFrom.toISOString() }));
 }
 
 // ── the dispatcher ───────────────────────────────────────────────────────

@@ -104,7 +104,7 @@ export async function findForTenant(tenantPartyId: string) {
       listing: { include: { property: { include: { neighbourhood: true } } } },
       fieldReport: true,
       introductionRecord: true,
-      conductedBy: { select: { displayName: true } },
+      conductedByParty: { select: { displayName: true } },
     },
   });
 
@@ -120,7 +120,7 @@ export async function findForTenant(tenantPartyId: string) {
       neighbourhoodName: v.listing.property.neighbourhood.name,
       landmarkText: v.listing.property.landmarkText,
     },
-    conductedBy: v.conductedBy?.displayName ?? null,
+    conductedBy: v.conductedByParty?.displayName ?? null,
     hasFieldReport: Boolean(v.fieldReport),
     hasIntroduction: Boolean(v.introductionRecord),
     whatHappensNext: nextStepFor(v.status),
@@ -192,8 +192,10 @@ export class OfficerNotFoundError extends Error {
 
 /** The officers dispatch can send: active field officers, with their open load. */
 export async function assignableOfficers() {
+  // The account's standing is the PARTY's status now — user_account carries
+  // no status column of its own.
   const accounts = await db.userAccount.findMany({
-    where: { role: 'foo', status: 'active' },
+    where: { authRole: 'foo', party: { status: 'active' } },
     include: { party: { select: { displayName: true } } },
   });
   return Promise.all(
@@ -225,9 +227,13 @@ export async function dispatchViewing(params: {
   // Server-authoritative: only an ACTIVE field officer can be sent. The
   // route is admin-only, but "who conducted a visit" is exactly what an
   // audit question turns on, so the service refuses anything else rather
-  // than trusting the caller's select box.
-  const account = await db.userAccount.findUnique({ where: { partyId: params.fooPartyId } });
-  if (!account || account.role !== 'foo' || account.status !== 'active') {
+  // than trusting the caller's select box. partyId is not unique on
+  // user_account — the lookup is findFirst, and standing is the party's.
+  const account = await db.userAccount.findFirst({
+    where: { partyId: params.fooPartyId },
+    include: { party: { select: { status: true } } },
+  });
+  if (!account || account.authRole !== 'foo' || account.party.status !== 'active') {
     throw new OfficerNotFoundError(params.fooPartyId);
   }
 
@@ -254,18 +260,17 @@ export async function dispatchViewing(params: {
     await tx.auditEvent.create({
       data: {
         actorPartyId: params.adminPartyId,
-        actorRole: 'admin',
-        action: 'viewing_assigned',
-        entityType: 'viewing',
-        entityId: params.viewingId,
-        detail: JSON.stringify({
+        eventType: 'viewing_assigned',
+        subjectRef: params.viewingId,
+        payload: {
           listingId: viewing.listingId,
           officerPartyId: params.fooPartyId,
           previousOfficerPartyId: viewing.conductedByPartyId,
           reassigned,
           scheduledFor: row.scheduledFor.toISOString(),
           timeChanged,
-        }),
+        },
+        occurredAt: new Date(),
       },
     });
     return row;
@@ -311,7 +316,7 @@ export async function getViewingDetail(viewingId: string) {
     include: {
       listing: { include: { property: { include: { neighbourhood: true } } } },
       tenantParty: { select: { displayName: true } },
-      conductedBy: { select: { displayName: true } },
+      conductedByParty: { select: { displayName: true } },
       fieldReport: true,
       introductionRecord: true,
     },
@@ -322,7 +327,7 @@ export async function getViewingDetail(viewingId: string) {
     status: v.status,
     scheduledFor: v.scheduledFor,
     tenantName: v.tenantParty.displayName,
-    conductedByName: v.conductedBy?.displayName ?? null,
+    conductedByName: v.conductedByParty?.displayName ?? null,
     listing: {
       id: v.listing.id,
       monthlyRent: v.listing.monthlyRent.toString(),
@@ -399,7 +404,7 @@ export async function fileFieldReport(params: {
       isAvailable: params.isAvailable,
       issuesText: params.issuesText,
       timingNote: params.timingNote,
-      mediaAssetIds: JSON.stringify([]),
+      mediaAssetIds: [],
       reportedAt: new Date(),
     },
   });
@@ -488,14 +493,13 @@ export async function cancelViewing(params: { viewingId: string; tenantPartyId: 
     db.auditEvent.create({
       data: {
         actorPartyId: params.tenantPartyId,
-        actorRole: 'tenant',
-        action: 'viewing_cancelled',
-        entityType: 'viewing',
-        entityId: params.viewingId,
-        detail: JSON.stringify({
+        eventType: 'viewing_cancelled',
+        subjectRef: params.viewingId,
+        payload: {
           from: viewing.status,
           listingId: viewing.listingId,
-        }),
+        },
+        occurredAt: new Date(),
       },
     }),
   ]);
@@ -527,16 +531,15 @@ export async function opsCancelViewing(params: {
     db.auditEvent.create({
       data: {
         actorPartyId: params.adminPartyId,
-        actorRole: 'admin',
-        action: 'viewing_cancelled',
-        entityType: 'viewing',
-        entityId: params.viewingId,
-        detail: JSON.stringify({
+        eventType: 'viewing_cancelled',
+        subjectRef: params.viewingId,
+        payload: {
           from: viewing.status,
           listingId: viewing.listingId,
           by: 'operations',
           note: params.note ?? null,
-        }),
+        },
+        occurredAt: new Date(),
       },
     }),
   ]);
@@ -566,11 +569,10 @@ export async function verifyListingFromVisit(params: {
     await tx.auditEvent.create({
       data: {
         actorPartyId: params.fooPartyId,
-        actorRole: 'foo',
-        action: 'listing_verification',
-        entityType: 'listing',
-        entityId: params.listingId,
-        detail: JSON.stringify({ verificationState: listing.verificationState, available: params.available, note: params.note ?? null }),
+        eventType: 'listing_verification',
+        subjectRef: params.listingId,
+        payload: { verificationState: listing.verificationState, available: params.available, note: params.note ?? null },
+        occurredAt: new Date(),
       },
     });
     return listing;
@@ -616,7 +618,7 @@ export async function findViewingsForLister(listerPartyId: string) {
     include: {
       listing: { include: { property: { include: { neighbourhood: true } } } },
       tenantParty: { select: { displayName: true } },
-      conductedBy: { select: { displayName: true } },
+      conductedByParty: { select: { displayName: true } },
       fieldReport: { select: { conditionRating: true, matchesListing: true, isAvailable: true } },
     },
   });
@@ -627,7 +629,7 @@ export async function findViewingsForLister(listerPartyId: string) {
     scheduledFor: v.scheduledFor.toISOString(),
     requestedAt: v.createdAt.toISOString(),
     tenantName: v.tenantParty.displayName,
-    officerName: v.conductedBy?.displayName ?? null,
+    officerName: v.conductedByParty?.displayName ?? null,
     listing: {
       id: v.listing.id,
       bedrooms: v.listing.property.bedrooms,

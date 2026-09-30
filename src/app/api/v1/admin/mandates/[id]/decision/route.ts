@@ -26,7 +26,9 @@ export const POST = route(async (req: NextRequest, ctx: { params: Promise<{ id: 
   return NextResponse.json({
     id: mandate.id,
     state: mandate.state,
-    decidedAt: mandate.decidedAt?.toISOString() ?? null,
+    // The decision time is verified_at on the production row; the wire key
+    // stays `decidedAt` so the console's contract is unchanged.
+    decidedAt: mandate.verifiedAt?.toISOString() ?? null,
   });
 });
 

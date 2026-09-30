@@ -26,6 +26,9 @@
  * Without --yes the script prints what it WOULD delete and exits.
  */
 import { PrismaClient } from '@prisma/client';
+import { assertSandboxDatabase } from './production-guard.mjs';
+
+assertSandboxDatabase('scripts/purge-demo-data.mjs');
 
 const db = new PrismaClient();
 const yes = process.argv.includes('--yes');

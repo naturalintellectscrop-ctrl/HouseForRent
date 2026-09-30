@@ -14,35 +14,64 @@
  *    cannot buy relevance by stuffing their description.
  */
 import { db } from '@/lib/db';
-import type { Prisma } from '@prisma/client';
-import { LISTER_TIERS, type ListerTier, type PropertyType } from './domain';
+import type { ConfigValueType, Prisma } from '@prisma/client';
+import { LISTER_TIERS, type FurnishedState, type ListerTier, type PropertyType } from './domain';
+import { ApiError } from './http';
 
 // ── config (freshness window) ────────────────────────────────────────────
 
 const DEFAULT_FRESHNESS_DAYS = 14;
 
-export async function freshnessWindowDays(): Promise<number> {
-  const row = await db.configParameter.findUnique({ where: { key: 'freshness_window_days' } });
-  const parsed = row ? parseInt(row.value, 10) : NaN;
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_FRESHNESS_DAYS;
+/** Mirrors the ConfigValueType enum; the parameter row's value_type is native now. */
+const CONFIG_VALUE_TYPES = ['int', 'json', 'text'] as const;
+
+/**
+ * The CURRENT value of an int-valued config parameter. The parameter row no
+ * longer carries a value — the current value is the LATEST ConfigVersion's
+ * (append-only history, FR-10.1); the row holds only key and value_type.
+ */
+export async function configIntValue(key: string, fallback: number): Promise<number> {
+  const param = await db.configParameter.findUnique({ where: { key } });
+  if (!param) return fallback;
+  const version = await db.configVersion.findFirst({
+    where: { parameterId: param.id },
+    orderBy: { effectiveFrom: 'desc' },
+  });
+  if (!version) return fallback;
+  const parsed = parseInt(String(version.value), 10);
+  return Number.isFinite(parsed) ? parsed : fallback;
 }
 
-export async function setConfigParameter(params: { key: string; value: string; valueType: string; changedBy: string }) {
+export async function freshnessWindowDays(): Promise<number> {
+  const days = await configIntValue('freshness_window_days', DEFAULT_FRESHNESS_DAYS);
+  return days > 0 ? days : DEFAULT_FRESHNESS_DAYS;
+}
+
+/**
+ * Records a parameter change. Append-only by construction: the value lives
+ * on a NEW config_version row (who, when, what it became), never an edit of
+ * the parameter row (FR-10.1) — the row's valueType is the only mutable fact.
+ */
+export async function setConfigParameter(params: { key: string; value: string; valueType: string; createdByPartyId: string }) {
+  if (!(CONFIG_VALUE_TYPES as readonly string[]).includes(params.valueType)) {
+    throw new ApiError(422, 'VALIDATION', `valueType must be one of: ${CONFIG_VALUE_TYPES.join(', ')}`);
+  }
+  const valueType = params.valueType as ConfigValueType;
   const existing = await db.configParameter.findUnique({ where: { key: params.key } });
   if (existing) {
     const [updated] = await db.$transaction([
-      db.configParameter.update({ where: { key: params.key }, data: { value: params.value, valueType: params.valueType } }),
+      db.configParameter.update({ where: { key: params.key }, data: { valueType } }),
       db.configVersion.create({
-        data: { parameterId: existing.id, value: params.value, changedBy: params.changedBy },
+        data: { parameterId: existing.id, value: params.value, effectiveFrom: new Date(), createdByPartyId: params.createdByPartyId },
       }),
     ]);
     return updated;
   }
   const created = await db.configParameter.create({
-    data: { key: params.key, value: params.value, valueType: params.valueType },
+    data: { key: params.key, valueType },
   });
   await db.configVersion.create({
-    data: { parameterId: created.id, value: params.value, changedBy: params.changedBy },
+    data: { parameterId: created.id, value: params.value, effectiveFrom: new Date(), createdByPartyId: params.createdByPartyId },
   });
   return created;
 }
@@ -88,16 +117,16 @@ export interface PhotoView {
 }
 
 /** Same-origin media route (sandbox); the real deployment serves from the API host. */
-export function photoToView(p: { id: string; mediaAssetId: string; position: number; asset: { source: string } }): PhotoView {
+export function photoToView(p: { id: string; mediaAssetId: string; sortOrder: number; caption: string | null; source: string }): PhotoView {
   return {
     id: p.id,
     mediaAssetId: p.mediaAssetId,
     url: `/api/v1/media/${p.mediaAssetId}`,
-    caption: null,
-    sortOrder: p.position,
-    source: p.asset.source,
-    isFieldVerified: p.asset.source === 'field_officer',
-    isDevelopmentFixture: p.asset.source === 'development_fixture',
+    caption: p.caption,
+    sortOrder: p.sortOrder,
+    source: p.source,
+    isFieldVerified: p.source === 'field_officer',
+    isDevelopmentFixture: p.source === 'development_fixture',
   };
 }
 
@@ -173,7 +202,8 @@ export async function publicSearch(filters: SearchFilters = {}, asOf: Date = new
       ? { monthlyRent: { gte: filters.minRent, lte: filters.maxRent } }
       : {}),
     ...(filters.bedrooms !== undefined ? { property: { bedrooms: filters.bedrooms } } : {}),
-    ...(filters.furnished ? { property: { furnished: filters.furnished } } : {}),
+    // furnished is a native enum now; the value arrives from a fixed select.
+    ...(filters.furnished ? { property: { furnished: filters.furnished as FurnishedState } } : {}),
     ...(filters.propertyType ? { property: { propertyType: filters.propertyType } } : {}),
   };
 
@@ -182,7 +212,9 @@ export async function publicSearch(filters: SearchFilters = {}, asOf: Date = new
     if (q) {
       where.OR = [
         { property: { neighbourhood: { name: { contains: q } } } },
-        { property: { neighbourhood: { district: { contains: q } } } },
+        // The old district column is the parent relation now: match the
+        // parent's name — never invent a district.
+        { property: { neighbourhood: { parent: { name: { contains: q } } } } },
         { property: { landmarkText: { contains: q } } },
       ];
     }
@@ -208,7 +240,7 @@ export async function publicSearch(filters: SearchFilters = {}, asOf: Date = new
       skip: offset,
       include: {
         property: { include: { neighbourhood: true } },
-        photos: { orderBy: { position: 'asc' }, include: { asset: true } },
+        photos: { orderBy: { sortOrder: 'asc' } },
       },
     }),
     db.listing.count({ where }),
@@ -252,8 +284,13 @@ export async function publicDetail(listingId: string, asOf: Date = new Date()) {
   const l = await db.listing.findUnique({
     where: { id: listingId },
     include: {
-      property: { include: { neighbourhood: true, owner: { select: { displayName: true } } } },
-      photos: { orderBy: { position: 'asc' }, include: { asset: true } },
+      property: {
+        include: {
+          neighbourhood: { include: { parent: true } },
+          ownerParty: { select: { displayName: true } },
+        },
+      },
+      photos: { orderBy: { sortOrder: 'asc' } },
       listingAmenities: { include: { amenity: true } },
     },
   });
@@ -276,7 +313,8 @@ export async function publicDetail(listingId: string, asOf: Date = new Date()) {
     propertyType: l.property.propertyType,
     furnished: l.property.furnished,
     neighbourhoodName: l.property.neighbourhood.name,
-    neighbourhoodDistrict: l.property.neighbourhood.district,
+    // No district column: the parent's name is the district-level label.
+    neighbourhoodDistrict: l.property.neighbourhood.parent?.name ?? null,
     landmarkText: l.property.landmarkText,
     streetAddress: l.property.streetAddress,
     descriptionText: l.descriptionText,
@@ -286,7 +324,7 @@ export async function publicDetail(listingId: string, asOf: Date = new Date()) {
     availabilityConfirmedAt: l.availabilityConfirmedAt,
     amenities: l.listingAmenities.map((a) => a.amenity.name),
     photos: l.photos.map(photoToView),
-    listerDisplayName: l.property.owner.displayName,
+    listerDisplayName: l.property.ownerParty.displayName,
     freeForTenants: true,
   };
 }
@@ -325,7 +363,7 @@ export async function createPropertyWithListing(params: {
         propertyType: params.propertyType,
         bedrooms: params.bedrooms,
         bathrooms: params.bathrooms,
-        furnished: params.furnished,
+        furnished: params.furnished as FurnishedState,
         neighbourhoodId: params.neighbourhoodId,
         landmarkText: params.landmarkText,
         streetAddress: params.streetAddress,
@@ -353,27 +391,35 @@ async function draftAgreement(
   listerPartyId: string,
   monthlyRent: bigint,
 ) {
-  const rate = await effectiveCommissionRate();
+  const rate = await effectiveCommissionRate(new Date(), listerPartyId);
   return tx.listingAgreement.create({
     data: {
       listingId,
       listerPartyId,
       commissionRateVersionId: rate.id,
       monthlyRentAtSigning: monthlyRent,
+      circumventionClauseVersion: 'v1',
     },
   });
 }
 
-export async function effectiveCommissionRate(asOf: Date = new Date()) {
+export async function effectiveCommissionRate(asOf: Date = new Date(), bootstrapByPartyId?: string) {
   const versions = await db.commissionRateVersion.findMany({
     orderBy: { effectiveFrom: 'desc' },
   });
-  const current =
-    versions.find((v) => v.effectiveFrom.getTime() <= asOf.getTime() && (!v.effectiveTo || v.effectiveTo.getTime() > asOf.getTime())) ??
-    versions[0];
+  // A later version supersedes an earlier one outright — there is no
+  // effective_to column; the latest version effective at `asOf` is current.
+  const current = versions.find((v) => v.effectiveFrom.getTime() <= asOf.getTime()) ?? versions[0];
   if (!current) {
+    // First-ever rate on an empty table: the 10000 bp default (SSOT
+    // Decision 4). The immutable version row names a real creator — the
+    // party whose action triggered the bootstrap — so a caller with no
+    // actor in scope (a public read) fails loudly rather than fabricating one.
+    if (!bootstrapByPartyId) {
+      throw new Error('no commission rate version exists and no actor was provided to record the default');
+    }
     return db.commissionRateVersion.create({
-      data: { rateBp: 10000, effectiveFrom: new Date('2026-01-01') },
+      data: { rateBpOfMonth: 10000, effectiveFrom: new Date('2026-01-01'), createdByPartyId: bootstrapByPartyId },
     });
   }
   return current;
@@ -467,13 +513,13 @@ export async function evaluatePublish(listingId: string, dryRun = true) {
   const listing = await db.listing.findUnique({
     where: { id: listingId },
     include: {
-      property: { include: { neighbourhood: true, owner: { include: { listerProfile: true } } } },
+      property: { include: { neighbourhood: true, ownerParty: { include: { listerProfile: true } } } },
       listingAgreements: { where: { accepted: true }, take: 1 },
     },
   });
   if (!listing) throw new Error('listing not found');
 
-  const tier = listing.property.owner.listerProfile?.tier as ListerTier | undefined;
+  const tier = listing.property.ownerParty.listerProfile?.tier as ListerTier | undefined;
   const mandateVerified = tier
     ? await canPublish({ listerTier: tier, listerPartyId: listing.property.ownerPartyId, propertyId: listing.propertyId })
     : true;
@@ -491,11 +537,10 @@ export async function evaluatePublish(listingId: string, dryRun = true) {
       await tx.auditEvent.create({
         data: {
           actorPartyId: listing.property.ownerPartyId,
-          actorRole: 'lister',
-          action: 'listing_published',
-          entityType: 'listing',
-          entityId: listing.id,
-          detail: JSON.stringify({ publicationState: 'live', agreementId: listing.listingAgreements[0].id }),
+          eventType: 'listing_published',
+          subjectRef: listing.id,
+          payload: { publicationState: 'live', agreementId: listing.listingAgreements[0].id },
+          occurredAt: new Date(),
         },
       });
     });
@@ -534,7 +579,7 @@ export async function findForLister(listerPartyId: string) {
     include: {
       property: { include: { neighbourhood: true } },
       listingAgreements: { orderBy: { createdAt: 'desc' } },
-      photos: { orderBy: { position: 'asc' }, include: { asset: true } },
+      photos: { orderBy: { sortOrder: 'asc' } },
     },
     orderBy: { createdAt: 'desc' },
   });
@@ -583,7 +628,7 @@ export async function findForLister(listerPartyId: string) {
         agreementId: accepted?.id ?? null,
         agreementAcceptedAt: accepted?.acceptedAt ?? null,
         commissionRateBp: accepted?.commissionRateVersionId
-          ? (await db.commissionRateVersion.findUnique({ where: { id: accepted.commissionRateVersionId } }))?.rateBp ?? null
+          ? (await db.commissionRateVersion.findUnique({ where: { id: accepted.commissionRateVersionId } }))?.rateBpOfMonth ?? null
           : null,
         photos: listing.photos.map(photoToView),
         blockedBy,
@@ -614,7 +659,7 @@ export async function adminVerificationQueue() {
   const listings = await db.listing.findMany({
     where: { publicationState: { in: ['draft', 'awaiting_verification'] } },
     include: {
-      property: { include: { neighbourhood: true, owner: { include: { listerProfile: true } } } },
+      property: { include: { neighbourhood: true, ownerParty: { include: { listerProfile: true } } } },
       listingAgreements: { where: { accepted: true }, take: 1 },
     },
     orderBy: { createdAt: 'asc' },
@@ -622,7 +667,7 @@ export async function adminVerificationQueue() {
 
   return Promise.all(
     listings.map(async (listing) => {
-      const tier = listing.property.owner.listerProfile?.tier as ListerTier | undefined;
+      const tier = listing.property.ownerParty.listerProfile?.tier as ListerTier | undefined;
       const mandateVerified = tier
         ? await canPublish({ listerTier: tier, listerPartyId: listing.property.ownerPartyId, propertyId: listing.propertyId })
         : true;
@@ -644,7 +689,7 @@ export async function adminVerificationQueue() {
         listingId: listing.id,
         propertyId: listing.propertyId,
         listerPartyId: listing.property.ownerPartyId,
-        listerName: listing.property.owner.displayName,
+        listerName: listing.property.ownerParty.displayName,
         listerTier: tier ?? null,
         neighbourhood: listing.property.neighbourhood.name,
         inServiceArea: listing.property.neighbourhood.inServiceArea,
@@ -662,11 +707,16 @@ export async function adminVerificationQueue() {
 // ── taxonomy ─────────────────────────────────────────────────────────────
 
 export async function listNeighbourhoods() {
-  return db.neighbourhood.findMany({ orderBy: [{ district: 'asc' }, { name: 'asc' }] });
+  // No district column: group ordering follows the parent's name.
+  return db.neighbourhood.findMany({ orderBy: [{ parent: { name: 'asc' } }, { name: 'asc' }] });
 }
 
 export async function listServiceAreaNeighbourhoods() {
-  return db.neighbourhood.findMany({ where: { inServiceArea: true }, orderBy: { name: 'asc' } });
+  return db.neighbourhood.findMany({
+    where: { inServiceArea: true },
+    orderBy: { name: 'asc' },
+    include: { parent: true },
+  });
 }
 
 // F-015 note: neighbourhood CREATION moved to ops.ts
