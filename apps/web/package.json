@@ -1,0 +1,9 @@
+{
+  "name": "@hfr/web",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Build-command compatibility shim. The Vercel project dashboard still carries the v0 monorepo Build Command override 'npm run build --workspace @hfr/web'. This workspace package satisfies that exact command by delegating to the real root Next.js build. It contains no code and no dependencies. Safe to delete once the Build Command override is cleared in Vercel > Settings > Build & Output Settings.",
+  "scripts": {
+    "build": "cd ../.. && npm run build"
+  }
+}
