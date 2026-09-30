@@ -23,7 +23,7 @@ export const POST = route(async (req: NextRequest) => {
   if (!account || !ok) {
     throw new ApiError(401, 'INVALID_CREDENTIALS', 'Those credentials were not accepted.');
   }
-  if (!maySignIn(account.party.status, account.role as never)) {
+  if (!maySignIn(account.party.status, account.authRole)) {
     throw new ApiError(403, 'ACCOUNT_BLOCKED', 'This account cannot sign in. Contact House For Rent support.');
   }
 
@@ -31,7 +31,7 @@ export const POST = route(async (req: NextRequest) => {
   const session = await resolveSession();
   return NextResponse.json({
     partyId: account.partyId,
-    role: account.role,
+    role: account.authRole,
     home: homeFor(session!.role),
   });
 });

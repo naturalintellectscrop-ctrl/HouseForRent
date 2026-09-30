@@ -26,14 +26,14 @@ export const POST = route(async (req: NextRequest) => {
 export const GET = route(async () => {
   await requireRole(['admin']);
   const accounts = await db.userAccount.findMany({
-    where: { role: { in: ['foo', 'admin'] } },
+    where: { authRole: { in: ['foo', 'admin'] } },
     include: { party: { select: { displayName: true, primaryPhone: true } } },
     orderBy: { createdAt: 'desc' },
   });
   return NextResponse.json(
     accounts.map((a) => ({
       id: a.id,
-      role: a.role,
+      role: a.authRole,
       displayName: a.party.displayName,
       primaryPhone: a.party.primaryPhone,
     })),

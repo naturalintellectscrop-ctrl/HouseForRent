@@ -29,16 +29,18 @@ export const POST = route(async (req: NextRequest) => {
       throw new Error('commission rate must be between 1 and 10000 basis points');
     }
     const version = await db.commissionRateVersion.create({
-      data: { rateBp: bp, effectiveFrom: new Date() },
+      data: { rateBpOfMonth: bp, effectiveFrom: new Date(), createdByPartyId: session.partyId },
     });
-    return NextResponse.json({ rateVersionId: version.id, rateBp: version.rateBp }, { status: 201 });
+    return NextResponse.json({ rateVersionId: version.id, rateBp: version.rateBpOfMonth }, { status: 201 });
   }
 
   const updated = await setConfigParameter({
     key,
     value,
     valueType: typeof body.valueType === 'string' ? body.valueType : 'text',
-    changedBy: session.partyId,
+    createdByPartyId: session.partyId,
   });
-  return NextResponse.json({ key: updated.key, value: updated.value });
+  // The parameter row no longer carries a value — echo the value just
+  // recorded on the new config version.
+  return NextResponse.json({ key: updated.key, value });
 });

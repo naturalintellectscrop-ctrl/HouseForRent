@@ -18,12 +18,14 @@
  * Usage: QA_PASSWORD=… node scripts/qa-set-lister-tier.mjs <phone> <tier>
  */
 import { PrismaClient } from '@prisma/client';
+import { assertSandboxDatabase } from './production-guard.mjs';
 
 const QA_PASSWORD = process.env.QA_PASSWORD;
 if (!QA_PASSWORD) {
   console.error('Refusing to run without QA_PASSWORD (F-009).');
   process.exit(1);
 }
+assertSandboxDatabase('scripts/qa-set-lister-tier.mjs');
 
 const [phone, tier] = process.argv.slice(2);
 const TIERS = ['property_owner', 'broker_agent', 'property_mgmt_company'];

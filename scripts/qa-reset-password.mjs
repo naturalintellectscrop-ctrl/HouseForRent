@@ -10,6 +10,7 @@
  */
 import { PrismaClient } from '@prisma/client';
 import { randomBytes, scryptSync } from 'node:crypto';
+import { assertSandboxDatabase } from './production-guard.mjs';
 
 const prisma = new PrismaClient();
 const QA_PASSWORD = process.env.QA_PASSWORD;
@@ -17,6 +18,7 @@ if (!QA_PASSWORD) {
   console.error('Refusing to reset without QA_PASSWORD (F-009).');
   process.exit(1);
 }
+assertSandboxDatabase('scripts/qa-reset-password.mjs');
 
 function hash(password) {
   const salt = randomBytes(16).toString('hex');

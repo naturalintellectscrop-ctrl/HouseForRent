@@ -21,8 +21,10 @@
  *    path: that same row is reset to pending, so the history of a
  *    property's authority is one row per relationship, not a pile.
  *  - The decision reason lives in the AUDIT TRAIL, not on the mandate
- *    row. The mandate row carries the lister's submission note only;
- *    ops-facing reads deliberately do not re-serve the decision note.
+ *    row. The production mandate row has no note column at all — the
+ *    lister's submission note AND the ops decision note are both audit
+ *    content (the row carries only the state); ops-facing reads
+ *    deliberately do not re-serve the decision note.
  *  - Every state change writes an AuditEvent in the same transaction as
  *    the write it describes.
  */
@@ -123,32 +125,33 @@ export async function submitMandate(params: {
   const resubmission = existing?.state === 'rejected';
 
   return db.$transaction(async (tx) => {
+    // A rejected mandate returns to the queue on the SAME row: the reset
+    // clears the previous decision (verifiedAt + verifiedByPartyId) so a
+    // pending row never claims a verifier it no longer has.
     const mandate = resubmission
       ? await tx.propertyMandate.update({
           where: { id: existing.id },
-          data: { state: 'pending', note, decidedAt: null },
+          data: { state: 'pending', verifiedAt: null, verifiedByPartyId: null },
         })
       : await tx.propertyMandate.create({
           data: {
             propertyId: params.propertyId,
             listerPartyId: params.listerPartyId,
             state: 'pending',
-            note,
           },
         });
 
     await tx.auditEvent.create({
       data: {
         actorPartyId: params.listerPartyId,
-        actorRole: 'lister',
-        action: 'mandate_submitted',
-        entityType: 'property_mandate',
-        entityId: mandate.id,
-        detail: JSON.stringify({
+        eventType: 'mandate_submitted',
+        subjectRef: mandate.id,
+        payload: {
           propertyId: params.propertyId,
           note: note ?? null,
           resubmission,
-        }),
+        },
+        occurredAt: new Date(),
       },
     });
 
@@ -170,9 +173,11 @@ export async function findMandatesForLister(listerPartyId: string) {
   return rows.map((m) => ({
     id: m.id,
     state: m.state,
-    note: m.note,
+    // The production row has no note column; the submission note lives in
+    // the audit trail (`mandate_submitted`).
+    note: null as string | null,
     createdAt: m.createdAt.toISOString(),
-    decidedAt: m.decidedAt?.toISOString() ?? null,
+    decidedAt: m.verifiedAt?.toISOString() ?? null,
     property: {
       id: m.property.id,
       landmarkText: m.property.landmarkText,
@@ -213,22 +218,21 @@ export async function decideMandate(params: {
   return db.$transaction(async (tx) => {
     const updated = await tx.propertyMandate.update({
       where: { id: mandate.id },
-      data: { state: params.decision, decidedAt: new Date() },
+      data: { state: params.decision, verifiedAt: new Date(), verifiedByPartyId: params.adminPartyId },
     });
 
     await tx.auditEvent.create({
       data: {
         actorPartyId: params.adminPartyId,
-        actorRole: 'admin',
-        action: 'mandate_decided',
-        entityType: 'property_mandate',
-        entityId: mandate.id,
-        detail: JSON.stringify({
+        eventType: 'mandate_decided',
+        subjectRef: mandate.id,
+        payload: {
           decision: params.decision,
           note: note ?? null,
           propertyId: mandate.propertyId,
           listerPartyId: mandate.listerPartyId,
-        }),
+        },
+        occurredAt: new Date(),
       },
     });
 
@@ -247,28 +251,29 @@ export async function findMandatesForOps(filter: { state?: 'pending' | 'verified
     where: filter.state ? { state: filter.state } : undefined,
     orderBy: { createdAt: 'desc' },
     include: {
-      property: { include: { neighbourhood: true, owner: { select: { displayName: true } } } },
-      lister: { include: { listerProfile: true } },
+      property: { include: { neighbourhood: true, ownerParty: { select: { displayName: true } } } },
+      listerParty: { include: { listerProfile: true } },
     },
   });
 
   return rows.map((m) => ({
     id: m.id,
     state: m.state,
-    note: m.note,
+    // The production row has no note column; see findMandatesForLister.
+    note: null as string | null,
     createdAt: m.createdAt.toISOString(),
-    decidedAt: m.decidedAt?.toISOString() ?? null,
+    decidedAt: m.verifiedAt?.toISOString() ?? null,
     property: {
       id: m.property.id,
       landmarkText: m.property.landmarkText,
       neighbourhoodName: m.property.neighbourhood.name,
       ownerId: m.property.ownerPartyId,
-      ownerName: m.property.owner.displayName,
+      ownerName: m.property.ownerParty.displayName,
     },
     // Task 14: ops surfaces link rows to the account detail page, so the
     // queue carries the ids (the landlord's own panel never needed them).
     listerPartyId: m.listerPartyId,
-    listerName: m.lister.displayName,
-    listerTier: m.lister.listerProfile?.tier ?? null,
+    listerName: m.listerParty.displayName,
+    listerTier: m.listerParty.listerProfile?.tier ?? null,
   }));
 }

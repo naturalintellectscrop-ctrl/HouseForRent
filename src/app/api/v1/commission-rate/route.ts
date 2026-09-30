@@ -10,7 +10,7 @@ import { route } from '@/server/http';
 export const GET = route(async () => {
   const rate = await effectiveCommissionRate();
   return NextResponse.json({
-    rateBpOfMonth: rate.rateBp,
+    rateBpOfMonth: rate.rateBpOfMonth,
     effectiveFrom: rate.effectiveFrom.toISOString(),
   });
 });

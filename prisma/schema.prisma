@@ -1,284 +1,527 @@
-// House For Rent V1 — core domain schema (SANDBOX ADAPTATION).
+// House For Rent V1 — PRODUCTION DOMAIN SCHEMA (PostgreSQL).
 //
-// Source of truth: apps/api/prisma/schema.prisma in the HouseForRent
-// repository (PostgreSQL). This is the SQLite working copy used by the
-// sandbox web product. Every model, state machine and money rule mirrors
-// the real schema; the adaptations are mechanical and recorded in
-// worklog.md §D-1:
-//   - PostgreSQL enums → String columns constrained in the service layer
-//     (SQLite has no native enums). Valid values are re-exported from
-//     src/server/domain.ts and validated on every write.
-//   - PostgreSQL immutable-table triggers → enforced in the service layer
-//     (append-only by construction; corrections are new rows). SQLite
-//     triggers exist but Prisma migrations cannot ship them idempotently
-//     here; the real database keeps its BEFORE UPDATE OR DELETE triggers.
-//   - String[] (mediaAssetIds) → JSON-encoded String (SQLite has no arrays).
-//   - Money remains BigInt (never Float) and travels on the wire as String.
-//   - Better Auth tables dropped (superseded in the real repo); sessions are
-//     first-party rows, as in the real schema's `session` table.
+// This is the real repository's schema (recovered from the v0 lineage in git
+// history, apps/api/prisma/schema.prisma @ 2efa53f) and it EXACTLY matches
+// the owner's live Supabase database (introspected 2026-09-30: 33 models,
+// 26 enums, 11 applied migrations, zero drift).
+//
+// ── RULES THAT KEEP THE BUSINESS DATA ALIVE ──
+//   1. NEVER run `prisma db push` or `prisma migrate reset` against
+//      DATABASE_URL pointing at Supabase — the database holds the company's
+//      real records (parties, listings, deals, ledger) AND database-level
+//      immutability triggers. Schema changes go through migrations reviewed
+//      by the owner, never a push.
+//   2. Append-only tables (🔒 below) are guarded by BEFORE UPDATE OR DELETE
+//      triggers that raise on ANY mutation — corrections are new rows.
+//   3. PspInstruction.state is the INITIAL state only; current state is the
+//      toState of the latest PspInstructionEvent (deduped per (instruction, state)).
+//
+// The former SQLite sandbox adaptation of this schema is preserved in git
+// history (sandbox/webapp lineage up to 760d8cd) together with the QA
+// harness built on it.
+// Source of truth: /docs/House_For_Rent_Data_Model.md. Do not diverge from it
+// without a flagged, confirmed decision — see /docs/DOMAIN.md for the mapping
+// of every model back to its SSOT decision(s).
+//
+// Conventions carried over from Data_Model.md:
+//   - All money is Int/BigInt shillings. Never Float/Decimal for money.
+//   - 🔒 in a comment marks an immutable table. Enforced at the DATABASE level
+//     by a BEFORE UPDATE OR DELETE trigger (see
+//     prisma/migrations/*_immutable_tables/migration.sql) that raises an
+//     exception regardless of which role or code path issues the write —
+//     not merely a service-layer convention. Corrections are new rows.
+//   - ⟡ in a comment marks a seam field: V1 constrains it to a single value via
+//     enum + check constraint / application validation, but future values are
+//     addable without migrating existing rows.
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
   url      = env("DATABASE_URL")
+  provider = "postgresql"
 }
 
 // ============================================================================
-// Identity & Verification module
+// Identity & Verification module (Data_Model.md §2)
 // ============================================================================
 
-/// Party lifecycle: pending_verification | active | suspended | disabled |
-/// archived | closed. Policy enforced at sign-in (AccountStatusPolicy).
-model Party {
-  id            String    @id @default(uuid())
-  displayName   String
-  primaryPhone  String    @unique
-  status        String    @default("pending_verification") // PartyStatus
-  createdAt     DateTime  @default(now()) @map("created_at")
-  updatedAt     DateTime  @updatedAt @map("updated_at")
+/// Account lifecycle states.
+///
+/// `active`, `suspended` and `closed` are the original SSOT set.
+/// `pending_verification`, `disabled` and `archived` were added for the
+/// auth-hardening pass; they are additive enum values, so no existing row
+/// changes meaning and no data migrates.
+///
+/// What each one MEANS is defined once, in `AccountStatusPolicy`
+/// (src/auth/account-status.ts), and enforced at login. A status column
+/// nothing checks is documentation, not a control — which is exactly what
+/// this was before that policy existed.
+enum PartyStatus {
+  /// Registered but not yet identity-verified. CAN sign in — a tenant must
+  /// be able to reach the app in order to complete verification.
+  pending_verification
+  active
+  /// Temporarily blocked by ops. Cannot sign in; reversible.
+  suspended
+  /// Blocked and not expected to return. Cannot sign in.
+  disabled
+  /// Retained for audit/retention only (DPA 2019). Cannot sign in.
+  archived
+  /// Original SSOT value, retained so existing rows keep their meaning.
+  closed
+}
 
-  account        UserAccount?
-  listerProfile  ListerProfile?
+/// The product-agnostic actor. A party may be a tenant, lister, FOO, or admin —
+/// role is contextual (via user_account.auth_role), not a fixed column, because
+/// one human could be both a tenant and a landlord. (SSOT Decision 8; Technical
+/// Architecture §4.1)
+model Party {
+  id           String      @id @default(uuid())
+  displayName  String      @map("display_name")
+  primaryPhone String      @unique @map("primary_phone")
+  status       PartyStatus @default(active)
+  createdAt    DateTime    @default(now()) @map("created_at")
+  updatedAt    DateTime    @updatedAt @map("updated_at")
+
+  userAccounts          UserAccount[]
+  listerProfile         ListerProfile?
   identityVerifications IdentityVerification[]
-  consents       ConsentRecord[]
-  mandates       PropertyMandate[]
-  properties     Property[]          @relation("PropertyOwner")
-  listerAgreements ListingAgreement[] @relation("AgreementLister")
-  // deals
-  dealsAsTenant  Deal[]              @relation("DealTenant")
-  dealsAsLandlord Deal[]             @relation("DealLandlord")
-  viewingsAsTenant Viewing[]         @relation("ViewingTenant")
-  viewingsConducted Viewing[]        @relation("ViewingConductor")
-  introsAsTenant   IntroductionRecord[] @relation("IntroTenant")
-  introsAsLandlord IntroductionRecord[] @relation("IntroLandlord")
-  introductionsAsFoo IntroductionRecord[] @relation("IntroFoo")
-  fieldReports     FieldReport[]
+  consentRecords        ConsentRecord[]
+
+  mandatesAsLister   PropertyMandate[] @relation("MandateLister")
+  mandatesVerifiedBy PropertyMandate[] @relation("MandateVerifier")
+
+  propertiesOwned Property[]
+
+  viewingsAsTenant Viewing[] @relation("ViewingTenant")
+  viewingsAsFoo    Viewing[] @relation("ViewingFoo")
+
+  introductionsAsTenant   IntroductionRecord[] @relation("IntroTenant")
+  introductionsAsLandlord IntroductionRecord[] @relation("IntroLandlord")
+  introductionsAsFoo      IntroductionRecord[] @relation("IntroFoo")
+
+  fieldReports FieldReport[]
+
+  screeningRuns ScreeningRun[]
+
+  dealsAsTenant   Deal[]           @relation("DealTenant")
+  dealsAsLandlord Deal[]           @relation("DealLandlord")
+  dealTransitions DealTransition[]
+
   ledgerAccounts LedgerAccount[]
-  auditEvents    AuditEvent[]
-  mediaAssets    MediaAsset[]
-  savedListings  SavedListing[]
+
+  configVersionsCreated         ConfigVersion[]
+  commissionRateVersionsCreated CommissionRateVersion[]
+
+  listingAgreements ListingAgreement[]
+
+  mediaAssetsUploaded MediaAsset[]
+
+  auditEvents AuditEvent[]
+
+  /// Sandbox-era feature carried into production (additive): a tenant's
+  /// saved homes. Backing table created additively in Supabase — see
+  /// worklog Task 26. Touches no pre-existing table.
+  savedListings SavedListing[]
 
   @@map("party")
 }
 
-/// tenant | lister | foo | admin. One primary role per account. Only tenant
-/// and lister are self-served; staff are provisioned via /api/v1/auth/staff.
-model UserAccount {
-  id        String   @id @default(uuid())
-  partyId   String   @unique @map("party_id")
-  role      String // AuthRole
-  status    String   @default("active") // PartyStatus (mirrors the party)
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+enum AuthRole {
+  tenant
+  lister
+  foo
+  admin
+}
 
-  party      Party           @relation(fields: [partyId], references: [id])
-  credential UserCredential?
-  sessions   Session[]
+/// Auth binding for a party. Kept separate from Party so a party can exist
+/// (e.g. a landlord created by ops) before self-service credentials. V1: one
+/// primary role per account (Data_Model.md §2.2).
+model UserAccount {
+  id             String   @id @default(uuid())
+  partyId        String   @map("party_id")
+  authRole  AuthRole @map("auth_role")
+  /// Set on each successful login. Nullable because an account that has
+  /// never signed in genuinely has no value — a sentinel date would make
+  /// "never" indistinguishable from "long ago".
+  lastLoginAt DateTime? @map("last_login_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  party            Party              @relation(fields: [partyId], references: [id])
+  sessions         Session[]
+  credential       UserCredential?
+  passwordResets   PasswordResetToken[]
 
   @@map("user_account")
 }
 
+/// Password reset tokens.
+///
+/// ── Why hashed, single-use and short-lived ──
+/// A reset token is a credential that bypasses the password entirely, so it
+/// is stored as a SHA-256 hash exactly like a refresh token: a database
+/// disclosure must not hand over the ability to take over accounts. It is
+/// consumed on use (`usedAt`) and expires quickly — the same reasoning that
+/// makes refresh tokens rotate.
+///
+/// ── Why deliberately NOT immutable ──
+/// Unlike the 🔒 tables, this row is legitimately mutated (marking it used)
+/// and legitimately deleted (expiry cleanup). Marking it immutable would be
+/// wrong rather than merely unnecessary — the same call already recorded
+/// for `session` in DOMAIN.md.
+model PasswordResetToken {
+  id            String    @id @default(uuid())
+  userAccountId String    @map("user_account_id")
+  tokenHash     String    @unique @map("token_hash")
+  expiresAt     DateTime  @map("expires_at")
+  usedAt        DateTime? @map("used_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  userAccount UserAccount @relation(fields: [userAccountId], references: [id])
+
+  @@index([userAccountId])
+  @@map("password_reset_token")
+}
+
+/// Credential store. Data_Model.md §2.2 deliberately models no password
+/// columns on `user_account`, noting "credentials handled by auth
+/// subsystem" and leaving the shape to document 4 — this is that decision.
+///
+/// Kept in its own table rather than as columns on `user_account` so that
+/// reading an account (which happens on every authorised request) never
+/// loads the password hash, and so a future switch to a different
+/// credential type (OTP-only, WebAuthn) adds a table rather than migrating
+/// the account row. Only the bcrypt hash is stored; the password itself
+/// never touches the database.
 model UserCredential {
-  id                String   @id @default(uuid())
-  userAccountId     String   @unique @map("user_account_id")
-  passwordHash      String   @map("password_hash")
-  passwordAlgo      String   @default("scrypt") @map("password_algo")
-  passwordUpdatedAt DateTime @default(now()) @map("password_updated_at")
+  id            String   @id @default(uuid())
+  userAccountId String   @unique @map("user_account_id")
+  passwordHash  String   @map("password_hash")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
 
   userAccount UserAccount @relation(fields: [userAccountId], references: [id])
 
   @@map("user_credential")
 }
 
-/// First-party sessions (the real repo runs the same table; Supabase sits
-/// in front of it there). tokenHash is a SHA-256 of the cookie token — the
-/// raw token never rests in the database.
+/// Standard session/refresh record (Data_Model.md §2.3 — "fields per auth
+/// choice, not detailed there"). Minimal V1 shape: an opaque refresh-token
+/// hash + expiry, revocable. Not immutable — sessions are legitimately
+/// mutated (revoked) and deleted (expiry cleanup); this is intentionally
+/// outside the 🔒 set.
 model Session {
-  id          String    @id @default(uuid())
-  userAccountId String  @map("user_account_id")
-  tokenHash   String    @unique @map("token_hash")
-  expiresAt   DateTime  @map("expires_at")
-  revokedAt   DateTime? @map("revoked_at")
-  userAgent   String?   @map("user_agent")
-  createdAt   DateTime  @default(now()) @map("created_at")
+  id               String    @id @default(uuid())
+  userAccountId    String    @map("user_account_id")
+  refreshTokenHash String    @map("refresh_token_hash")
+  expiresAt        DateTime  @map("expires_at")
+  revokedAt        DateTime? @map("revoked_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
 
   userAccount UserAccount @relation(fields: [userAccountId], references: [id])
 
+  @@index([userAccountId])
   @@map("session")
 }
 
-/// property_owner | broker_agent | property_mgmt_company. Tier gates the
-/// publish mandate requirement (SSOT Decision 8).
+enum ListerTier {
+  property_owner
+  broker_agent
+  property_mgmt_company
+}
+
+/// Tier drives verification + mandate requirements (FR-1.1, FR-3.2; SSOT
+/// Decision 8). One profile per party.
 model ListerProfile {
-  id        String @id @default(uuid())
-  partyId   String @unique @map("party_id")
-  tier      String @default("property_owner") // ListerTier
+  id        String     @id @default(uuid())
+  partyId   String     @unique @map("party_id")
+  tier      ListerTier
+  createdAt DateTime   @default(now()) @map("created_at")
+  updatedAt DateTime   @updatedAt @map("updated_at")
 
   party Party @relation(fields: [partyId], references: [id])
 
   @@map("lister_profile")
 }
 
-/// nin | phone | selfie_match. V1 baseline is identity-only screening
-/// (SSOT Decision 10) — no payslips, no bank statements.
+enum IdentityMethod {
+  nin
+  phone
+  selfie_match
+}
+
+enum VerificationState {
+  pending
+  verified
+  failed
+}
+
+/// Identity = who a party is. SEPARATE from mandate (Technical Architecture
+/// §4.1). One row per verification attempt; current state derivable from the
+/// latest row per (party, method). A party is "identity-verified" when it has
+/// a 'verified' row for each required method (nin, phone, selfie_match).
+///
+/// No plaintext NIN is stored here — the raw NIN is handled by the
+/// IdentityProvider boundary; only verification state and an opaque
+/// provider_ref persist (DPA 2019 data minimisation, NFR-3).
 model IdentityVerification {
-  id          String    @id @default(uuid())
-  partyId     String    @map("party_id")
-  method      String // IdentityMethod
-  state       String    @default("pending") // VerificationState
-  reference   String?
-  verifiedAt  DateTime? @map("verified_at")
-  createdAt   DateTime  @default(now()) @map("created_at")
+  id          String            @id @default(uuid())
+  partyId     String            @map("party_id")
+  method      IdentityMethod
+  state       VerificationState @default(pending)
+  providerRef String?           @map("provider_ref")
+  verifiedAt  DateTime?         @map("verified_at")
+  createdAt   DateTime          @default(now()) @map("created_at")
 
   party Party @relation(fields: [partyId], references: [id])
 
+  @@index([partyId, method])
   @@map("identity_verification")
 }
 
+/// 🔒 Immutable: consent is a historical fact. Withdrawal is a new row with a
+/// 'consent_withdrawal' purpose, never an edit (DPA 2019).
 model ConsentRecord {
-  id         String   @id @default(uuid())
-  partyId    String   @map("party_id")
-  kind       String
-  version    String
-  acceptedAt DateTime @default(now()) @map("accepted_at")
+  id             String    @id @default(uuid())
+  partyId        String    @map("party_id")
+  purpose        String
+  grantedAt      DateTime  @map("granted_at")
+  retentionUntil DateTime? @map("retention_until")
+  policyVersion  String    @map("policy_version")
+  createdAt      DateTime  @default(now()) @map("created_at")
 
   party Party @relation(fields: [partyId], references: [id])
 
   @@map("consent_record")
 }
 
-/// pending | verified | rejected. Brokers and management companies need a
-/// verified per-property mandate before publish (the remaining half of F-003).
+enum MandateState {
+  pending
+  verified
+  rejected
+}
+
+/// Authority = a lister's right to market a SPECIFIC property (FR-3.2, FR-3.3).
+/// A (lister, property) pair. This is what an unmandated broker listing lacks.
+/// Enforcement (stated in Data_Model.md §2.7, for the Listings module): a
+/// broker_agent or property_mgmt_company listing cannot transition to 'live'
+/// unless a 'verified' mandate exists for (its lister, its property).
+/// property_owner listings do not require a mandate row in V1.
 model PropertyMandate {
-  id            String    @id @default(uuid())
-  propertyId    String    @map("property_id")
-  listerPartyId String    @map("lister_party_id")
-  state         String    @default("pending") // MandateState
-  note          String?
-  decidedAt     DateTime? @map("decided_at")
-  createdAt     DateTime  @default(now()) @map("created_at")
+  id                String       @id @default(uuid())
+  listerPartyId     String       @map("lister_party_id")
+  propertyId        String       @map("property_id")
+  evidenceMediaId   String?      @map("evidence_media_id")
+  state             MandateState @default(pending)
+  verifiedByPartyId String?      @map("verified_by_party_id")
+  verifiedAt        DateTime?    @map("verified_at")
+  createdAt         DateTime     @default(now()) @map("created_at")
+  updatedAt         DateTime     @updatedAt @map("updated_at")
 
-  property Property @relation(fields: [propertyId], references: [id])
-  lister   Party    @relation(fields: [listerPartyId], references: [id])
+  listerParty     Party       @relation("MandateLister", fields: [listerPartyId], references: [id])
+  verifiedByParty Party?      @relation("MandateVerifier", fields: [verifiedByPartyId], references: [id])
+  property        Property    @relation(fields: [propertyId], references: [id])
+  evidenceMedia   MediaAsset? @relation(fields: [evidenceMediaId], references: [id])
 
+  @@unique([listerPartyId, propertyId])
   @@map("property_mandate")
 }
 
 // ============================================================================
-// Config & taxonomy
+// Config module (Data_Model.md §3) — versioned, effective-dated
 // ============================================================================
 
+enum ConfigValueType {
+  int
+  json
+  text
+}
+
+/// Generic versioned config for non-money parameters: service-area boundary,
+/// freshness window (days), screening module set, required-months default.
 model ConfigParameter {
-  id        String   @id @default(uuid())
-  key       String   @unique
-  value     String
-  valueType String   @default("text") // ConfigValueType: int | json | text
-  updatedAt DateTime @updatedAt @map("updated_at")
+  id        String          @id @default(uuid())
+  key       String          @unique
+  valueType ConfigValueType @map("value_type")
+  createdAt DateTime        @default(now()) @map("created_at")
 
   versions ConfigVersion[]
 
   @@map("config_parameter")
 }
 
-/// Append-only history of config changes.
+/// 🔒 Immutable: a config change is a new version, never an edit. Current value
+/// = latest version whose effective_from <= now() (FR-10.1).
 model ConfigVersion {
-  id            String   @id @default(uuid())
-  parameterId   String   @map("parameter_id")
-  value         String
-  changedBy     String?  @map("changed_by")
-  createdAt     DateTime @default(now()) @map("created_at")
+  id               String   @id @default(uuid())
+  parameterId      String   @map("parameter_id")
+  value            Json
+  effectiveFrom    DateTime @map("effective_from")
+  createdByPartyId String   @map("created_by_party_id")
+  createdAt        DateTime @default(now()) @map("created_at")
 
-  parameter ConfigParameter @relation(fields: [parameterId], references: [id])
+  parameter      ConfigParameter @relation(fields: [parameterId], references: [id])
+  createdByParty Party           @relation(fields: [createdByPartyId], references: [id])
 
+  @@index([parameterId, effectiveFrom])
   @@map("config_version")
 }
 
-/// Effective-dated commission rate, basis points of one month's rent
-/// (SSOT Decisions 4–5). Snapshot onto the agreement at acceptance.
+/// 🔒 Immutable. Commission rate is money-touching, so it gets its own explicit
+/// versioned table (Technical Architecture §4.1) rather than living in the
+/// generic config_version table. Rate is expressed as basis points of ONE
+/// MONTH's rent (10000 bp = 1.0 month) so commission math is pure integer
+/// arithmetic: commission = monthly_rent * rate_bp_of_month / 10000. The
+/// default V1 value (~10000 bp) is a config choice pending landlord
+/// validation (SSOT Decision 4) — changing it creates a NEW version and never
+/// mutates an existing one; in-flight deals hold a snapshot (see Deal below),
+/// making them structurally immune to the change (FR-7.4).
 model CommissionRateVersion {
-  id            String    @id @default(uuid())
-  rateBp        Int       @map("rate_bp")
-  effectiveFrom DateTime  @map("effective_from")
-  effectiveTo   DateTime? @map("effective_to")
+  id               String   @id @default(uuid())
+  rateBpOfMonth    Int      @map("rate_bp_of_month")
+  effectiveFrom    DateTime @map("effective_from")
+  createdByPartyId String   @map("created_by_party_id")
+  note             String?
+  createdAt        DateTime @default(now()) @map("created_at")
 
-  agreements ListingAgreement[]
-  deals      Deal[]
+  createdByParty Party @relation(fields: [createdByPartyId], references: [id])
 
+  deals             Deal[]
+  listingAgreements ListingAgreement[]
+
+  @@index([effectiveFrom])
   @@map("commission_rate_version")
 }
 
+// ============================================================================
+// Listings & Properties module (Data_Model.md §4)
+// ============================================================================
+
+/// Taxonomy-first location (FR-2.2). Hierarchical to allow corridor grouping.
+/// Corridor membership is a DATA FLAG (in_service_area), not code (FR-2.5).
+/// The authoritative service-area definition lives in Config ('service_area');
+/// this flag is its materialised projection for query performance.
 model Neighbourhood {
-  id            String  @id @default(uuid())
+  id            String   @id @default(uuid())
   name          String
-  district      String
-  inServiceArea Boolean @default(false) @map("in_service_area")
-  latitude      Float?
-  longitude     Float?
+  parentId      String?  @map("parent_id")
+  inServiceArea Boolean  @default(false) @map("in_service_area")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  parent   Neighbourhood?  @relation("NeighbourhoodHierarchy", fields: [parentId], references: [id])
+  children Neighbourhood[] @relation("NeighbourhoodHierarchy")
 
   properties Property[]
 
   @@map("neighbourhood")
 }
 
-// ============================================================================
-// Listings module
-// ============================================================================
+enum PropertyType {
+  apartment
+  house
+  room
+  other
+}
 
-/// apartment | house | room | other
+enum FurnishedState {
+  furnished
+  semi_furnished
+  unfurnished
+}
+
+/// ⟡ transaction_type is a single-value enum in V1 ('rental' only). Adding
+/// 'sale' is a Postgres enum ADD VALUE, which does not migrate or invalidate
+/// existing rows — seam preserved without building sale logic (FR-2.4, SSOT
+/// Decision 6).
+enum TransactionType {
+  rental
+}
+
+/// street_address is OPTIONAL and never required (FR-2.2) — location is
+/// neighbourhood-taxonomy-first with a map pin + landmark.
 model Property {
-  id              String   @id @default(uuid())
-  ownerPartyId    String   @map("owner_party_id")
-  propertyType    String   @map("property_type") // PropertyType
+  id              String          @id @default(uuid())
+  ownerPartyId    String          @map("owner_party_id")
+  propertyType    PropertyType    @map("property_type")
   bedrooms        Int
   bathrooms       Int
-  furnished       String // FurnishedState: furnished | semi_furnished | unfurnished
-  neighbourhoodId String   @map("neighbourhood_id")
-  geoLat          Float?   @map("geo_lat")
-  geoLng          Float?   @map("geo_lng")
-  landmarkText    String   @map("landmark_text")
-  streetAddress   String?  @map("street_address")
-  transactionType String   @default("rental") @map("transaction_type") // seam: rental only in V1
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
+  furnished       FurnishedState
+  neighbourhoodId String          @map("neighbourhood_id")
+  geoLat          Float?          @map("geo_lat")
+  geoLng          Float?          @map("geo_lng")
+  landmarkText    String          @map("landmark_text")
+  streetAddress   String?         @map("street_address")
+  transactionType TransactionType @default(rental) @map("transaction_type")
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
 
-  owner         Party             @relation("PropertyOwner", fields: [ownerPartyId], references: [id])
-  neighbourhood Neighbourhood     @relation(fields: [neighbourhoodId], references: [id])
-  mandates      PropertyMandate[]
-  listings      Listing[]
+  ownerParty    Party         @relation(fields: [ownerPartyId], references: [id])
+  neighbourhood Neighbourhood @relation(fields: [neighbourhoodId], references: [id])
+
+  mandates PropertyMandate[]
+  listings Listing[]
 
   @@map("property")
 }
 
-/// draft | awaiting_verification | live | rented | withdrawn.
-/// Publication is server-gated (invariant 5): verification_state=verified,
-/// neighbourhood in service area, accepted agreement, mandate for non-owner
-/// tiers. Staleness of availability is COMPUTED, not stored.
-model Listing {
-  id                      String    @id @default(uuid())
-  propertyId              String    @map("property_id")
-  monthlyRent             BigInt    @map("monthly_rent")
-  requiredMonthsUpfront   Int       @map("required_months_upfront")
-  depositAmount           BigInt    @map("deposit_amount")
-  tier                    String    @default("standard") // ListingTier (seam)
-  publicationState        String    @default("draft") @map("publication_state") // PublicationState
-  verificationState       String    @default("unverified") @map("verification_state") // unverified | verified
-  availabilityStatus      String    @default("available") @map("availability_status") // available | unavailable
-  availabilityConfirmedAt DateTime? @map("availability_confirmed_at")
-  descriptionText         String?   @map("description_text")
-  createdAt               DateTime  @default(now()) @map("created_at")
-  updatedAt               DateTime  @updatedAt @map("updated_at")
+/// ⟡ tier is single-value in V1 ('standard' only) — seam for premium
+/// operations (SSOT Decision 1). Availability freshness: a listing is STALE
+/// when now() - availability_confirmed_at > freshness_window (window from
+/// Config) — staleness is COMPUTED, not stored, so the window can change by
+/// config alone (FR-2.3).
+///
+/// Invariant (enforced at the publish transition, not by DB constraint alone,
+/// since it depends on lister tier + mandate state which live in other
+/// tables): publication_state = 'live' requires verification_state =
+/// 'verified' AND, for broker/mgmt listers, a verified property_mandate.
+enum ListingTier {
+  standard
+}
 
-  property        Property           @relation(fields: [propertyId], references: [id])
-  listingAmenities ListingAmenity[]
-  viewings        Viewing[]
+enum PublicationState {
+  draft
+  awaiting_verification
+  live
+  rented
+  withdrawn
+}
+
+enum ListingVerificationState {
+  unverified
+  verified
+}
+
+enum AvailabilityStatus {
+  available
+  unavailable
+}
+
+model Listing {
+  id                      String                   @id @default(uuid())
+  propertyId              String                   @map("property_id")
+  monthlyRent             BigInt                   @map("monthly_rent")
+  requiredMonthsUpfront   Int                      @map("required_months_upfront")
+  depositAmount           BigInt                   @map("deposit_amount")
+  tier                    ListingTier              @default(standard)
+  publicationState        PublicationState         @default(draft) @map("publication_state")
+  verificationState       ListingVerificationState @default(unverified) @map("verification_state")
+  availabilityStatus      AvailabilityStatus       @default(available) @map("availability_status")
+  availabilityConfirmedAt DateTime?                @map("availability_confirmed_at")
+  descriptionText         String?                  @map("description_text")
+  createdAt               DateTime                 @default(now()) @map("created_at")
+  updatedAt               DateTime                 @updatedAt @map("updated_at")
+
+  property Property @relation(fields: [propertyId], references: [id])
+
+  listingAmenities    ListingAmenity[]
+  viewings            Viewing[]
   introductionRecords IntroductionRecord[]
-  deals           Deal[]
-  listingAgreements ListingAgreement[]
-  photos          ListingPhoto[]
-  savedBy         SavedListing[]
+  deals               Deal[]
+  listingAgreements   ListingAgreement[]
+  photos              ListingPhoto[]
+  savedBy             SavedListing[]
 
   @@map("listing")
 }
@@ -287,7 +530,7 @@ model Amenity {
   id   String @id @default(uuid())
   name String @unique
 
-  listings ListingAmenity[]
+  listingAmenities ListingAmenity[]
 
   @@map("amenity")
 }
@@ -304,24 +547,41 @@ model ListingAmenity {
 }
 
 // ============================================================================
-// Field operations module
+// Viewings & Field Ops module (Data_Model.md §5)
 // ============================================================================
 
-/// requested | scheduled | conducted | no_show | cancelled
-model Viewing {
-  id                 String    @id @default(uuid())
-  listingId          String    @map("listing_id")
-  tenantPartyId      String    @map("tenant_party_id")
-  conductedByPartyId String?   @map("conducted_by_party_id")
-  conductedByRole    String    @default("foo") @map("conducted_by_role") // ConductedByRole (seam)
-  scheduledFor       DateTime  @map("scheduled_for")
-  status             String    @default("requested") // ViewingStatus
-  createdAt          DateTime  @default(now()) @map("created_at")
-  updatedAt          DateTime  @updatedAt @map("updated_at")
+/// ⟡ conducted_by_role is 'foo'-only in V1 (FR-5.6 seam). Adding
+/// 'certified_partner' is an enum extension; existing rows unaffected.
+///
+/// Invariant (enforced at the transition, see Stage 1/5 services): a viewing
+/// cannot move to 'conducted' without (a) an introduction_record and (b) a
+/// field_report (FR-5.3, FR-5.4).
+enum ConductedByRole {
+  foo
+}
 
-  listing       Listing  @relation(fields: [listingId], references: [id])
-  tenantParty   Party    @relation("ViewingTenant", fields: [tenantPartyId], references: [id])
-  conductedBy   Party?   @relation("ViewingConductor", fields: [conductedByPartyId], references: [id])
+enum ViewingStatus {
+  requested
+  scheduled
+  conducted
+  no_show
+  cancelled
+}
+
+model Viewing {
+  id                 String          @id @default(uuid())
+  listingId          String          @map("listing_id")
+  tenantPartyId      String          @map("tenant_party_id")
+  conductedByPartyId String?         @map("conducted_by_party_id")
+  conductedByRole    ConductedByRole @default(foo) @map("conducted_by_role")
+  scheduledFor       DateTime        @map("scheduled_for")
+  status             ViewingStatus   @default(requested)
+  createdAt          DateTime        @default(now()) @map("created_at")
+  updatedAt          DateTime        @updatedAt @map("updated_at")
+
+  listing          Listing @relation(fields: [listingId], references: [id])
+  tenantParty      Party   @relation("ViewingTenant", fields: [tenantPartyId], references: [id])
+  conductedByParty Party?  @relation("ViewingFoo", fields: [conductedByPartyId], references: [id])
 
   introductionRecord IntroductionRecord?
   fieldReport        FieldReport?
@@ -329,9 +589,10 @@ model Viewing {
   @@map("viewing")
 }
 
-/// 🔒 Append-only evidence. The timestamped tenant↔property↔landlord↔FOO
-/// linkage behind the circumvention clause (SSOT Decision 11). Persists
-/// independently of any deal.
+/// 🔒 Immutable — this is evidence. The timestamped tenant<->property<->
+/// landlord<->FOO linkage that makes the circumvention clause enforceable
+/// (FR-5.3, FR-8.3, SSOT Decision 11). Persists independently of the deal — a
+/// bypassed deal (no deal record) still leaves this evidence.
 model IntroductionRecord {
   id              String   @id @default(uuid())
   viewingId       String   @unique @map("viewing_id")
@@ -342,31 +603,40 @@ model IntroductionRecord {
   introducedAt    DateTime @map("introduced_at")
   createdAt       DateTime @default(now()) @map("created_at")
 
-  viewing     Viewing  @relation(fields: [viewingId], references: [id])
-  tenantParty Party    @relation("IntroTenant", fields: [tenantPartyId], references: [id])
-  landlordParty Party  @relation("IntroLandlord", fields: [landlordPartyId], references: [id])
-  fooParty    Party    @relation("IntroFoo", fields: [fooPartyId], references: [id])
-  listing     Listing  @relation(fields: [listingId], references: [id])
-  deals       Deal[]
+  viewing       Viewing @relation(fields: [viewingId], references: [id])
+  tenantParty   Party   @relation("IntroTenant", fields: [tenantPartyId], references: [id])
+  landlordParty Party   @relation("IntroLandlord", fields: [landlordPartyId], references: [id])
+  fooParty      Party   @relation("IntroFoo", fields: [fooPartyId], references: [id])
+  listing       Listing @relation(fields: [listingId], references: [id])
+
+  deals Deal[]
 
   @@map("introduction_record")
 }
 
-/// 🔒 Append-only. Structured, not free-text (invariant §7 of the brief):
-/// conditionRating / matchesListing / isAvailable become the baseline data
-/// for partner standards. issuesText/timingNote are supplements, not the record.
+enum ConditionRating {
+  excellent
+  good
+  fair
+  poor
+}
+
+/// Structured, not free-text-only (FR-5.4). condition_rating and
+/// matches_listing are structured fields precisely so they become baseline
+/// data for future Certified Partner standards (SSOT Decision 9) — you can't
+/// certify against a standard you never measured.
 model FieldReport {
-  id              String   @id @default(uuid())
-  viewingId       String   @unique @map("viewing_id")
-  fooPartyId      String   @map("foo_party_id")
-  conditionRating String   @map("condition_rating") // excellent | good | fair | poor
-  matchesListing  Boolean  @map("matches_listing")
-  isAvailable     Boolean  @map("is_available")
-  issuesText      String?  @map("issues_text")
-  timingNote      String?  @map("timing_note")
-  mediaAssetIds   String   @default("[]") @map("media_asset_ids") // JSON string[]
-  reportedAt      DateTime @map("reported_at")
-  createdAt       DateTime @default(now()) @map("created_at")
+  id              String          @id @default(uuid())
+  viewingId       String          @unique @map("viewing_id")
+  fooPartyId      String          @map("foo_party_id")
+  conditionRating ConditionRating @map("condition_rating")
+  matchesListing  Boolean         @map("matches_listing")
+  isAvailable     Boolean         @map("is_available")
+  issuesText      String?         @map("issues_text")
+  timingNote      String?         @map("timing_note")
+  mediaAssetIds   String[]        @map("media_asset_ids")
+  reportedAt      DateTime        @map("reported_at")
+  createdAt       DateTime        @default(now()) @map("created_at")
 
   viewing  Viewing @relation(fields: [viewingId], references: [id])
   fooParty Party   @relation(fields: [fooPartyId], references: [id])
@@ -375,98 +645,206 @@ model FieldReport {
 }
 
 // ============================================================================
-// Deals & money — HIGH-RISK AREA. Read CLAUDE.md §2 invariants before edit.
+// Screening module (Data_Model.md §6) — modular pipeline
 // ============================================================================
 
-/// created → tenant_matched → agreement_signed → escrow_funded →
-/// move_in_confirmed → commission_earned → settled → closed,
-/// with cancelled | refunded | dispute_hold reachable appropriately.
-model Deal {
-  id                   String   @id @default(uuid())
-  listingId            String   @map("listing_id")
-  tenantPartyId        String   @map("tenant_party_id")
-  landlordPartyId      String   @map("landlord_party_id")
-  introductionRecordId String?  @map("introduction_record_id")
-  status               String   @default("created") // DealStatus
+enum ScreeningOverallState {
+  pending
+  passed
+  failed
+}
 
-  // Snapshotted at agreement_signed, immutable thereafter (FR-7.4).
+/// The pipeline is data-driven: which modules run comes from Config
+/// ('screening_modules'); V1 = ['identity']. module_set snapshots what
+/// actually ran on this run, so history stays interpretable after config
+/// changes (FR-6.1, FR-6.2).
+model ScreeningRun {
+  id            String                @id @default(uuid())
+  tenantPartyId String                @map("tenant_party_id")
+  dealId        String?               @map("deal_id")
+  overallState  ScreeningOverallState @default(pending) @map("overall_state")
+  moduleSet     Json                  @map("module_set")
+  createdAt     DateTime              @default(now()) @map("created_at")
+  updatedAt     DateTime              @updatedAt @map("updated_at")
+
+  tenantParty Party @relation(fields: [tenantPartyId], references: [id])
+  deal        Deal? @relation(fields: [dealId], references: [id])
+
+  moduleResults ScreeningModuleResult[]
+
+  @@map("screening_run")
+}
+
+enum ScreeningModuleState {
+  pending
+  passed
+  failed
+  skipped
+}
+
+/// Adding a future module = a new module_key value + a new pipeline module;
+/// NO schema change here, and no change to the tenant flow (FR-6.2). Ability-
+/// to-pay is NOT a screening module — it's evidenced by escrow funding
+/// (FR-6.3); no employment/financial documents are modelled anywhere in V1.
+model ScreeningModuleResult {
+  id             String               @id @default(uuid())
+  screeningRunId String               @map("screening_run_id")
+  moduleKey      String               @map("module_key")
+  state          ScreeningModuleState
+  detail         Json?
+  createdAt      DateTime             @default(now()) @map("created_at")
+
+  screeningRun ScreeningRun @relation(fields: [screeningRunId], references: [id])
+
+  @@map("screening_module_result")
+}
+
+// ============================================================================
+// Deals & Guarantee module (Data_Model.md §7) — the spine
+// ============================================================================
+
+/// One authoritative status; explicit transitions only; illegal transitions
+/// rejected (FR-8.1). §7.3's transition table is the state machine — the
+/// service layer exposes only the transitions listed there.
+///
+/// Move-In Guarantee (FR-8.2), stated as a structural fact: there is NO
+/// transition from escrow_funded to settled. The only exits from
+/// escrow_funded are move_in_confirmed (forward) or refunded (money back).
+/// Funds are therefore unreleasable until move-in — the guarantee is the
+/// SHAPE OF THE GRAPH, needing no reserve fund.
+enum DealStatus {
+  created
+  tenant_matched
+  agreement_signed
+  escrow_funded
+  move_in_confirmed
+  commission_earned
+  settled
+  closed
+  cancelled
+  refunded
+  dispute_hold
+}
+
+model Deal {
+  id                   String     @id @default(uuid())
+  listingId            String     @map("listing_id")
+  tenantPartyId        String     @map("tenant_party_id")
+  landlordPartyId      String     @map("landlord_party_id")
+  introductionRecordId String?    @map("introduction_record_id")
+  status               DealStatus @default(created)
+
+  // SNAPSHOTTED at agreement_signed, immutable thereafter (FR-7.4). A later
+  // change to the listing's rent or to commission_rate_version cannot alter
+  // an in-flight deal — immunity is structural, not disciplinary.
   monthlyRentSnapshot      BigInt? @map("monthly_rent_snapshot")
   commissionRateBpSnapshot Int?    @map("commission_rate_bp_snapshot")
   commissionRateVersionId  String? @map("commission_rate_version_id")
 
-  // Derived at earn time: rent × rateBp / 10000, integer arithmetic.
+  // Derived, stored at earn time. commission_amount =
+  // monthly_rent_snapshot * commission_rate_bp_snapshot / 10000, integer
+  // arithmetic, computed at commission_earned — never from escrow total,
+  // never from a live rate (FR-7.3).
   commissionAmount BigInt? @map("commission_amount")
   agreementId      String? @map("agreement_id")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  listing            Listing                @relation(fields: [listingId], references: [id])
-  tenantParty        Party                  @relation("DealTenant", fields: [tenantPartyId], references: [id])
-  landlordParty      Party                  @relation("DealLandlord", fields: [landlordPartyId], references: [id])
-  introductionRecord IntroductionRecord?    @relation(fields: [introductionRecordId], references: [id])
+  listing               Listing                @relation(fields: [listingId], references: [id])
+  tenantParty           Party                  @relation("DealTenant", fields: [tenantPartyId], references: [id])
+  landlordParty         Party                  @relation("DealLandlord", fields: [landlordPartyId], references: [id])
+  introductionRecord    IntroductionRecord?    @relation(fields: [introductionRecordId], references: [id])
   commissionRateVersion CommissionRateVersion? @relation(fields: [commissionRateVersionId], references: [id])
-  agreement          ListingAgreement?      @relation(fields: [agreementId], references: [id])
+  agreement             ListingAgreement?      @relation(fields: [agreementId], references: [id])
 
   transitions     DealTransition[]
   ledgerAccounts  LedgerAccount[]
   ledgerEntries   LedgerEntry[]
   pspInstructions PspInstruction[]
+  screeningRuns   ScreeningRun[]
 
   @@map("deal")
 }
 
 /// 🔒 Explicit, auditable state history. One authoritative status on Deal;
-/// full history here. Corrections are new rows.
+/// full history here.
 model DealTransition {
   id           String   @id @default(uuid())
   dealId       String   @map("deal_id")
   fromStatus   String   @map("from_status")
   toStatus     String   @map("to_status")
-  actorPartyId String?  @map("actor_party_id")
-  actorRole    String?  @map("actor_role")
+  actorPartyId String   @map("actor_party_id")
   reason       String?
+  occurredAt   DateTime @map("occurred_at")
   createdAt    DateTime @default(now()) @map("created_at")
 
-  deal Deal @relation(fields: [dealId], references: [id])
+  deal       Deal  @relation(fields: [dealId], references: [id])
+  actorParty Party @relation(fields: [actorPartyId], references: [id])
 
   @@map("deal_transition")
 }
 
-/// escrow_liability | commission_receivable | commission_revenue |
-/// landlord_payable | psp_clearing
-model LedgerAccount {
-  id           String  @id @default(uuid())
-  accountType  String  @map("account_type") // LedgerAccountType
-  ownerPartyId String? @map("owner_party_id")
-  dealId       String? @map("deal_id")
-  currency     String  @default("UGX")
+// ============================================================================
+// Payments module (Data_Model.md §8) — double-entry ledger & PSP boundary
+// ============================================================================
 
-  owner   Party?        @relation(fields: [ownerPartyId], references: [id])
-  deal    Deal?         @relation(fields: [dealId], references: [id])
+/// Typed accounts (Technical Architecture §5.1). Product-agnostic: no
+/// "rent"/"commission" as columns — meaning comes from account_type.
+enum LedgerAccountType {
+  escrow_liability
+  commission_receivable
+  commission_revenue
+  landlord_payable
+  psp_clearing
+}
+
+model LedgerAccount {
+  id           String            @id @default(uuid())
+  accountType  LedgerAccountType @map("account_type")
+  ownerPartyId String?           @map("owner_party_id")
+  dealId       String?           @map("deal_id")
+  currency     String            @default("UGX")
+  createdAt    DateTime          @default(now()) @map("created_at")
+
+  ownerParty Party? @relation(fields: [ownerPartyId], references: [id])
+  deal       Deal?  @relation(fields: [dealId], references: [id])
+
   entries LedgerEntry[]
 
   @@map("ledger_account")
 }
 
-/// debit | credit. 🔒 Append-only, balanced postings — the single source of
-/// financial truth. amount > 0 always; direction carries the sign.
+enum LedgerDirection {
+  debit
+  credit
+}
+
+/// 🔒 Immutable, balanced postings. The single source of financial truth.
+///
+/// Invariants (enforced in code within the DB transaction, FR-7.2):
+///   - For a given posting_id, sum(debits) = sum(credits). Unbalanced ->
+///     rejected before commit.
+///   - No UPDATE/DELETE on any row. Corrections = a new reversing posting_id.
+///   - amount > 0 always; direction carries the sign.
+///   - Money is BigInt; no float anywhere.
+///
 /// Canonical postings (Data_Model.md §8.2):
-///   fund_escrow:          debit psp_clearing,        credit escrow_liability
-///   recognise_commission: debit escrow_liability,    credit commission_revenue
-///   settle:               debit escrow_liability,    credit landlord_payable
-///                         + release: debit landlord_payable, credit psp_clearing
-///   refund:               debit escrow_liability,    credit psp_clearing
+///   fund_escrow:          debit psp_clearing,      credit escrow_liability
+///   recognise_commission: debit escrow_liability,  credit commission_revenue
+///   settle:               debit escrow_liability,  credit landlord_payable
+///                         (+ PSP release: debit landlord_payable, credit psp_clearing)
+///   refund:               debit escrow_liability,  credit psp_clearing
 model LedgerEntry {
-  id         String   @id @default(uuid())
-  postingId  String   @map("posting_id")
-  accountId  String   @map("account_id")
-  direction  String // debit | credit
+  id         String          @id @default(uuid())
+  postingId  String          @map("posting_id")
+  accountId  String          @map("account_id")
+  direction  LedgerDirection
   amount     BigInt
-  dealId     String?  @map("deal_id")
+  dealId     String?         @map("deal_id")
   reference  String?
-  occurredAt DateTime @map("occurred_at")
-  createdAt  DateTime @default(now()) @map("created_at")
+  occurredAt DateTime        @map("occurred_at")
+  createdAt  DateTime        @default(now()) @map("created_at")
 
   account LedgerAccount @relation(fields: [accountId], references: [id])
   deal    Deal?         @relation(fields: [dealId], references: [id])
@@ -476,38 +854,67 @@ model LedgerEntry {
   @@map("ledger_entry")
 }
 
-/// collect | release | refund × pending | succeeded | failed.
-/// The seam where a real PSP plugs in; the sandbox PSP mock resolves
-/// collect instructions immediately (and says so in the UI).
-model PspInstruction {
-  id        String   @id @default(uuid())
-  dealId    String   @map("deal_id")
-  kind      String // PspInstructionKind
-  state     String   @default("pending") // PspInstructionState
-  amount    BigInt
-  reference String?
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+enum PspInstructionKind {
+  collect
+  release
+  refund
+}
 
-  deal    Deal                  @relation(fields: [dealId], references: [id])
-  events  PspInstructionEvent[]
+enum PspInstructionState {
+  pending
+  succeeded
+  failed
+}
+
+/// 🔒 The idempotent boundary to the external custodian (Technical
+/// Architecture §5.2). idempotency_key dedupes duplicate callbacks (FR-7.8).
+///
+/// FULLY immutable — the instruction as issued never changes. Its lifecycle
+/// (pending → succeeded/failed) is recorded as PspInstructionEvent rows and
+/// the current state is DERIVED from the latest event, not stored here.
+/// The `state` column is retained only as the initial, permanent record of
+/// how the instruction was created (always `pending`); read current state
+/// via PspInstructionEvent. This keeps the amount, kind and idempotency key
+/// of a money instruction un-editable after the fact, which is the point of
+/// marking this table immutable in the first place.
+model PspInstruction {
+  id             String              @id @default(uuid())
+  dealId         String              @map("deal_id")
+  kind           PspInstructionKind
+  amount         BigInt
+  idempotencyKey String              @unique @map("idempotency_key")
+  providerRef    String?             @map("provider_ref")
+  state          PspInstructionState @default(pending)
+  createdAt      DateTime            @default(now()) @map("created_at")
+
+  deal   Deal                  @relation(fields: [dealId], references: [id])
+  events PspInstructionEvent[]
 
   @@map("psp_instruction")
 }
 
+/// 🔒 Append-only lifecycle log for a psp_instruction. The instruction's
+/// CURRENT state is the `toState` of its most recent event (or `pending` if
+/// it has none). Duplicate provider callbacks are deduplicated on
+/// (instruction, toState) so a repeated "succeeded" webhook cannot post
+/// twice (FR-7.8).
 model PspInstructionEvent {
-  id             String   @id @default(uuid())
-  instructionId  String   @map("instruction_id")
-  state          String
-  detail         String?
-  occurredAt     DateTime @map("occurred_at")
+  id            String              @id @default(uuid())
+  instructionId String              @map("instruction_id")
+  toState       PspInstructionState @map("to_state")
+  providerRef   String?             @map("provider_ref")
+  detail        String?
+  occurredAt    DateTime            @map("occurred_at")
+  createdAt     DateTime            @default(now()) @map("created_at")
 
   instruction PspInstruction @relation(fields: [instructionId], references: [id])
 
+  @@unique([instructionId, toState])
+  @@index([instructionId])
   @@map("psp_instruction_event")
 }
 
-/// Periodic ledger-vs-PSP balance assertions.
+/// Ledger-vs-PSP reconciliation (FR-7.8, FR-10.4).
 model ReconciliationCheck {
   id              String   @id @default(uuid())
   runAt           DateTime @map("run_at")
@@ -520,84 +927,125 @@ model ReconciliationCheck {
   @@map("reconciliation_check")
 }
 
-/// Circumvention clause version is snapshot onto the accepted agreement
-/// (SSOT Decision 11). Acceptance freezes monthlyRentAtSigning.
+// ============================================================================
+// Agreements module (Data_Model.md §9)
+// ============================================================================
+
+/// 🔒 Originates the rate snapshot (FR-9.1). Immutable once accepted. At
+/// acceptance, the deal copies commission_rate_version.rate_bp_of_month ->
+/// deal.commission_rate_bp_snapshot and monthly_rent_at_signing ->
+/// deal.monthly_rent_snapshot. Names the LANDLORD as payer (FR-9.2);
+/// tenant-facing surfaces carry no charge.
 model ListingAgreement {
   id                         String    @id @default(uuid())
   listingId                  String    @map("listing_id")
   listerPartyId              String    @map("lister_party_id")
   commissionRateVersionId    String    @map("commission_rate_version_id")
   monthlyRentAtSigning       BigInt    @map("monthly_rent_at_signing")
-  circumventionClauseVersion String    @default("v1") @map("circumvention_clause_version")
-  accepted                   Boolean   @default(false)
+  circumventionClauseVersion String    @map("circumvention_clause_version")
   acceptedAt                 DateTime? @map("accepted_at")
+  accepted                   Boolean   @default(false)
   createdAt                  DateTime  @default(now()) @map("created_at")
 
   listing               Listing               @relation(fields: [listingId], references: [id])
-  listerParty           Party                 @relation("AgreementLister", fields: [listerPartyId], references: [id])
+  listerParty           Party                 @relation(fields: [listerPartyId], references: [id])
   commissionRateVersion CommissionRateVersion @relation(fields: [commissionRateVersionId], references: [id])
-  deals                 Deal[]
+
+  deals Deal[]
 
   @@map("listing_agreement")
 }
 
 // ============================================================================
-// Media & audit
+// Media & Audit (Data_Model.md §10)
 // ============================================================================
 
-model MediaAsset {
-  id        String   @id @default(uuid())
-  kind      String   @default("image") // MediaKind: image | video
-  ownerId   String?  @map("owner_id")
-  filename  String
-  mime      String   @default("image/svg+xml")
-  byteSize  Int      @default(0)
-  // field_officer | lister | development_fixture — written from the CALLER's
-  // role, never a request body (CLAUDE.md §4). development_fixture is
-  // reachable from no HTTP route.
-  source    String   @default("lister")
-  createdAt DateTime @default(now()) @map("created_at")
+enum MediaKind {
+  image
+  video
+}
 
-  owner  Party?         @relation(fields: [ownerId], references: [id])
-  photos ListingPhoto[]
+model MediaAsset {
+  id                String    @id @default(uuid())
+  storageRef        String    @map("storage_ref")
+  kind              MediaKind
+  perceptualHash    String?   @map("perceptual_hash")
+  uploadedByPartyId String    @map("uploaded_by_party_id")
+  /// The MIME type actually stored. Nullable because rows written by the
+  /// V1 mock capture path predate byte storage and have no file behind them.
+  mimeType          String?   @map("mime_type")
+  byteSize          Int?      @map("byte_size")
+  createdAt         DateTime  @default(now()) @map("created_at")
+
+  uploadedByParty Party @relation(fields: [uploadedByPartyId], references: [id])
+
+  propertyMandates PropertyMandate[]
+  listingPhotos    ListingPhoto[]
 
   @@map("media_asset")
 }
 
-model ListingPhoto {
-  id           String @id @default(uuid())
-  listingId    String @map("listing_id")
-  mediaAssetId String @map("media_asset_id")
-  position     Int    @default(0)
+/// A photograph shown on a listing (FR-4.2 — the property is the evidence).
+///
+/// ── Why this is a table and not a column on Listing ──
+/// A listing has many photographs, they are ordered, and each one carries
+/// its own provenance. Provenance is the point: `source` records whether a
+/// human being from this platform stood in that room. A tenant deciding
+/// whether to spend a Saturday travelling to Kira is entitled to know
+/// whether the picture was taken by our field officer or supplied by the
+/// person trying to let the property — and a development fixture must be
+/// able to say so out loud rather than pass as either.
+enum PhotoSource {
+  /// Captured by a Field Operations Officer during a verification visit.
+  /// The only value that may be presented as verified photography.
+  field_officer
+  /// Supplied by the lister. Shown, but never described as verified.
+  lister
+  /// Seeded demonstration imagery. NOT a real property on this platform.
+  /// The API marks it and every surface must label it.
+  development_fixture
+}
 
-  listing Listing    @relation(fields: [listingId], references: [id])
-  asset   MediaAsset @relation(fields: [mediaAssetId], references: [id])
+model ListingPhoto {
+  id           String      @id @default(uuid())
+  listingId    String      @map("listing_id")
+  mediaAssetId String      @map("media_asset_id")
+  sortOrder    Int         @default(0) @map("sort_order")
+  caption      String?
+  source       PhotoSource
+  createdAt    DateTime    @default(now()) @map("created_at")
+
+  listing    Listing    @relation(fields: [listingId], references: [id])
+  mediaAsset MediaAsset @relation(fields: [mediaAssetId], references: [id])
 
   @@unique([listingId, mediaAssetId])
+  @@index([listingId, sortOrder])
   @@map("listing_photo")
 }
 
-/// 🔒 Append-only. Every row names a RESOLVED actor (from the session), never
-/// a client-chosen identity.
+/// 🔒 Append-only (NFR-2). Money, verification, consent, config-change
+/// events.
 model AuditEvent {
   id           String   @id @default(uuid())
-  actorPartyId String?  @map("actor_party_id")
-  actorRole    String?  @map("actor_role")
-  action       String
-  entityType   String   @map("entity_type")
-  entityId     String   @map("entity_id")
-  detail       String? // JSON
+  eventType    String   @map("event_type")
+  actorPartyId String   @map("actor_party_id")
+  subjectRef   String?  @map("subject_ref")
+  payload      Json?
+  occurredAt   DateTime @map("occurred_at")
   createdAt    DateTime @default(now()) @map("created_at")
 
-  actor Party? @relation(fields: [actorPartyId], references: [id])
+  actorParty Party @relation(fields: [actorPartyId], references: [id])
 
   @@map("audit_event")
 }
 
-/// A tenant's bookmarked listing. Purely additive (QA round): no existing
-/// table is touched. One row per (party, listing); the listing side is the
-/// public listing id, and a saved listing that later leaves search simply
-/// stops being shown — the row keeps no truth of its own.
+// ============================================================================
+// Saved homes (additive, sandbox-era product feature carried into production)
+// ============================================================================
+
+/// A tenant's bookmarked listings. The production database shipped without
+/// this table; it was added ADDITIVELY (CREATE TABLE IF NOT EXISTS, no
+/// pre-existing table touched) so the product's save feature keeps working.
 model SavedListing {
   id        String   @id @default(uuid())
   partyId   String   @map("party_id")
@@ -610,3 +1058,7 @@ model SavedListing {
   @@unique([partyId, listingId])
   @@map("saved_listing")
 }
+
+// ============================================================================
+// Better Auth (Technical Architecture — auth provider evaluation)
+// ============================================================================

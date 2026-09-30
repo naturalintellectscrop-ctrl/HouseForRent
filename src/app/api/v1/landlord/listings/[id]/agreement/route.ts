@@ -15,13 +15,13 @@ export const GET = route(async (_req: NextRequest, ctx: { params: Promise<{ id: 
   const mine = await getListingForLister(id, session.partyId);
   if (!mine) throw new ApiError(404, 'LISTING_NOT_FOUND', 'not your listing');
 
-  const rate = await effectiveCommissionRate();
+  const rate = await effectiveCommissionRate(new Date(), session.partyId);
   const commissionIfLet =
-    (BigInt(mine.monthlyRent) * BigInt(rate.rateBp)) / 10000n;
+    (BigInt(mine.monthlyRent) * BigInt(rate.rateBpOfMonth)) / 10000n;
 
   return NextResponse.json({
     monthlyRent: mine.monthlyRent,
-    commissionRateBp: rate.rateBp,
+    commissionRateBp: rate.rateBpOfMonth,
     commissionIfLet: commissionIfLet.toString(),
     clause: {
       version: 'v1',

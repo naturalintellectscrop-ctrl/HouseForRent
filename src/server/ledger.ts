@@ -20,9 +20,27 @@
  *    lock provides on Postgres.
  */
 import { randomUUID } from 'node:crypto';
+import { Prisma } from '@prisma/client';
+import type { PspInstructionState } from '@prisma/client';
 import { db } from '@/lib/db';
 import type { LedgerAccountType } from './domain';
 import { initiateNylonCollect, nylonPayMode } from './nylonpay';
+
+/**
+ * An instruction's CURRENT state is the `toState` of its most recent event
+ * (psp_instruction is immutable — the `state` column only ever holds the
+ * initial `pending`). Every reader MUST go through this helper.
+ */
+export function derivedPspState(
+  instruction: { state: string } & { events?: Array<{ toState: string }> | null },
+): string {
+  return instruction.events?.[0]?.toState ?? instruction.state;
+}
+
+const PSP_EVENT_ORDER: Prisma.PspInstructionEventOrderByWithRelationInput[] = [
+  { occurredAt: 'desc' },
+  { createdAt: 'desc' },
+];
 
 type Tx = Parameters<Parameters<typeof db.$transaction>[0]>[0];
 
@@ -299,28 +317,49 @@ export async function issuePspInstruction(params: {
   // database itself. The ledger stays correct either way; only the truth
   // about the money differs, and the truth is what this row records.
   const existing = await db.pspInstruction.findFirst({
-    where: { dealId: params.dealId, kind: params.kind, reference: params.idempotencyKey },
+    where: { dealId: params.dealId, kind: params.kind, idempotencyKey: params.idempotencyKey },
   });
-  if (existing) return existing;
+  if (existing) {
+    return db.pspInstruction.findUniqueOrThrow({
+      where: { id: existing.id },
+      include: { events: { orderBy: PSP_EVENT_ORDER, take: 1 } },
+    });
+  }
 
+  // The row is immutable, so the mock's instant settlement is expressed the
+  // same way the real provider's confirmation is: an event. The +1ms on the
+  // settlement event keeps it strictly after the initial pending event even
+  // within the same millisecond, so the derived state is unambiguous.
+  const pendingAt = new Date();
   const instruction = await db.pspInstruction.create({
     data: {
       dealId: params.dealId,
       kind: params.kind,
-      state: 'succeeded', // the sandbox mock settles instantly and says so
+      state: 'pending',
       amount: params.amount,
-      reference: params.idempotencyKey,
+      idempotencyKey: params.idempotencyKey,
     },
   });
-  await db.pspInstructionEvent.create({
-    data: {
-      instructionId: instruction.id,
-      state: 'succeeded',
-      detail: 'MOCK PSP: instruction resolved immediately by the sandbox provider. Not real money movement.',
-      occurredAt: new Date(),
-    },
+  await db.pspInstructionEvent.createMany({
+    data: [
+      {
+        instructionId: instruction.id,
+        toState: 'pending',
+        detail: 'Instruction issued.',
+        occurredAt: pendingAt,
+      },
+      {
+        instructionId: instruction.id,
+        toState: 'succeeded',
+        detail: 'MOCK PSP: instruction resolved immediately by the sandbox provider. Not real money movement.',
+        occurredAt: new Date(pendingAt.getTime() + 1),
+      },
+    ],
   });
-  return instruction;
+  return db.pspInstruction.findUniqueOrThrow({
+    where: { id: instruction.id },
+    include: { events: { orderBy: PSP_EVENT_ORDER, take: 1 } },
+  });
 }
 
 /**
@@ -342,14 +381,14 @@ async function issueLiveInstruction(params: {
   amount: bigint;
   idempotencyKey: string;
 }) {
+  // Reuse any instruction still in flight or already honoured — the CURRENT
+  // state is derived from events (the row itself is immutable and always
+  // reads `pending`). A failed/cancelled instruction does not block a retry.
   const existing = await db.pspInstruction.findFirst({
-    where: {
-      dealId: params.dealId,
-      kind: params.kind,
-      state: { in: ['pending', 'processing', 'succeeded'] },
-    },
+    where: { dealId: params.dealId, kind: params.kind },
+    include: { events: { orderBy: PSP_EVENT_ORDER, take: 1 } },
   });
-  if (existing) return existing;
+  if (existing && !PSP_TERMINAL_FAILED.has(derivedPspState(existing))) return existing;
 
   // The provider's reference must be a UUID — it is their dedupe key and the
   // key webhooks use to find this instruction. Fresh instruction, fresh UUID:
@@ -368,13 +407,14 @@ async function issueLiveInstruction(params: {
         kind: params.kind,
         state: 'pending',
         amount: params.amount,
-        reference,
+        idempotencyKey: params.idempotencyKey,
+        providerRef: reference,
       },
     });
     await db.pspInstructionEvent.create({
       data: {
         instructionId: instruction.id,
-        state: 'pending',
+        toState: 'pending',
         detail: 'Submitted to Nylon Pay — awaiting the tenant’s approval of the payment prompt.',
         occurredAt: new Date(),
       },
@@ -408,74 +448,98 @@ async function issueLiveInstruction(params: {
       kind: params.kind,
       state: 'pending',
       amount: params.amount,
-      reference,
+      idempotencyKey: params.idempotencyKey,
     },
   });
   await db.pspInstructionEvent.create({
     data: {
       instructionId: instruction.id,
-      state: 'pending',
+      toState: 'pending',
       detail:
         'Awaiting payout dispatch: payouts are dispatched through the provider’s payout API at go-live. No money has moved yet.',
       occurredAt: new Date(),
     },
   });
-  return instruction;
+  return db.pspInstruction.findUniqueOrThrow({
+    where: { id: instruction.id },
+    include: { events: { orderBy: PSP_EVENT_ORDER, take: 1 } },
+  });
 }
 
 /** Webhook lookup: the provider only ever speaks our reference (a UUID). */
 export async function pspInstructionByReference(reference: string) {
-  return db.pspInstruction.findFirst({ where: { reference }, include: { deal: true } });
+  return db.pspInstruction.findFirst({ where: { providerRef: reference }, include: { deal: true } });
 }
 
-const PSP_TERMINAL_STATES = new Set(['succeeded', 'failed', 'cancelled']);
+const PSP_TERMINAL_STATES = new Set(['succeeded', 'failed']);
+const PSP_TERMINAL_FAILED = new Set(['failed']);
 
 /**
  * Advance an instruction and append the event — idempotent under the
  * provider's at-least-once delivery. Rules:
- *  - same state again → acknowledged, no duplicate row;
+ *  - same state again → acknowledged, no duplicate row (the (instruction,
+ *    toState) unique enforces it);
  *  - an already-terminal instruction NEVER changes state (a late `failed`
- *    after `succeeded` is recorded as an anomaly event, not a reversal —
- *    booked custody is only ever undone through the refund deal action);
- *  - `processing` is progress, not an outcome: the instruction stays
- *    `pending` and the event records it.
+ *    after `succeeded` is refused and logged — booked custody is only ever
+ *    undone through the refund deal action);
+ *  - the production state model is three-state (pending/succeeded/failed);
+ *    provider "processing" progress belongs in the audit log, not here.
  */
 export async function transitionPspInstruction(params: {
   instructionId: string;
-  toState: string;
+  toState: PspInstructionState;
   detail: string;
   occurredAt?: Date;
+  providerRef?: string | null;
 }) {
   const instruction = await db.pspInstruction.findUnique({
     where: { id: params.instructionId },
+    include: { events: { orderBy: PSP_EVENT_ORDER, take: 1 } },
   });
   if (!instruction) return null;
 
-  const effective = params.toState === 'processing' ? instruction.state : params.toState;
+  // The instruction row is IMMUTABLE (BEFORE UPDATE OR DELETE trigger raises
+  // on any mutation) — state advances by appending an event; the current
+  // state is always the latest event's toState.
+  const current = derivedPspState(instruction);
+  const effective = params.toState;
   const occurredAt = params.occurredAt ?? new Date();
 
-  if (instruction.state === effective) {
-    // Redelivery of an already-recorded state — acknowledge silently.
+  if (current === effective) {
+    // Redelivery of an already-recorded state — acknowledge silently (the
+    // (instruction, toState) unique would reject the duplicate anyway).
     return instruction;
   }
-  if (PSP_TERMINAL_STATES.has(instruction.state) && instruction.state !== effective) {
+  if (PSP_TERMINAL_STATES.has(current)) {
+    // The first terminal outcome stands. A late contradicting delivery is
+    // refused here and must never flip the derived state backwards.
+    console.error(
+      `[ledger] PSP anomaly: instruction ${instruction.id} already ${current}; ignoring late "${params.toState}" — ${params.detail}`,
+    );
+    return instruction;
+  }
+
+  try {
     await db.pspInstructionEvent.create({
       data: {
         instructionId: instruction.id,
-        state: instruction.state,
-        detail: `Anomaly: provider sent “${params.toState}” after the instruction was already ${instruction.state}. Kept the first outcome; reconcile with the provider if this was not a duplicate delivery.`,
+        toState: effective,
+        providerRef: params.providerRef ?? null,
+        detail: params.detail,
         occurredAt,
       },
     });
-    return instruction;
+  } catch (err) {
+    // A concurrent delivery recorded the same transition first — the dedup
+    // unique ((instruction_id, to_state)) did its job. Idempotent no-op.
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+      return instruction;
+    }
+    throw err;
   }
 
-  const updated = await db.pspInstruction.update({
+  return db.pspInstruction.findUnique({
     where: { id: instruction.id },
-    data: { state: effective },
+    include: { events: { orderBy: PSP_EVENT_ORDER, take: 1 } },
   });
-  await db.pspInstructionEvent.create({
-    data: { instructionId: instruction.id, state: effective, detail: params.detail, occurredAt },
-  });
-  return updated;
 }

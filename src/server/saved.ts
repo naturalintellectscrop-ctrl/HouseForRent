@@ -82,7 +82,7 @@ export async function listSaved(
       listing: {
         include: {
           property: { include: { neighbourhood: true } },
-          photos: { orderBy: { position: 'asc' }, include: { asset: true } },
+          photos: { orderBy: { sortOrder: 'asc' } },
         },
       },
     },

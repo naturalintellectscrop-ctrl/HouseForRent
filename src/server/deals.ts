@@ -264,7 +264,7 @@ export async function signAgreement(params: {
           agreementId: agreement.id,
           // frozen here, forever:
           monthlyRentSnapshot: agreement.monthlyRentAtSigning,
-          commissionRateBpSnapshot: agreement.commissionRateVersion.rateBp,
+          commissionRateBpSnapshot: agreement.commissionRateVersion.rateBpOfMonth,
           commissionRateVersionId: agreement.commissionRateVersionId,
         },
       },
@@ -314,10 +314,11 @@ export async function fundEscrow(params: {
   // booked by the verified webhook when the provider confirms the money —
   // never on faith. The untouched deal is returned so the page reloads and
   // shows the deal still unfunded, which is the truth until the webhook.
-  if (instruction.state === 'pending') {
+  const pspState = ledger.derivedPspState(instruction);
+  if (pspState === 'pending') {
     return {
       ...preflight,
-      pspInstruction: { id: instruction.id, kind: instruction.kind, state: instruction.state },
+      pspInstruction: { id: instruction.id, kind: instruction.kind, state: pspState },
     };
   }
 
@@ -440,11 +441,13 @@ export async function settle(params: { dealId: string; actorPartyId: string; rea
 
   // LIVE PSP: the payout is not dispatched yet — the instruction parks
   // `pending` rather than pretending the landlord was paid. The verified
-  // webhook completes it.
-  if (instruction.state === 'pending') {
+  // webhook completes it. (Current state derives from the instruction's
+  // events — the row itself is immutable.)
+  const pspState = ledger.derivedPspState(instruction);
+  if (pspState === 'pending') {
     return {
       ...preflight,
-      pspInstruction: { id: instruction.id, kind: instruction.kind, state: instruction.state },
+      pspInstruction: { id: instruction.id, kind: instruction.kind, state: pspState },
     };
   }
 
@@ -514,10 +517,11 @@ export async function refund(params: { dealId: string; actorPartyId: string; rea
   // LIVE PSP: same honesty as settlement — the instruction parks `pending`
   // until the provider confirms the payout, and only then does the ledger
   // release the liability back to the tenant.
-  if (instruction.state === 'pending') {
+  const pspState = ledger.derivedPspState(instruction);
+  if (pspState === 'pending') {
     return {
       ...preflight,
-      pspInstruction: { id: instruction.id, kind: instruction.kind, state: instruction.state },
+      pspInstruction: { id: instruction.id, kind: instruction.kind, state: pspState },
     };
   }
 
@@ -855,7 +859,6 @@ export async function getDealForCaller(dealId: string, callerPartyId: string, ca
       fromStatus: t.fromStatus,
       toStatus: t.toStatus,
       actorPartyId: t.actorPartyId,
-      actorRole: t.actorRole,
       reason: t.reason,
       createdAt: t.createdAt,
     })),
@@ -899,6 +902,25 @@ async function requireDeal(dealId: string, tx: Tx) {
 }
 
 /**
+ * Webhook-sourced transitions still need an actor party — the production
+ * deal_transition.actor_party_id is NOT NULL by design (the real API used
+ * labelled PSP actor parties for exactly this). One stable, clearly-labelled
+ * system party is provisioned on demand; never a fabricated human actor.
+ */
+async function systemPartyId(client: Tx | typeof db = db): Promise<string> {
+  const name = 'House For Rent System (PSP webhook)';
+  const existing = await client.party.findFirst({ where: { displayName: name }, select: { id: true } });
+  if (existing) return existing.id;
+  const created = await client.party.create({
+    // The placeholder phone is deliberately not a dialable number — it
+    // labels the row as plumbing, not a person.
+    data: { displayName: name, primaryPhone: 'PSP-WEBHOOK-SYSTEM' },
+    select: { id: true },
+  });
+  return created.id;
+}
+
+/**
  * Writes the status change and its immutable transition row together.
  * Callers are already inside a transaction that also holds any ledger
  * effect, so all three commit or roll back as one. Money events are
@@ -922,16 +944,18 @@ async function applyTransition(
   }
 
   const occurredAt = new Date();
+  // The production deal_transition table requires an actor party (the
+  // actor's ROLE travels in the audit payload instead of a column).
+  const actorPartyId = params.actorPartyId ?? (await systemPartyId(tx));
 
   await tx.dealTransition.create({
     data: {
       dealId: params.deal.id,
       fromStatus: params.deal.status,
       toStatus: params.to,
-      actorPartyId: params.actorPartyId,
-      actorRole: params.actorRole ?? null,
+      actorPartyId,
       reason: params.reason ?? null,
-      createdAt: occurredAt,
+      occurredAt,
     },
   });
 
@@ -944,19 +968,18 @@ async function applyTransition(
   if (auditType) {
     await tx.auditEvent.create({
       data: {
-        actorPartyId: params.actorPartyId,
-        actorRole: params.actorRole ?? null,
-        action: auditType,
-        entityType: 'deal',
-        entityId: updated.id,
-        detail: JSON.stringify({
+        actorPartyId,
+        eventType: auditType,
+        subjectRef: updated.id,
+        payload: {
           fromStatus: params.deal.status,
           toStatus: params.to,
+          actorRole: params.actorRole ?? null,
           commissionAmount: updated.commissionAmount?.toString() ?? null,
           monthlyRentSnapshot: updated.monthlyRentSnapshot?.toString() ?? null,
           commissionRateBpSnapshot: updated.commissionRateBpSnapshot ?? null,
-        }),
-        createdAt: occurredAt,
+        },
+        occurredAt,
       },
     });
   }
@@ -995,21 +1018,34 @@ export async function applyPspWebhookOutcome(payload: {
     .join(' — ');
 
   switch (payload.event) {
-    case 'transaction.processing':
-      await ledger.transitionPspInstruction({
-        instructionId: instruction.id,
-        toState: 'processing',
-        detail: `Nylon Pay: the transaction is processing${providerBits ? ` (${providerBits})` : ''}.`,
+    case 'transaction.processing': {
+      // The production PSP state model is three-state (pending/succeeded/
+      // failed): provider "processing" progress is recorded in the
+      // append-only audit log, never as an instruction state.
+      await db.auditEvent.create({
+        data: {
+          actorPartyId: await systemPartyId(),
+          eventType: 'psp_processing',
+          subjectRef: instruction.id,
+          payload: {
+            detail: `Nylon Pay: the transaction is processing${providerBits ? ` (${providerBits})` : ''}.`,
+          },
+          occurredAt: new Date(),
+        },
       });
       return { matched: true as const, action: 'recorded' as const };
+    }
 
     case 'transaction.failed':
     case 'transaction.cancelled': {
-      const toState = payload.event === 'transaction.cancelled' ? 'cancelled' : 'failed';
+      // The state model has no "cancelled": a provider cancellation is a
+      // failure to complete — nothing is booked and a retry issues a fresh
+      // instruction. The detail preserves which one the provider sent.
+      const cancelled = payload.event === 'transaction.cancelled';
       await ledger.transitionPspInstruction({
         instructionId: instruction.id,
-        toState,
-        detail: `Nylon Pay reported ${toState}${providerBits ? `: ${providerBits}` : ''}. No ledger effect — retry the action to issue a fresh instruction.`,
+        toState: 'failed',
+        detail: `Nylon Pay reported ${cancelled ? 'cancellation' : 'failure'}${providerBits ? `: ${providerBits}` : ''}. No ledger effect — retry the action to issue a fresh instruction.`,
       });
       return { matched: true as const, action: 'instruction_not_taken' as const };
     }
@@ -1019,10 +1055,21 @@ export async function applyPspWebhookOutcome(payload: {
       const rawAmount = payload.transaction.amount;
       const confirmed = rawAmount !== null && /^\d+$/.test(rawAmount) ? BigInt(rawAmount) : null;
       if (payload.transaction.currency !== 'UGX' || confirmed === null || confirmed !== instruction.amount) {
-        await ledger.transitionPspInstruction({
-          instructionId: instruction.id,
-          toState: 'processing',
-          detail: `Anomaly: the provider confirmed ${payload.transaction.amount ?? 'null'} ${payload.transaction.currency ?? '?'} but the instruction is for ${instruction.amount} UGX. NOT booked — ops must reconcile before any ledger effect.`,
+        // NOT booked: the instruction stays pending and the anomaly lives in
+        // the append-only audit log until ops reconciles it.
+        await db.auditEvent.create({
+          data: {
+            actorPartyId: await systemPartyId(),
+            eventType: 'psp_amount_mismatch',
+            subjectRef: instruction.id,
+            payload: {
+              confirmed: payload.transaction.amount ?? null,
+              currency: payload.transaction.currency ?? null,
+              instructionAmount: instruction.amount.toString(),
+              note: 'The provider confirmation does not match the instruction. NOT booked — ops must reconcile before any ledger effect.',
+            },
+            occurredAt: new Date(),
+          },
         });
         return { matched: true as const, action: 'amount_mismatch' as const };
       }

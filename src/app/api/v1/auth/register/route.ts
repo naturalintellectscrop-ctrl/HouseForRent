@@ -32,7 +32,7 @@ export const POST = route(async (req: NextRequest) => {
     const party = await tx.party.create({
       data: { displayName, primaryPhone, status: 'pending_verification' },
     });
-    const account = await tx.userAccount.create({ data: { partyId: party.id, role, status: 'pending_verification' } });
+    const account = await tx.userAccount.create({ data: { partyId: party.id, authRole: role } });
     await tx.userCredential.create({
       data: { userAccountId: account.id, passwordHash: await hashPassword(password) },
     });
@@ -40,7 +40,7 @@ export const POST = route(async (req: NextRequest) => {
       await tx.listerProfile.create({ data: { partyId: party.id, tier: 'property_owner' } });
     }
     await tx.consentRecord.create({
-      data: { partyId: party.id, kind: 'terms', version: 'v1' },
+      data: { partyId: party.id, purpose: 'terms', policyVersion: 'v1', grantedAt: new Date() },
     });
     return { party, account };
   });
