@@ -414,6 +414,8 @@ export function availableDealActions(params: {
   };
   callerPartyId: string;
   callerRole: AuthRole;
+  /** Live PSP honesty: funding/payout actions wait on a phone prompt, not the server. */
+  pspLive?: boolean;
 }): AvailableDealAction[] {
   const isStaff = params.callerRole === 'admin' || params.callerRole === 'foo';
   const isParty =
@@ -432,7 +434,10 @@ export function availableDealActions(params: {
   }).map((spec) => ({
     action: spec.action,
     label: spec.label,
-    consequence: spec.consequence,
+    consequence:
+      params.pspLive && (spec.action === 'fund-escrow' || spec.action === 'settle' || spec.action === 'refund')
+        ? `${spec.consequence} With the live payment provider this waits on a Nylon Pay payment prompt — the action records as pending and completes when the money is confirmed, not when the button is pressed.`
+        : spec.consequence,
     reversible: spec.reversible,
     movesMoney: spec.movesMoney,
     fields: spec.fields,

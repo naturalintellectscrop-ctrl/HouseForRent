@@ -22,6 +22,7 @@
 import { randomUUID } from 'node:crypto';
 import { db } from '@/lib/db';
 import type { LedgerAccountType } from './domain';
+import { initiateNylonCollect, nylonPayMode } from './nylonpay';
 
 type Tx = Parameters<Parameters<typeof db.$transaction>[0]>[0];
 
@@ -275,10 +276,14 @@ export async function refund(params: { dealId: string; amount: bigint }, tx?: Tx
 }
 
 /**
- * The PSP seam. The real repo defines a PaymentProvider abstraction with a
- * mock implementation; the sandbox keeps the seam and the instruction
- * record, and the mock resolves collects immediately. Every surface that
- * shows this says it is a mock — the ledger is correct regardless.
+ * The PSP seam. Two providers sit behind it:
+ *  - the sandbox mock (default), which settles instantly and labels every
+ *    instruction MOCK in the database itself; and
+ *  - Nylon Pay (NYLONPAY_MODE=live + credentials), whose collections are
+ *    async — the instruction goes `pending` and only a verified webhook
+ *    completes it. See issueLiveInstruction below.
+ * The ledger is correct under both; what differs is the truth about money,
+ * and the instruction record is what carries that truth.
  */
 export async function issuePspInstruction(params: {
   dealId: string;
@@ -287,6 +292,12 @@ export async function issuePspInstruction(params: {
   idempotencyKey: string;
   reference?: string;
 }) {
+  if (nylonPayMode() === 'live') return issueLiveInstruction(params);
+
+  // ── Sandbox mock ──
+  // Unchanged behaviour: the mock settles instantly and says so, in the
+  // database itself. The ledger stays correct either way; only the truth
+  // about the money differs, and the truth is what this row records.
   const existing = await db.pspInstruction.findFirst({
     where: { dealId: params.dealId, kind: params.kind, reference: params.idempotencyKey },
   });
@@ -310,4 +321,161 @@ export async function issuePspInstruction(params: {
     },
   });
   return instruction;
+}
+
+/**
+ * ── Live Nylon Pay path ──
+ * A collection is ASYNC: the tenant approves a prompt on their phone, so the
+ * instruction is created `pending` and only a signature-verified webhook
+ * (see /api/v1/payments/nylonpay/webhook) moves it to `succeeded` — which is
+ * the only moment custody is booked (the deal service gates its booking on
+ * this state). A provider initiation failure marks the instruction `failed`
+ * and rethrows: nothing is booked, the retry creates a fresh instruction.
+ *
+ * Release/refund instructions are parked `pending` until the payout dispatch
+ * is wired to the provider's payout API — the honest alternative to the mock
+ * pretending the landlord was paid.
+ */
+async function issueLiveInstruction(params: {
+  dealId: string;
+  kind: 'collect' | 'release' | 'refund';
+  amount: bigint;
+  idempotencyKey: string;
+}) {
+  const existing = await db.pspInstruction.findFirst({
+    where: {
+      dealId: params.dealId,
+      kind: params.kind,
+      state: { in: ['pending', 'processing', 'succeeded'] },
+    },
+  });
+  if (existing) return existing;
+
+  // The provider's reference must be a UUID — it is their dedupe key and the
+  // key webhooks use to find this instruction. Fresh instruction, fresh UUID:
+  // a FAILED instruction does not block a retry, a live one does.
+  const reference = randomUUID();
+
+  if (params.kind === 'collect') {
+    const deal = await db.deal.findUniqueOrThrow({
+      where: { id: params.dealId },
+      include: { tenantParty: true },
+    });
+
+    const instruction = await db.pspInstruction.create({
+      data: {
+        dealId: params.dealId,
+        kind: params.kind,
+        state: 'pending',
+        amount: params.amount,
+        reference,
+      },
+    });
+    await db.pspInstructionEvent.create({
+      data: {
+        instructionId: instruction.id,
+        state: 'pending',
+        detail: 'Submitted to Nylon Pay — awaiting the tenant’s approval of the payment prompt.',
+        occurredAt: new Date(),
+      },
+    });
+
+    try {
+      await initiateNylonCollect({
+        reference,
+        // UGX has no subunit: integer shillings map 1:1. Rent-scale amounts
+        // are far below Number.MAX_SAFE_INTEGER.
+        amountUGX: Number(params.amount),
+        description: 'Rent escrow — House For Rent',
+        customerName: deal.tenantParty.displayName,
+        customerPhone: deal.tenantParty.primaryPhone,
+        metadata: { dealId: params.dealId },
+      });
+    } catch (err) {
+      await transitionPspInstruction({
+        instructionId: instruction.id,
+        toState: 'failed',
+        detail: 'Nylon Pay did not accept the instruction. No money moved; retry the action.',
+      });
+      throw err;
+    }
+    return instruction;
+  }
+
+  const instruction = await db.pspInstruction.create({
+    data: {
+      dealId: params.dealId,
+      kind: params.kind,
+      state: 'pending',
+      amount: params.amount,
+      reference,
+    },
+  });
+  await db.pspInstructionEvent.create({
+    data: {
+      instructionId: instruction.id,
+      state: 'pending',
+      detail:
+        'Awaiting payout dispatch: payouts are dispatched through the provider’s payout API at go-live. No money has moved yet.',
+      occurredAt: new Date(),
+    },
+  });
+  return instruction;
+}
+
+/** Webhook lookup: the provider only ever speaks our reference (a UUID). */
+export async function pspInstructionByReference(reference: string) {
+  return db.pspInstruction.findFirst({ where: { reference }, include: { deal: true } });
+}
+
+const PSP_TERMINAL_STATES = new Set(['succeeded', 'failed', 'cancelled']);
+
+/**
+ * Advance an instruction and append the event — idempotent under the
+ * provider's at-least-once delivery. Rules:
+ *  - same state again → acknowledged, no duplicate row;
+ *  - an already-terminal instruction NEVER changes state (a late `failed`
+ *    after `succeeded` is recorded as an anomaly event, not a reversal —
+ *    booked custody is only ever undone through the refund deal action);
+ *  - `processing` is progress, not an outcome: the instruction stays
+ *    `pending` and the event records it.
+ */
+export async function transitionPspInstruction(params: {
+  instructionId: string;
+  toState: string;
+  detail: string;
+  occurredAt?: Date;
+}) {
+  const instruction = await db.pspInstruction.findUnique({
+    where: { id: params.instructionId },
+  });
+  if (!instruction) return null;
+
+  const effective = params.toState === 'processing' ? instruction.state : params.toState;
+  const occurredAt = params.occurredAt ?? new Date();
+
+  if (instruction.state === effective) {
+    // Redelivery of an already-recorded state — acknowledge silently.
+    return instruction;
+  }
+  if (PSP_TERMINAL_STATES.has(instruction.state) && instruction.state !== effective) {
+    await db.pspInstructionEvent.create({
+      data: {
+        instructionId: instruction.id,
+        state: instruction.state,
+        detail: `Anomaly: provider sent “${params.toState}” after the instruction was already ${instruction.state}. Kept the first outcome; reconcile with the provider if this was not a duplicate delivery.`,
+        occurredAt,
+      },
+    });
+    return instruction;
+  }
+
+  const updated = await db.pspInstruction.update({
+    where: { id: instruction.id },
+    data: { state: effective },
+  });
+  await db.pspInstructionEvent.create({
+    data: { instructionId: instruction.id, state: effective, detail: params.detail, occurredAt },
+  });
+  return updated;
 }
