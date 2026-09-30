@@ -27,6 +27,7 @@ import {
   type DealStatus,
 } from './domain';
 import * as ledger from './ledger';
+import { nylonPayLive } from './nylonpay';
 
 type Tx = Parameters<Parameters<typeof db.$transaction>[0]>[0];
 
@@ -302,11 +303,49 @@ export async function fundEscrow(params: {
   if (params.expectedAmount !== undefined && params.expectedAmount !== amount) {
     throw new AmountNotAuthoritativeError(params.expectedAmount, amount);
   }
-  await ledger.issuePspInstruction({
+  const instruction = await ledger.issuePspInstruction({
     dealId: preflight.id,
     kind: 'collect',
     amount,
     idempotencyKey: `fund:${preflight.id}`,
+  });
+
+  // LIVE PSP: the collection is in flight on the tenant's phone. Custody is
+  // booked by the verified webhook when the provider confirms the money —
+  // never on faith. The untouched deal is returned so the page reloads and
+  // shows the deal still unfunded, which is the truth until the webhook.
+  if (instruction.state === 'pending') {
+    return {
+      ...preflight,
+      pspInstruction: { id: instruction.id, kind: instruction.kind, state: instruction.state },
+    };
+  }
+
+  return applyEscrowFunding({
+    dealId: params.dealId,
+    actorPartyId: params.actorPartyId,
+    expectedAmount: params.expectedAmount,
+    reason: params.reason,
+  });
+}
+
+/**
+ * The funding transaction — the ONLY place escrow custody is ever booked.
+ * The synchronous deal action calls it after the mock instruction settles;
+ * the PSP webhook calls it after the provider confirms the money. It
+ * re-derives the figure from the deal's own snapshotted terms inside the
+ * transaction, so no caller — human, route, or webhook — can post an amount
+ * the deal's signed terms do not support.
+ */
+export async function applyEscrowFunding(params: {
+  dealId: string;
+  actorPartyId?: string;
+  actorRole?: string;
+  expectedAmount?: bigint;
+  reason?: string;
+}) {
+  const listing = await db.listing.findUniqueOrThrow({
+    where: { id: (await db.deal.findUniqueOrThrow({ where: { id: params.dealId }, select: { listingId: true } })).listingId },
   });
 
   return transactional(async (tx) => {
@@ -329,6 +368,7 @@ export async function fundEscrow(params: {
         deal,
         to: 'escrow_funded',
         actorPartyId: params.actorPartyId,
+        actorRole: params.actorRole,
         reason: params.reason,
       },
       tx,
@@ -391,13 +431,37 @@ export async function settle(params: { dealId: string; actorPartyId: string; rea
   const provisional = await ledger.outstandingEscrowLiability(preflight.id);
   if (provisional <= 0n) throw new NothingHeldError(preflight.id);
 
-  await ledger.issuePspInstruction({
+  const instruction = await ledger.issuePspInstruction({
     dealId: preflight.id,
     kind: 'release',
     amount: provisional,
     idempotencyKey: `settle:${preflight.id}`,
   });
 
+  // LIVE PSP: the payout is not dispatched yet — the instruction parks
+  // `pending` rather than pretending the landlord was paid. The verified
+  // webhook completes it.
+  if (instruction.state === 'pending') {
+    return {
+      ...preflight,
+      pspInstruction: { id: instruction.id, kind: instruction.kind, state: instruction.state },
+    };
+  }
+
+  return applySettlement({ dealId: params.dealId, actorPartyId: params.actorPartyId, reason: params.reason });
+}
+
+/**
+ * The settlement transaction — shared by the sync path (mock) and the PSP
+ * webhook. Re-reads the outstanding liability INSIDE the transaction: that
+ * figure, never a caller-supplied total, is what gets posted.
+ */
+export async function applySettlement(params: {
+  dealId: string;
+  actorPartyId?: string;
+  actorRole?: string;
+  reason?: string;
+}) {
   return transactional(async (tx) => {
     const deal = await requireDeal(params.dealId, tx);
     assertTransitionAllowed(deal.status as DealStatus, 'settled');
@@ -410,7 +474,7 @@ export async function settle(params: { dealId: string; actorPartyId: string; rea
     await ledger.releaseToLandlord({ dealId: deal.id, amount: netToLandlord }, tx);
 
     return applyTransition(
-      { deal, to: 'settled', actorPartyId: params.actorPartyId, reason: params.reason },
+      { deal, to: 'settled', actorPartyId: params.actorPartyId, actorRole: params.actorRole, reason: params.reason },
       tx,
     );
   });
@@ -440,13 +504,33 @@ export async function refund(params: { dealId: string; actorPartyId: string; rea
   const provisional = await ledger.outstandingEscrowLiability(preflight.id);
   if (provisional <= 0n) throw new NothingHeldError(preflight.id);
 
-  await ledger.issuePspInstruction({
+  const instruction = await ledger.issuePspInstruction({
     dealId: preflight.id,
     kind: 'refund',
     amount: provisional,
     idempotencyKey: `refund:${preflight.id}`,
   });
 
+  // LIVE PSP: same honesty as settlement — the instruction parks `pending`
+  // until the provider confirms the payout, and only then does the ledger
+  // release the liability back to the tenant.
+  if (instruction.state === 'pending') {
+    return {
+      ...preflight,
+      pspInstruction: { id: instruction.id, kind: instruction.kind, state: instruction.state },
+    };
+  }
+
+  return applyRefundCompletion({ dealId: params.dealId, actorPartyId: params.actorPartyId, reason: params.reason });
+}
+
+/** The refund transaction — shared by the sync path and the PSP webhook. */
+export async function applyRefundCompletion(params: {
+  dealId: string;
+  actorPartyId?: string;
+  actorRole?: string;
+  reason?: string;
+}) {
   return transactional(async (tx) => {
     const deal = await requireDeal(params.dealId, tx);
     assertTransitionAllowed(deal.status as DealStatus, 'refunded');
@@ -457,7 +541,7 @@ export async function refund(params: { dealId: string; actorPartyId: string; rea
     await ledger.refund({ dealId: deal.id, amount }, tx);
 
     return applyTransition(
-      { deal, to: 'refunded', actorPartyId: params.actorPartyId, reason: params.reason },
+      { deal, to: 'refunded', actorPartyId: params.actorPartyId, actorRole: params.actorRole, reason: params.reason },
       tx,
     );
   });
@@ -764,6 +848,7 @@ export async function getDealForCaller(dealId: string, callerPartyId: string, ca
       deal: { status: deal.status, tenantPartyId: deal.tenantPartyId, landlordPartyId: deal.landlordPartyId },
       callerPartyId,
       callerRole,
+      pspLive: nylonPayLive(),
     }),
     transitions: transitions.map((t) => ({
       id: t.id,
@@ -823,7 +908,8 @@ async function applyTransition(
   params: {
     deal: { id: string; status: string };
     to: DealStatus;
-    actorPartyId: string;
+    /** Absent when the actor is not a person — e.g. a PSP webhook. */
+    actorPartyId?: string;
     actorRole?: string;
     reason?: string;
     data?: Record<string, unknown>;
@@ -876,6 +962,115 @@ async function applyTransition(
   }
 
   return updated;
+}
+
+/**
+ * A verified Nylon Pay webhook arrived — apply its outcome to the instruction
+ * and, for confirmed money, to the deal. The payload snapshot comes from the
+ * route AFTER signature verification; nothing here trusts an unverified body.
+ *
+ * Money guard: custody/settlement is only ever booked against an amount and
+ * currency that match the instruction as issued. A mismatch is recorded and
+ * left for ops reconciliation — never auto-posted.
+ */
+export async function applyPspWebhookOutcome(payload: {
+  event: string;
+  transaction: {
+    reference: string;
+    amount: string | null;
+    currency: string | null;
+    status: string | null;
+    failureReason?: string | null;
+    operatorTid?: string | null;
+  };
+}) {
+  const instruction = await ledger.pspInstructionByReference(payload.transaction.reference);
+  if (!instruction) return { matched: false as const };
+
+  const providerBits = [
+    payload.transaction.failureReason ?? null,
+    payload.transaction.operatorTid ? `operator ref ${payload.transaction.operatorTid}` : null,
+  ]
+    .filter(Boolean)
+    .join(' — ');
+
+  switch (payload.event) {
+    case 'transaction.processing':
+      await ledger.transitionPspInstruction({
+        instructionId: instruction.id,
+        toState: 'processing',
+        detail: `Nylon Pay: the transaction is processing${providerBits ? ` (${providerBits})` : ''}.`,
+      });
+      return { matched: true as const, action: 'recorded' as const };
+
+    case 'transaction.failed':
+    case 'transaction.cancelled': {
+      const toState = payload.event === 'transaction.cancelled' ? 'cancelled' : 'failed';
+      await ledger.transitionPspInstruction({
+        instructionId: instruction.id,
+        toState,
+        detail: `Nylon Pay reported ${toState}${providerBits ? `: ${providerBits}` : ''}. No ledger effect — retry the action to issue a fresh instruction.`,
+      });
+      return { matched: true as const, action: 'instruction_not_taken' as const };
+    }
+
+    case 'transaction.successful': {
+      // ── the money guard ──
+      const rawAmount = payload.transaction.amount;
+      const confirmed = rawAmount !== null && /^\d+$/.test(rawAmount) ? BigInt(rawAmount) : null;
+      if (payload.transaction.currency !== 'UGX' || confirmed === null || confirmed !== instruction.amount) {
+        await ledger.transitionPspInstruction({
+          instructionId: instruction.id,
+          toState: 'processing',
+          detail: `Anomaly: the provider confirmed ${payload.transaction.amount ?? 'null'} ${payload.transaction.currency ?? '?'} but the instruction is for ${instruction.amount} UGX. NOT booked — ops must reconcile before any ledger effect.`,
+        });
+        return { matched: true as const, action: 'amount_mismatch' as const };
+      }
+
+      await ledger.transitionPspInstruction({
+        instructionId: instruction.id,
+        toState: 'succeeded',
+        detail: `Nylon Pay confirmed the ${instruction.kind}${providerBits ? ` (${providerBits})` : ''}.`,
+      });
+
+      const deal = await db.deal.findUniqueOrThrow({ where: { id: instruction.dealId } });
+      if (instruction.kind === 'collect') {
+        if (deal.status !== 'escrow_funded') {
+          await applyEscrowFunding({
+            dealId: deal.id,
+            actorRole: 'psp_webhook',
+            reason: 'Nylon Pay webhook confirmed the tenant’s payment.',
+          });
+          return { matched: true as const, action: 'escrow_funded' as const };
+        }
+        return { matched: true as const, action: 'already_applied' as const };
+      }
+      if (instruction.kind === 'release') {
+        if (deal.status === 'commission_earned') {
+          await applySettlement({
+            dealId: deal.id,
+            actorRole: 'psp_webhook',
+            reason: 'Nylon Pay webhook confirmed the landlord payout.',
+          });
+          return { matched: true as const, action: 'settled' as const };
+        }
+        return { matched: true as const, action: 'already_applied' as const };
+      }
+      // kind === 'refund'
+      if (deal.status === 'escrow_funded' || deal.status === 'dispute_hold') {
+        await applyRefundCompletion({
+          dealId: deal.id,
+          actorRole: 'psp_webhook',
+          reason: 'Nylon Pay webhook confirmed the refund.',
+        });
+        return { matched: true as const, action: 'refunded' as const };
+      }
+      return { matched: true as const, action: 'already_applied' as const };
+    }
+
+    default:
+      return { matched: true as const, action: 'unhandled_event' as const };
+  }
 }
 
 export { TERMINAL_STATUSES };
