@@ -57,7 +57,7 @@ export default async function ViewingPage(props: {
   }
 
   const { viewing, listing, fieldReport, introduction, canConduct, officerName } = detail;
-  // A REQUESTED viewing is not a closed one — it has simply not been
+  // A REQUESTED viewing is not a closed one - it has simply not been
   // scheduled yet. Treating "not scheduled" as "closed" made the page tell
   // an operator that a waiting request had "closed without a report", which
   // is a lie about the state of the world.
@@ -67,7 +67,7 @@ export default async function ViewingPage(props: {
 
   // The reassign control needs the sendable officers; only an admin on a
   // SCHEDULED visit ever renders it, so only that combination pays for the
-  // read. A failure fails the page like any other read — an empty roster
+  // read. A failure fails the page like any other read - an empty roster
   // renders the honest "nobody to send" note instead of a dead select.
   const officers: AssignableOfficer[] =
     role === 'admin' && scheduled ? await api<AssignableOfficer[]>('/v1/ops/officers') : [];
@@ -92,7 +92,7 @@ export default async function ViewingPage(props: {
 
       {/* ── Where the visit happens (Task 15) ──
           An officer standing in a stairwell needs the landmark and the
-          terms the tenant is working from — not an opaque listing id. The
+          terms the tenant is working from - not an opaque listing id. The
           money figure is derived server-side; the public link renders only
           when the exact predicate the public detail page answers 404 with
           holds, so the officer can never follow a dead link. */}
@@ -126,12 +126,12 @@ export default async function ViewingPage(props: {
             <Link href={`/properties/${viewing.listingId}`}>
               Open the public listing
             </Link>{' '}
-            — the photographs and description the tenant is working from.
+            - the photographs and description the tenant is working from.
           </p>
         ) : (
           <p className="muted" style={{ marginBottom: 0 }}>
             This listing is not publicly visible any more, so there is no
-            public page to open — the tenant asked to see it before that
+            public page to open - the tenant asked to see it before that
             changed.
           </p>
         )}
@@ -147,7 +147,7 @@ export default async function ViewingPage(props: {
       {viewing.status === 'requested' && (
         <p className="alert alert-note">
           Not yet scheduled. This request is waiting for the operations desk
-          to assign a field officer and confirm the time — the dispatch
+          to assign a field officer and confirm the time - the dispatch
           queue is where that happens.
         </p>
       )}
@@ -155,7 +155,7 @@ export default async function ViewingPage(props: {
       {/* ── Operations controls on an open visit ──
           Reassignment (Task 16): the promise "re-assigning before the
           visit is permitted" was always true in the graph and never
-          reachable in the product — the queue only lists REQUESTED rows,
+          reachable in the product - the queue only lists REQUESTED rows,
           so a scheduled visit was stuck with its officer. Cancellation
           (Task 12): the landlord-reported case. Officers see neither. */}
       {scheduled && role === 'admin' && officers.length > 0 && (
@@ -169,12 +169,12 @@ export default async function ViewingPage(props: {
       {scheduled && role === 'admin' && officers.length === 0 && (
         <p className="alert alert-error" role="alert">
           No active field officer accounts exist, so this visit cannot be
-          reassigned — and a new assignment cannot happen either until an
+          reassigned - and a new assignment cannot happen either until an
           officer is provisioned.
         </p>
       )}
 
-      {/* Operations may withdraw a request that cannot go ahead — the
+      {/* Operations may withdraw a request that cannot go ahead - the
           landlord-reported case. Officers cannot: dispatch is the admin's
           decision, and the tenant's own cancel lives on their side. */}
       {(viewing.status === 'requested' || viewing.status === 'scheduled') &&

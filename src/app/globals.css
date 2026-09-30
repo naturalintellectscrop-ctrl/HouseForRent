@@ -24,13 +24,13 @@
 :root {
   /*
    * The brand colours, sampled from the ORIGINAL logo file
-   * (public/brand/house-for-rent-logo.png — scripts/build-brand-assets.py
+   * (public/brand/house-for-rent-logo.png - scripts/build-brand-assets.py
    * prints the values): roof red #cb0108, house ink #0e1412, field green
    * #0a5514.
    *
    * ── Why there are two greens ──
    * The logo's green #0a5514 is right as a FILL: white on it measures
-   * ~8.4:1, comfortably past WCAG AA — and it is the colour the company
+   * ~8.4:1, comfortably past WCAG AA - and it is the colour the company
    * actually chose for RENT. On the near-black identity surfaces (auth
    * aside, CTA band) it is too deep to read, so those surfaces take
    * --brand-green, the brighter mark of the same hue, which clears 5:1
@@ -94,7 +94,7 @@
 /*
  * Light-only by decision of the product owner: one theme, tuned once, with
  * no second register to keep honest. The dark tokens that used to live here
- * were removed wholesale — any component still reading a token gets the
+ * were removed wholesale - any component still reading a token gets the
  * single light value, so the site cannot drift between two palettes.
  */
 
@@ -172,7 +172,7 @@ a {
   border-radius: var(--radius-sm);
 }
 
-/* Skip link — the first thing a keyboard user meets. */
+/* Skip link - the first thing a keyboard user meets. */
 .skip {
   position: absolute;
   left: -9999px;
@@ -249,7 +249,7 @@ a {
 }
 
 /* Stacks on spans. .stack-sm's margin-top only does anything between block
-   children — but list rows and deal rows use <span className="stack-sm">
+   children - but list rows and deal rows use <span className="stack-sm">
    whose children (spans, links) are inline, so every line ran together.
    Make a stack that lands on a span a real vertical flex container, which
    blockifies its children and gives the margins effect. */
@@ -322,16 +322,9 @@ span.stack-lg {
 }
 
 /*
- * The one all-caps step: section eyebrows and nothing else. Uppercase is
- * hard to read at length, so it is confined to two or three words.
+ * All-caps micro-labels ("eyebrows") were removed by owner decision: the
+ * heading itself opens every section now. Nothing here styles them.
  */
-.eyebrow {
-  font-size: 0.75rem;
-  font-weight: 640;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-  color: var(--accent);
-}
 
 .num {
   font-variant-numeric: tabular-nums;
@@ -492,7 +485,7 @@ legend {
   margin-bottom: 0.5rem;
 }
 
-/* A radio group rendered as selectable cards — bigger targets, clearer state. */
+/* A radio group rendered as selectable cards - bigger targets, clearer state. */
 .choice-group {
   display: grid;
   gap: 0.5rem;
@@ -651,7 +644,7 @@ legend {
   text-transform: uppercase;
   letter-spacing: 0.15em;
   color: var(--ink-soft);
-  /* The short red rule echoes the rules the logo paints around FOR — the
+  /* The short red rule echoes the rules the logo paints around FOR - the
      tagline arrives dressed the way the logo dresses it. */
 }
 .brand-tagline::before {
@@ -709,7 +702,7 @@ legend {
 
 /*
  * The small-screen menu is a `<details>` element: no JavaScript, no
- * hydration, and it works before the bundle loads — which on a slow
+ * hydration, and it works before the bundle loads - which on a slow
  * connection is the only moment that matters.
  */
 .menu {
@@ -762,7 +755,7 @@ legend {
 }
 
 /*
- * The footer sits on the brand's own ink — the same near-black the logo
+ * The footer sits on the brand's own ink - the same near-black the logo
  * paints its house on, the surface the auth aside and the CTA band already
  * use. Every page therefore ends the way the brand begins. Its colours are
  * FIXED, not tokenised, on purpose: the tokens above exist so light and
@@ -820,7 +813,7 @@ legend {
 }
 
 /*
- * Real contact channels in the footer — fixed light-on-ink like everything
+ * Real contact channels in the footer - fixed light-on-ink like everything
  * else in this block. Rows are inline-flex so icon and number hold together
  * when the column is narrow on a phone.
  */
@@ -879,7 +872,7 @@ a.foot-contact-row:hover,
  * ── The honest empty frame ──
  * A listing with no photograph does NOT get a stock photo of somebody
  * else's house. It gets this: a plain field in the brand surface that says
- * what is true — no officer photography yet. The platform's whole claim is
+ * what is true - no officer photography yet. The platform's whole claim is
  * that the picture was taken in that room by our officer, and a placeholder
  * that pretends otherwise sells the one thing we cannot sell.
  */
@@ -1133,7 +1126,7 @@ a.foot-contact-row:hover,
 }
 
 /*
- * Contact channels on /contact: one row per real channel — icon chip, the
+ * Contact channels on /contact: one row per real channel - icon chip, the
  * number or address as the primary line, how-to-use-it underneath. Nothing
  * here is a form that posts nowhere.
  */
@@ -1448,7 +1441,7 @@ a.foot-contact-row:hover,
   height: 0.85rem;
 }
 
-/* Entrances are 8px and 200ms — enough to feel deliberate, short of theatre. */
+/* Entrances are 8px and 200ms - enough to feel deliberate, short of theatre. */
 .enter {
   animation: enter 220ms ease both;
 }
@@ -1766,8 +1759,16 @@ a.list-item:hover {
     display: flex;
   }
 }
-.auth-aside .eyebrow {
+.auth-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  font-weight: 650;
   color: var(--brand-green);
+}
+.auth-brand img {
+  width: 1.6rem;
+  height: auto;
 }
 .auth-aside .trust-list svg {
   color: var(--brand-green);
@@ -1867,7 +1868,7 @@ a.list-item:hover {
  * brand ink (the same register as the footer and the landlord panel).
  * Colours inside are deliberately fixed light-on-ink rather than tokenised:
  * mode tokens exist for surfaces that flip between light and dark, and
- * this panel is identical in both — that is what a brand block is.
+ * this panel is identical in both - that is what a brand block is.
  */
 .hero-panel {
   background: var(--brand-ink);
@@ -1886,7 +1887,7 @@ a.list-item:hover {
   max-width: 16ch;
 }
 /* A card inside the panel is a LIGHT surface (the newest-listing card, the
-   honest empty frame) — it must not inherit the panel's light-on-ink text
+   honest empty frame) - it must not inherit the panel's light-on-ink text
    or its heading prints white-on-white. .pcard is the property card's own
    class; .card is the empty frame. */
 .hero-panel .card,
@@ -1898,22 +1899,6 @@ a.list-item:hover {
 }
 .hero-panel .faint {
   color: #7e8883;
-}
-/* The eyebrow keeps its all-caps register but gains the red brand rule
-   from the footer's tagline line — the ink blocks open the way the brand
-   signature does. */
-.hero-panel .eyebrow {
-  color: #a5aeaa;
-  display: flex;
-  align-items: center;
-  gap: 0.55rem;
-}
-.hero-panel .eyebrow::before {
-  content: '';
-  display: inline-block;
-  width: 1.5rem;
-  height: 2px;
-  background: var(--brand-red);
 }
 .hero-panel .input {
   background: #18211c;
@@ -1972,9 +1957,6 @@ a.list-item:hover {
   color: #a5aeaa;
   max-width: 40rem;
 }
-.cta .eyebrow {
-  color: var(--brand-green);
-}
 .cta .btn-secondary {
   background: transparent;
   color: #f4f7f6;
@@ -1995,7 +1977,7 @@ a.list-item:hover {
  * the pitch on the left, the three real steps of letting through us stacked
  * as a ruled list on the right. Rules and numbers switch to the panel's
  * own register; the content is the same process the for-landlords page
- * explains in full — nothing here is a new claim.
+ * explains in full - nothing here is a new claim.
  */
 .cta-grid {
   display: grid;
@@ -2081,7 +2063,7 @@ a.list-item:hover {
  * The reference's stats band, told only in numbers this system actually
  * holds: how many homes are live, how many neighbourhoods hold one, and
  * what a tenant has ever paid us. The figures get the reference's big
- * numerals; the captions stay honest when a number is small — a thin
+ * numerals; the captions stay honest when a number is small - a thin
  * corridor stated plainly is the product working, not failing.
  */
 .corridor {
@@ -2137,9 +2119,9 @@ a.list-item:hover {
 /*
  * The reference's testimonial slot, told truthfully. There are no invented
  * client quotes and no stars to fabricate: the statement on the right is
- * the company's own guarantee — a commitment the product's architecture
+ * the company's own guarantee - a commitment the product's architecture
  * actually enforces (an officer must file a report before a listing can go
- * live) — and the photographs on the left are the system's own, lifted
+ * live) - and the photographs on the left are the system's own, lifted
  * from real field visits, demo fixtures labelled on the image itself.
  */
 .field-grid {
@@ -2199,7 +2181,7 @@ a.list-item:hover {
   }
   /* The overlap is the reference's stacked-photograph composition; the
      mat border keeps the two frames legible where they cross. Static
-     transforms, not motion — reduced-motion has nothing to cancel. */
+     transforms, not motion - reduced-motion has nothing to cancel. */
   .field-photo-a {
     transform: rotate(-2deg);
   }
@@ -2253,7 +2235,7 @@ a.list-item:hover {
  * The reference's blog row, filled with real content: each card is a
  * question a first-time renter actually has, answered in one true sentence
  * and linked to the page that answers it in full. No fabricated dates,
- * authors, or thumbnails — text-led because there is no editorial
+ * authors, or thumbnails - text-led because there is no editorial
  * photography to put there and stock imagery is banned on this product.
  */
 .guide-cards {
@@ -2321,7 +2303,7 @@ a.list-item:hover {
  * The reference's "user guide for first timer": the heading owns the left
  * column and keeps its place while the steps run down the right, each
  * hanging off its own rule segment so the eye reads one path rather than
- * four loose cards. Geometry is the only difference from .steps — the
+ * four loose cards. Geometry is the only difference from .steps - the
  * counters and the copy discipline are the same.
  */
 .guide {
@@ -2381,7 +2363,7 @@ a.list-item:hover {
 
 /*
  * One motion idea for the page: each direct section settles in once, a
- * small rise with a 40ms cascade — hierarchy communicated by timing, not
+ * small rise with a 40ms cascade - hierarchy communicated by timing, not
  * by things flying around. prefers-reduced-motion neutralises it globally
  * at the top of this file, and no element animates twice.
  */
@@ -2420,8 +2402,8 @@ a.list-item:hover {
 
 /*
  * These class names predate the marketplace and are used across the ops
- * pages. They are kept — renaming twenty files to align vocabulary would be
- * churn — but they are re-expressed in the shared tokens above, so the two
+ * pages. They are kept - renaming twenty files to align vocabulary would be
+ * churn - but they are re-expressed in the shared tokens above, so the two
  * halves of the product cannot disagree about what the brand colour is.
  */
 
@@ -2537,7 +2519,7 @@ a.card-link:hover .card-title {
 
 /*
  * A bare `<button>` in the console gets the primary treatment. The console
- * has exactly one kind of button per form — the one that submits it — so
+ * has exactly one kind of button per form - the one that submits it - so
  * requiring a class on each would be ceremony without a decision behind it.
  */
 .ops button:not(.btn):not(.chip) {
@@ -2714,7 +2696,7 @@ a.card-link:hover .card-title {
 
 /* Row-scanning affordance for dense operational tables: with 8+ columns a
    pointing cursor needs to know which row it is on. Public tables stay
-   untouched — this is an ops-register detail. */
+   untouched - this is an ops-register detail. */
 .ops .table-scroll tbody tr {
   transition: background-color 120ms ease;
 }
@@ -2834,4 +2816,232 @@ a.card-link:hover .card-title {
 }
 .area-card-empty .area-count {
   font-style: normal;
+}
+
+/* ── page imagery (owner request: the info pages carry photography) ──── */
+
+/*
+ * A framed photograph with its caption. The frame is quiet: one line, the
+ * standard radius, no shadow theatrics. The caption is part of the figure,
+ * so a screenshot always carries its context with it. Marketing imagery is
+ * ILLUSTRATIVE and captioned as such; only field photographs claim to be
+ * a specific property.
+ */
+.figure {
+  margin: 0;
+  display: grid;
+  gap: 0.6rem;
+}
+.figure-frame {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: var(--surface);
+}
+.figure-frame img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  aspect-ratio: 3 / 2;
+}
+.figure-wide .figure-frame img {
+  aspect-ratio: 21 / 9;
+}
+@media (max-width: 30rem) {
+  .figure-wide .figure-frame img {
+    aspect-ratio: 16 / 10;
+  }
+}
+.figure figcaption {
+  font-size: 0.875rem;
+  color: var(--ink-faint);
+}
+
+/*
+ * Text-and-image rows. The image side keeps the figure system above; the
+ * copy side is whatever the page already uses (stack, prose, steps).
+ */
+.split {
+  display: grid;
+  gap: 1.5rem;
+  align-items: center;
+}
+@media (min-width: 62rem) {
+  .split {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 3rem;
+  }
+}
+
+/*
+ * The money path as a connected rail: pay, escrow, move-in, release. One
+ * numbered line rather than four loose cards, because the four states are
+ * a SEQUENCE and the connector is the point. Vertical on a phone with the
+ * line running down the left; horizontal from 52rem.
+ */
+.money-rail {
+  counter-reset: rail;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0;
+}
+.money-rail > li {
+  counter-increment: rail;
+  position: relative;
+  display: grid;
+  grid-template-columns: 2.25rem 1fr;
+  column-gap: 0.9rem;
+  padding-bottom: 1.5rem;
+}
+.money-rail > li:last-child {
+  padding-bottom: 0;
+}
+.money-rail > li:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  left: 1.02rem;
+  top: 2.4rem;
+  bottom: 0.05rem;
+  width: 2px;
+  background: var(--line);
+}
+.money-rail > li::before {
+  content: counter(rail);
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 999px;
+  border: 2px solid var(--brand-action);
+  color: var(--brand-action);
+  background: var(--surface);
+  font-weight: 680;
+  font-size: 0.95rem;
+  display: grid;
+  place-items: center;
+  position: relative;
+  z-index: 1;
+}
+.money-rail > li:last-child::before {
+  background: var(--brand-action);
+  color: #f4f7f6;
+}
+.money-rail h3 {
+  margin: 0.2rem 0 0.3rem;
+  font-size: 1rem;
+  font-weight: 680;
+}
+.money-rail p {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.925rem;
+}
+@media (min-width: 52rem) {
+  .money-rail {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 1.25rem;
+  }
+  .money-rail > li {
+    grid-template-columns: 1fr;
+    row-gap: 0;
+    padding-bottom: 0;
+  }
+  .money-rail > li h3,
+  .money-rail > li p {
+    margin-top: 0.4rem;
+  }
+  .money-rail > li:not(:last-child)::after {
+    left: 2.7rem;
+    right: -1.2rem;
+    top: 1.02rem;
+    bottom: auto;
+    width: auto;
+    height: 2px;
+  }
+}
+
+/*
+ * A closing band: photograph under an ink wash, content on top. The wash
+ * holds the text above AA contrast over any sky the photograph contains.
+ */
+.band {
+  position: relative;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  isolation: isolate;
+}
+.band > img.band-photo {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: -2;
+}
+.band::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(
+    95deg,
+    rgba(14, 20, 18, 0.94) 0%,
+    rgba(14, 20, 18, 0.82) 52%,
+    rgba(14, 20, 18, 0.5) 100%
+  );
+}
+.band-inner {
+  padding: 2.5rem 1.5rem;
+  color: #f4f7f6;
+}
+.band .h2 {
+  color: #f4f7f6;
+}
+.band p {
+  color: #cfd6d2;
+}
+@media (min-width: 62rem) {
+  .band-inner {
+    padding: 3.5rem 3rem;
+  }
+}
+
+/*
+ * The homepage landlord panel gains the dusk skyline as a backdrop, under
+ * the same wash discipline as .band. The panel's own ink background stays
+ * as the fallback if the photograph is slow or missing.
+ */
+.cta.cta-photograph {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+.cta > img.cta-photo {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: -2;
+}
+.cta.cta-photograph::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(
+    100deg,
+    rgba(14, 20, 18, 0.97) 0%,
+    rgba(14, 20, 18, 0.92) 45%,
+    rgba(14, 20, 18, 0.78) 100%
+  );
+}
+@media (prefers-reduced-motion: no-preference) {
+  .figure-frame,
+  .band,
+  .cta.cta-photograph {
+    transition: border-color 160ms ease;
+  }
 }

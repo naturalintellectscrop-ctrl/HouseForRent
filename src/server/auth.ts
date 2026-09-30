@@ -1,8 +1,8 @@
 /**
- * Authentication — credentials, sessions, and the server-resolved caller.
+ * Authentication - credentials, sessions, and the server-resolved caller.
  *
  * RUNS AGAINST THE PRODUCTION DATABASE (Supabase Postgres): password hashes
- * are bcrypt ($2b$) as issued by the real API — hashing and verification use
+ * are bcrypt ($2b$) as issued by the real API - hashing and verification use
  * bcryptjs so the 765 existing credentials keep working. Sessions use the
  * production `session` table shape: an opaque random token in an httpOnly
  * cookie, its SHA-256 hash in `refresh_token_hash`, revocation via
@@ -28,7 +28,7 @@ const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
 /**
  * A constant VALID dummy bcrypt hash so a missing account costs the same
- * bcrypt expansion work as a wrong password — timing reveals nothing.
+ * bcrypt expansion work as a wrong password - timing reveals nothing.
  */
 const DUMMY_BCRYPT_HASH = '$2b$10$WoP7X/zlmvmpfuP7WC/kbeX/CPGmuDuhbWsRpyd.xZ0dwt5UgO/JO';
 
@@ -61,7 +61,7 @@ export interface ResolvedSession {
 
 /**
  * Resolves the caller from the session cookie, or null. Server components
- * and route handlers both go through this — one implementation, and the
+ * and route handlers both go through this - one implementation, and the
  * only one.
  */
 export const resolveSession = cache(async (): Promise<ResolvedSession | null> => {
@@ -70,7 +70,7 @@ export const resolveSession = cache(async (): Promise<ResolvedSession | null> =>
   if (!token) return null;
 
   // The production `session` table keeps the token hash in
-  // `refresh_token_hash` with no unique constraint — lookup is findFirst.
+  // `refresh_token_hash` with no unique constraint - lookup is findFirst.
   const row = await db.session.findFirst({
     where: { refreshTokenHash: hashToken(token) },
     include: {
@@ -169,7 +169,7 @@ export class PasswordPolicyError extends Error {
  * The usual reason to change a password is "someone else may have access".
  * Leaving other sessions alive would preserve exactly the access the user
  * is trying to close. The CURRENT session survives, so the person making
- * the change is not signed out mid-action — that asymmetry is deliberate.
+ * the change is not signed out mid-action - that asymmetry is deliberate.
  *
  * An audit row is written in the same transaction: a credential change is
  * exactly the kind of event the audit page exists for.
@@ -187,7 +187,7 @@ export async function changePassword(
   }
 
   // partyId is not a unique constraint on user_account in the production
-  // schema — the 1:1 with party is semantic, so lookup is findFirst.
+  // schema - the 1:1 with party is semantic, so lookup is findFirst.
   const account = await db.userAccount.findFirst({
     where: { partyId: session.partyId },
     include: { credential: true },

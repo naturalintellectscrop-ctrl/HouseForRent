@@ -12,7 +12,7 @@ import { ApiAlert } from '@/app/ui';
  * Verifying is the act that lets a non-owner publish somebody else's
  * property. It deserves a beat of friction: the operator picks a verdict,
  * the consequence is spelled out in the operator's own register, and only
- * then is the call made. The optional note travels to the AUDIT trail —
+ * then is the call made. The optional note travels to the AUDIT trail -
  * the row deliberately does not carry it (mandates.ts).
  *
  * Both buttons always work: the service re-checks `pending` and answers
@@ -53,7 +53,7 @@ export function MandateActions({
       } else {
         setError({
           message:
-            'Could not reach the House For Rent API. Nothing was decided — try again when you have signal.',
+            'Could not reach the House For Rent API. Nothing was decided - try again when you have signal.',
         });
       }
     } finally {

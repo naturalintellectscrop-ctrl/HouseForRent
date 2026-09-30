@@ -16,14 +16,14 @@ const STATE_HEADLINE: Record<string, string> = {
  *
  * ── When this card exists ──
  * The listing page renders it only when the SERVER's blocker list contains
- * `mandate` — meaning this account lists on a tier that markets property
+ * `mandate` - meaning this account lists on a tier that markets property
  * it does not own, and publish is gated on the owner's written authority.
  * A property owner never sees it: for them a mandate is not a thing the
  * platform holds, and the backend would answer 422 MANDATE_NOT_NEEDED to
  * any attempt anyway.
  *
  * Submitting is idempotent server-side: a pending or verified mandate
- * returns unchanged, and a rejected one resets to pending — so "submit
+ * returns unchanged, and a rejected one resets to pending - so "submit
  * again" after a rejection is the same control as the first submission,
  * and the row's history stays one row per relationship.
  */
@@ -63,7 +63,7 @@ export function MandatePanel({
       } else {
         setError({
           message:
-            'Could not reach House For Rent. Nothing was submitted — try again in a moment.',
+            'Could not reach House For Rent. Nothing was submitted - try again in a moment.',
         });
       }
     } finally {
@@ -78,7 +78,7 @@ export function MandatePanel({
         Because this account markets property it does not own, a listing can
         only publish once the property&rsquo;s registered owner has given
         written authority for us to market it. That authority is verified by
-        our operations desk — it is what keeps a middleman from listing a
+        our operations desk - it is what keeps a middleman from listing a
         home the owner has never agreed to.
       </p>
 
@@ -97,7 +97,7 @@ export function MandatePanel({
           {ok ? <p className="notice notice-ok" role="status">{ok}</p> : null}
           {state === 'rejected' ? (
             <p className="muted" style={{ margin: 0 }}>
-              You can submit again — the decision note from operations is in
+              You can submit again - the decision note from operations is in
               your audit history, and a fresh submission re-enters the queue.
             </p>
           ) : null}

@@ -10,7 +10,7 @@
  *  - Staleness is COMPUTED against the configured window, never stored.
  *  - `blockedBy` for a lister's inventory is computed HERE, so the landlord
  *    UI cannot hold its own opinion of what publishing requires.
- *  - Search free-text covers neighbourhood + landmark ONLY — a lister
+ *  - Search free-text covers neighbourhood + landmark ONLY - a lister
  *    cannot buy relevance by stuffing their description.
  */
 import { db } from '@/lib/db';
@@ -27,7 +27,7 @@ const CONFIG_VALUE_TYPES = ['int', 'json', 'text'] as const;
 
 /**
  * The CURRENT value of an int-valued config parameter. The parameter row no
- * longer carries a value — the current value is the LATEST ConfigVersion's
+ * longer carries a value - the current value is the LATEST ConfigVersion's
  * (append-only history, FR-10.1); the row holds only key and value_type.
  */
 export async function configIntValue(key: string, fallback: number): Promise<number> {
@@ -50,7 +50,7 @@ export async function freshnessWindowDays(): Promise<number> {
 /**
  * Records a parameter change. Append-only by construction: the value lives
  * on a NEW config_version row (who, when, what it became), never an edit of
- * the parameter row (FR-10.1) — the row's valueType is the only mutable fact.
+ * the parameter row (FR-10.1) - the row's valueType is the only mutable fact.
  */
 export async function setConfigParameter(params: { key: string; value: string; valueType: string; createdByPartyId: string }) {
   if (!(CONFIG_VALUE_TYPES as readonly string[]).includes(params.valueType)) {
@@ -86,7 +86,7 @@ export interface WithFreshness<T extends { availabilityConfirmedAt: Date | null 
 
 /**
  * Staleness is computed, not stored (FR-2.3). A listing whose availability
- * was never confirmed is treated as stale — absence of evidence is not
+ * was never confirmed is treated as stale - absence of evidence is not
  * evidence of availability.
  */
 export function withFreshness<T extends { availabilityConfirmedAt: Date | null }>(
@@ -162,7 +162,7 @@ export interface SearchResult {
   isStale: boolean;
   daysSinceConfirmed: number | null;
   photos: PhotoView[];
-  /** Always true in V1 — tenants never pay (Decision 3). */
+  /** Always true in V1 - tenants never pay (Decision 3). */
   freeForTenants: boolean;
 }
 
@@ -180,7 +180,7 @@ const MAX_LIMIT = 60;
 
 /**
  * Corridor-scoped tenant search (FR-4.1). The three NON-NEGOTIABLE
- * constraints are applied regardless of filters — they are what the public
+ * constraints are applied regardless of filters - they are what the public
  * feed MEANS. `filters` only narrows.
  */
 export async function publicSearch(filters: SearchFilters = {}, asOf: Date = new Date()): Promise<SearchResponse> {
@@ -213,7 +213,7 @@ export async function publicSearch(filters: SearchFilters = {}, asOf: Date = new
       where.OR = [
         { property: { neighbourhood: { name: { contains: q } } } },
         // The old district column is the parent relation now: match the
-        // parent's name — never invent a district.
+        // parent's name - never invent a district.
         { property: { neighbourhood: { parent: { name: { contains: q } } } } },
         { property: { landmarkText: { contains: q } } },
       ];
@@ -230,7 +230,7 @@ export async function publicSearch(filters: SearchFilters = {}, asOf: Date = new
         ? { monthlyRent: 'desc' }
         : filters.sort === 'newest'
           ? { createdAt: 'desc' }
-          : { availabilityConfirmedAt: 'desc' }; // fresh first — a wasted trip is THE failure
+          : { availabilityConfirmedAt: 'desc' }; // fresh first - a wasted trip is THE failure
 
   const [rows, totalCount] = await Promise.all([
     db.listing.findMany({
@@ -270,15 +270,15 @@ export async function publicSearch(filters: SearchFilters = {}, asOf: Date = new
 
   const emptyStateMessage =
     totalCount === 0
-      ? 'No homes match this search right now. House For Rent publishes only homes our officers have visited and confirmed available — a short list somebody stood inside is the product. New verified homes appear as field visits are completed.'
+      ? 'No homes match this search right now. House For Rent publishes only homes our officers have visited and confirmed available - a short list somebody stood inside is the product. New verified homes appear as field visits are completed.'
       : totalCount < 5
-        ? 'Only a few homes are live in this corridor at the moment. Every one of them has been visited and confirmed by a field officer — that verification is what takes time.'
+        ? 'Only a few homes are live in this corridor at the moment. Every one of them has been visited and confirmed by a field officer - that verification is what takes time.'
         : null;
 
   return { results, totalCount, limit, offset, emptyStateMessage };
 }
 
-/** Public detail. Reuses the feed's visibility rules — no separate opinion. */
+/** Public detail. Reuses the feed's visibility rules - no separate opinion. */
 export async function publicDetail(listingId: string, asOf: Date = new Date()) {
   const windowDays = await freshnessWindowDays();
   const l = await db.listing.findUnique({
@@ -305,7 +305,7 @@ export async function publicDetail(listingId: string, asOf: Date = new Date()) {
     monthlyRent: l.monthlyRent.toString(),
     requiredMonthsUpfront: l.requiredMonthsUpfront,
     depositAmount: l.depositAmount.toString(),
-    /** The server-stated total a tenant will be asked to fund — derived from
+    /** The server-stated total a tenant will be asked to fund - derived from
      * the same terms fund-escrow derives its authoritative amount from (F-012). */
     expectedUpfront: (l.monthlyRent * BigInt(l.requiredMonthsUpfront) + l.depositAmount).toString(),
     bedrooms: l.property.bedrooms,
@@ -407,13 +407,13 @@ export async function effectiveCommissionRate(asOf: Date = new Date(), bootstrap
   const versions = await db.commissionRateVersion.findMany({
     orderBy: { effectiveFrom: 'desc' },
   });
-  // A later version supersedes an earlier one outright — there is no
+  // A later version supersedes an earlier one outright - there is no
   // effective_to column; the latest version effective at `asOf` is current.
   const current = versions.find((v) => v.effectiveFrom.getTime() <= asOf.getTime()) ?? versions[0];
   if (!current) {
     // First-ever rate on an empty table: the 10000 bp default (SSOT
-    // Decision 4). The immutable version row names a real creator — the
-    // party whose action triggered the bootstrap — so a caller with no
+    // Decision 4). The immutable version row names a real creator - the
+    // party whose action triggered the bootstrap - so a caller with no
     // actor in scope (a public read) fails loudly rather than fabricating one.
     if (!bootstrapByPartyId) {
       throw new Error('no commission rate version exists and no actor was provided to record the default');
@@ -483,7 +483,7 @@ async function canPublish(params: { listerTier: ListerTier; listerPartyId: strin
 /**
  * The ONE implementation of "what stands between this listing and the live
  * feed" (the publish gate, expressed as blocker codes). evaluatePublish,
- * findForLister and the admin verification queue all call this — three
+ * findForLister and the admin verification queue all call this - three
  * surfaces, one opinion. `mandateVerified` is resolved by the caller (it
  * needs a (lister, property) query only for non-owner tiers).
  */
@@ -505,7 +505,7 @@ function publishBlockers(input: {
 }
 
 /**
- * THE publish gate — all four preconditions enforced server-side (FR-2.5,
+ * THE publish gate - all four preconditions enforced server-side (FR-2.5,
  * FR-3.1, FR-3.2, FR-9.1). `dryRun` produces the same evaluation without
  * flipping state, so the landlord UI can show what is still missing.
  */
@@ -586,7 +586,7 @@ export async function findForLister(listerPartyId: string) {
 
   const tier = (await db.listerProfile.findUnique({ where: { partyId: listerPartyId } }))?.tier;
 
-  // The mandate state each listing's publish panel needs — one read for the
+  // The mandate state each listing's publish panel needs - one read for the
   // whole inventory, mapped per property. Null means "no mandate on file",
   // which is itself the state the panel must render for a non-owner tier.
   const mandates = await db.propertyMandate.findMany({
@@ -645,11 +645,11 @@ export async function getListingForLister(listingId: string, listerPartyId: stri
 }
 
 /**
- * FR-10.2 — the admin verification queue: every listing not yet live (and
+ * FR-10.2 - the admin verification queue: every listing not yet live (and
  * not withdrawn), with what each is actually waiting on.
  *
  * The previous implementation hard-coded `verificationState: 'unverified'`,
- * `mandateState: null` and `hasAcceptedAgreement: false` — so the console
+ * `mandateState: null` and `hasAcceptedAgreement: false` - so the console
  * showed a mandate column that could never hold a value and a queue that
  * could never name its real blockers. This version reads the states and
  * computes `blockedBy` through the same `publishBlockers` gate the publish
@@ -720,7 +720,7 @@ export async function listServiceAreaNeighbourhoods() {
 }
 
 // F-015 note: neighbourhood CREATION moved to ops.ts
-// (createServiceAreaNeighbourhood) when it gained its first real UI —
+// (createServiceAreaNeighbourhood) when it gained its first real UI -
 // duplicate protection, validation and an audit row. The old bare
 // db.neighbourhood.create wrapper here was unreachable dead code and is
 // gone (consolidate, don't duplicate).

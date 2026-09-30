@@ -3,7 +3,7 @@ import { publicDetail } from '@/server/listings';
 import { ApiError, route } from '@/server/http';
 
 /**
- * GET /api/v1/listings/:id — public detail. Reuses the feed's visibility
+ * GET /api/v1/listings/:id - public detail. Reuses the feed's visibility
  * rules; a non-public listing is 404, not 403, so an unpublished address
  * cannot be discovered by probing.
  */

@@ -6,12 +6,12 @@ import { TierControl } from '../tier-control';
 import { IdentityCheckControl } from './identity-check';
 
 /**
- * The account detail (admin) — the depth behind a directory row.
+ * The account detail (admin) - the depth behind a directory row.
  *
  * ── What an operator actually needs when a landlord or tenant calls ──
  * Standing (active? verified?), what they hold (properties, deals,
  * viewings), and what has HAPPENED on this account (its own audit rows,
- * both events they acted in and events carried out on it — tier changes,
+ * both events they acted in and events carried out on it - tier changes,
  * provisioning). The service scopes every query by this partyId, and the
  * page adds no arithmetic. Money amounts stay at the deal/rent level; the
  * ledger detail lives on the deal page, next to the audit trail that
@@ -159,7 +159,7 @@ export default async function PartyPage(props: { params: Promise<{ partyId: stri
             </p>
             <Empty title="No account answers to that reference.">
               A party that does not exist and one that was never given an
-              account look the same from here — the more common cause is a
+              account look the same from here - the more common cause is a
               truncated or mistyped ID.
             </Empty>
           </>
@@ -241,8 +241,8 @@ export default async function PartyPage(props: { params: Promise<{ partyId: stri
           </div>
           <p className="faint" style={{ fontSize: '0.8125rem', marginTop: 0 }}>
             {d.identity.attempts > 0
-              ? `${d.identity.attempts} attempt${d.identity.attempts === 1 ? '' : 's'} on file${d.identity.checkedAt ? `, last ${onDay(d.identity.checkedAt)}` : ''}. A pass marks the account verified${d.accountStatus === 'pending_verification' ? ' — this account is waiting on that' : ''}.`
-              : 'This account has never attempted a check. A pass marks the account verified' + (d.accountStatus === 'pending_verification' ? ' — this account is waiting on that.' : '.')}
+              ? `${d.identity.attempts} attempt${d.identity.attempts === 1 ? '' : 's'} on file${d.identity.checkedAt ? `, last ${onDay(d.identity.checkedAt)}` : ''}. A pass marks the account verified${d.accountStatus === 'pending_verification' ? ' - this account is waiting on that' : ''}.`
+              : 'This account has never attempted a check. A pass marks the account verified' + (d.accountStatus === 'pending_verification' ? ' - this account is waiting on that.' : '.')}
           </p>
           <IdentityCheckControl
             partyId={d.party.id}
@@ -264,8 +264,8 @@ export default async function PartyPage(props: { params: Promise<{ partyId: stri
               <span className="faint">·</span>{' '}
               <span className="faint" style={{ fontSize: '0.8125rem' }}>
                 {d.listerTier === 'property_owner' || !d.listerTier
-                  ? 'owns what they list — no mandate required'
-                  : 'markets for others — every listing needs the owner’s verified mandate'}
+                  ? 'owns what they list - no mandate required'
+                  : 'markets for others - every listing needs the owner’s verified mandate'}
               </span>
             </dd>
           </dl>
@@ -324,7 +324,7 @@ export default async function PartyPage(props: { params: Promise<{ partyId: stri
           {d.deals.length === 0 ? (
             <p className="faint" style={{ margin: 0 }}>
               {d.role === 'tenant'
-                ? 'No deal yet — deals begin after a conducted viewing.'
+                ? 'No deal yet - deals begin after a conducted viewing.'
                 : 'No deal on this account.'}
             </p>
           ) : (
@@ -359,7 +359,7 @@ export default async function PartyPage(props: { params: Promise<{ partyId: stri
         </p>
         {d.audit.length === 0 ? (
           <p className="faint" style={{ margin: 0 }}>
-            Nothing recorded yet — an account that has only signed in has no
+            Nothing recorded yet - an account that has only signed in has no
             trail, and that is the honest answer.
           </p>
         ) : (

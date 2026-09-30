@@ -3,7 +3,7 @@ import { effectiveCommissionRate } from '@/server/listings';
 import { route } from '@/server/http';
 
 /**
- * GET /api/v1/commission-rate — the currently-effective rate version
+ * GET /api/v1/commission-rate - the currently-effective rate version
  * (Decision 4: effective-dated). Public: it is what the landlord-facing
  * marketing pages quote, and the same version an agreement is drafted at.
  */

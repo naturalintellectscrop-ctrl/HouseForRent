@@ -15,7 +15,7 @@ function group(digits: string): string {
  * One form, two resources: the property and its first listing terms are
  * created together by `POST /v1/landlord/properties`, because a landlord
  * does not think "I will describe a property, and separately publish terms
- * against it". The owner is read from the session server-side — nothing
+ * against it". The owner is read from the session server-side - nothing
  * here can name one.
  *
  * Money crosses as a STRING of integer shillings, never a number.
@@ -38,7 +38,7 @@ export function PropertyForm({
    * Grouping as they type is the cheapest possible guard against a
    * factor-of-ten error, and it costs one piece of state.
    *
-   * The value SUBMITTED is the raw digits — the server takes a string of
+   * The value SUBMITTED is the raw digits - the server takes a string of
    * integer shillings and would reject the grouped form.
    */
   const [rent, setRent] = useState('');
@@ -64,7 +64,7 @@ export function PropertyForm({
     const streetAddress = String(data.get('streetAddress') ?? '').trim();
 
     // The reference carried the same pre-flight checks, in the same words.
-    // None of them decides whether the listing may PUBLISH — that stays
+    // None of them decides whether the listing may PUBLISH - that stays
     // server-side, behind the four gates.
     if (!neighbourhoodId) {
       setError({ message: 'Choose the neighbourhood the property is in.' });
@@ -73,7 +73,7 @@ export function PropertyForm({
     if (landmarkText.length < 4) {
       setError({
         message:
-          'Give us a landmark — how you would tell a driver where to turn off.',
+          'Give us a landmark - how you would tell a driver where to turn off.',
       });
       return;
     }
@@ -123,7 +123,7 @@ export function PropertyForm({
       } else {
         setError({
           message:
-            'Could not reach House For Rent. Nothing was saved — try again in a moment.',
+            'Could not reach House For Rent. Nothing was saved - try again in a moment.',
         });
       }
       setPending(false);
@@ -154,7 +154,7 @@ export function PropertyForm({
             {neighbourhoods.map((n) => (
               <option key={n.id} value={n.id}>
                 {n.name}
-                {n.parentName ? ` — ${n.parentName}` : ''}
+                {n.parentName ? ` - ${n.parentName}` : ''}
               </option>
             ))}
           </select>

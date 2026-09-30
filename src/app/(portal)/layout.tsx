@@ -5,7 +5,7 @@ import { currentRole, homeFor, requireRole } from '@/lib/session';
 
 /*
  * The portal's link set lives here once. It used to exist twice (desktop
- * nav + mobile menu panel), which is how the two copies drift — a link
+ * nav + mobile menu panel), which is how the two copies drift - a link
  * added to one and not the other is a bug the second role notices. The
  * admin variant is the tenant list minus the tenant-only pages.
  */
@@ -37,8 +37,8 @@ const ADMIN_NAV = [
 /**
  * The signed-in shell for tenants and landlords.
  *
- * Both roles share it because both are doing the same kind of thing —
- * following one transaction through its stages — and giving each its own
+ * Both roles share it because both are doing the same kind of thing -
+ * following one transaction through its stages - and giving each its own
  * chrome would be two things to keep consistent for no gain. The nav
  * differs; nothing else does.
  *
@@ -75,7 +75,7 @@ export default async function PortalLayout({
           </nav>
           <div className="site-actions-desktop">
             {/* Sign-out is a plain HTML form to the API, which revokes the
-                session server-side and clears the cookie — no JavaScript
+                session server-side and clears the cookie - no JavaScript
                 involved, and the token cannot be replayed. */}
             <form action="/api/v1/auth/logout" method="post">
               <button type="submit" className="btn btn-secondary btn-sm">

@@ -7,14 +7,11 @@ export const metadata = {
     'House For Rent is operated by Natural Intellects Ltd in Kampala. Why we verify every property in person, and what that costs us.',
 };
 
-/**
- * ── What is not on this page ──
- * No founding date we have not checked, no headcount, no funding, no
- * "trusted by thousands", no photographs of a team. Every one of those is
- * easy to write and impossible for a reader to verify, and a page whose job
- * is to establish trust cannot afford a single sentence that turns out to be
- * decoration. What is here is the operating model, which is true by
- * construction: it is what the software actually does.
+/*
+ * What is not on this page: no founding date we have not checked, no
+ * headcount, no funding, no "trusted by thousands". The photography is
+ * illustrative and captioned as such; the process it depicts is the one
+ * the software actually enforces, which is what the page is for.
  */
 export default function AboutPage() {
   return (
@@ -33,7 +30,27 @@ export default function AboutPage() {
         </div>
       </section>
 
-      <section className="section">
+      <section className="section" style={{ paddingTop: 0 }}>
+        <div className="page">
+          <figure className="figure figure-wide">
+            <div className="figure-frame">
+              <img
+                src="/site/about-area.jpg"
+                alt="Rooftops of a leafy Kampala residential neighbourhood at golden hour"
+                loading="eager"
+                decoding="async"
+              />
+            </div>
+            <figcaption>
+              Kampala and Wakiso: the corridor we cover, street by street. We
+              work where an officer can reach a property and get back the same
+              day.
+            </figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <section className="section" style={{ paddingTop: 0 }}>
         <div className="page">
           <div className="detail-grid">
             <div className="stack-lg">
@@ -80,6 +97,21 @@ export default function AboutPage() {
                     a much smaller thing to ask.
                   </p>
                 </div>
+                <figure className="figure">
+                  <div className="figure-frame">
+                    <img
+                      src="/site/officer-visit.jpg"
+                      alt="A field officer photographing a bungalow and noting details on a clipboard"
+                      loading="lazy"
+                      decoding="async"
+                    />
+                  </div>
+                  <figcaption>
+                    Illustration of the visit every listing starts with: the
+                    officer&rsquo;s photographs and report, not the
+                    landlord&rsquo;s word.
+                  </figcaption>
+                </figure>
               </section>
 
               <section className="stack">
@@ -89,7 +121,7 @@ export default function AboutPage() {
                     Verification does not scale the way a listings database
                     does. Every property on this site cost an officer a journey,
                     and that is why we operate in a defined corridor rather than
-                    claiming national coverage — an officer has to be able to
+                    claiming national coverage. An officer has to be able to
                     reach it and get back.
                   </p>
                   <p>
@@ -106,10 +138,10 @@ export default function AboutPage() {
             <aside className="detail-aside stack">
               <div className="card stack-sm">
                 {/* The company's registered identity, from the original
-                    artwork — not a redrawn approximation. */}
+                    artwork, not a redrawn approximation. */}
                 <img
                   src="/brand/house-for-rent-logo.png"
-                  alt="House For Rent — find your next home with ease."
+                  alt="House For Rent: find your next home with ease."
                   width={160}
                   height={189}
                   style={{
@@ -150,6 +182,99 @@ export default function AboutPage() {
                 </Link>
               </div>
             </aside>
+          </div>
+        </div>
+      </section>
+
+      {/*
+        The escrow path as one connected rail. Four states in order, because
+        the sequence is the guarantee: the money never moves to step four
+        before step three has happened.
+      */}
+      <section className="section section-sunk">
+        <div className="page stack-lg">
+          <div className="stack">
+            <h2 className="h1">How the money moves</h2>
+            <p className="prose" style={{ maxWidth: '44rem' }}>
+              Rent and deposit never pass directly from tenant to landlord.
+              They travel one road, in one direction, and every movement is
+              written to a reconciled ledger.
+            </p>
+          </div>
+
+          <ol className="money-rail">
+            <li>
+              <div>
+                <h3>You pay House For Rent</h3>
+                <p>
+                  Rent and deposit, calculated from the published listing
+                  terms. The figures are computed by the system, not typed in
+                  by anyone.
+                </p>
+              </div>
+            </li>
+            <li>
+              <div>
+                <h3>We hold it in escrow</h3>
+                <p>
+                  Recorded against your specific tenancy in a double-entry
+                  ledger. The landlord has not received it, and cannot.
+                </p>
+              </div>
+            </li>
+            <li>
+              <div>
+                <h3>You move in and confirm</h3>
+                <p>
+                  You collect the keys, settle in, and confirm the move-in
+                  from your account. This confirmation is what releases the
+                  money.
+                </p>
+              </div>
+            </li>
+            <li>
+              <div>
+                <h3>The landlord is paid</h3>
+                <p>
+                  The settlement reaches the landlord, and our one commission
+                  is taken from it. If there is no move-in, the escrow is
+                  refunded instead.
+                </p>
+              </div>
+            </li>
+          </ol>
+        </div>
+      </section>
+
+      <section className="section">
+        <div className="page">
+          <div className="band">
+            <img
+              className="band-photo"
+              src="/site/cta-band.jpg"
+              alt=""
+              aria-hidden="true"
+              loading="lazy"
+              decoding="async"
+            />
+            <div className="band-inner stack">
+              <h2 className="h2" style={{ maxWidth: '22ch' }}>
+                A short list somebody stood inside.
+              </h2>
+              <p style={{ maxWidth: '40rem' }}>
+                Every home on this site was visited, photographed and
+                confirmed by a field officer we employ. Start with the homes
+                that are verified right now.
+              </p>
+              <div className="row">
+                <Link href="/properties" className="btn btn-primary btn-lg">
+                  Browse verified homes
+                </Link>
+                <Link href="/how-it-works" className="btn btn-secondary btn-lg">
+                  How it works
+                </Link>
+              </div>
+            </div>
           </div>
         </div>
       </section>

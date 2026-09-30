@@ -3,12 +3,12 @@ import { api, ApiError, type Reconciliation } from '@/lib/api';
 import { AdminOnly, Empty, shillings, StatusDot, when } from '@/app/ui';
 
 /**
- * FR-10.4 — ledger ↔ custodian reconciliation.
+ * FR-10.4 - ledger ↔ custodian reconciliation.
  *
  * Two independent signals, presented as two, because they fail for
  * different reasons and need different responses:
  *
- *   - the ledger disagreeing with the CUSTODIAN is a real divergence —
+ *   - the ledger disagreeing with the CUSTODIAN is a real divergence -
  *     money moved somewhere our books do not reflect, or vice versa;
  *   - the ledger disagreeing with ITSELF (a posting that does not balance)
  *     is a defect in our own code.
@@ -63,7 +63,7 @@ export default async function ReconciliationPage() {
         <p className="alert alert-error" role="alert">
           <strong>The ledger does not balance internally.</strong> At least
           one posting&rsquo;s debits and credits differ. This is a defect in
-          our own books, not a custodian disagreement — treat every figure
+          our own books, not a custodian disagreement - treat every figure
           below as unreliable until it is resolved.
         </p>
       )}
@@ -91,7 +91,7 @@ export default async function ReconciliationPage() {
         ) : (
           <StatusDot
             tone="critical"
-            label="Ledger and custodian DISAGREE — investigate before settling."
+            label="Ledger and custodian DISAGREE - investigate before settling."
           />
         )}
       </p>
@@ -102,7 +102,7 @@ export default async function ReconciliationPage() {
 
       <p className="muted">
         The ledger is authoritative. A custodian mismatch is surfaced here,
-        never silently absorbed, and never resolved by adjusting a posting —
+        never silently absorbed, and never resolved by adjusting a posting -
         corrections are new reversing entries.
       </p>
 
@@ -145,7 +145,7 @@ export default async function ReconciliationPage() {
       )}
 
       <p className="muted">
-        A single green reading says less than a pattern — an intermittent
+        A single green reading says less than a pattern - an intermittent
         divergence is the one worth chasing.
       </p>
     </>

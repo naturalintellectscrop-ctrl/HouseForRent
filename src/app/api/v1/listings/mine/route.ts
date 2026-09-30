@@ -3,12 +3,12 @@ import { api } from '@/lib/api';
 import { requireRole, route } from '@/server/http';
 
 /**
- * GET /api/v1/listings/mine — the signed-in landlord's own inventory, with
+ * GET /api/v1/listings/mine - the signed-in landlord's own inventory, with
  * the server-computed `blockedBy` list and `canPublish` for each listing.
  *
  * Route order matters and a static segment beats a dynamic one: this file
  * exists so "mine" is never mistaken for a listing id by the
- * `/api/v1/listings/[id]` handler beside it — the same ordering rule the
+ * `/api/v1/listings/[id]` handler beside it - the same ordering rule the
  * in-process adapter documents (src/lib/api.ts).
  *
  * The contract shape already lives in the in-process resolver the landlord

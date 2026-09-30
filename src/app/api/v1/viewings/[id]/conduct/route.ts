@@ -3,7 +3,7 @@ import { conduct } from '@/server/viewings';
 import { readJson, requireRole, route } from '@/server/http';
 
 /**
- * POST /api/v1/viewings/:id/conduct — THE stage invariant. Refuses without
+ * POST /api/v1/viewings/:id/conduct - THE stage invariant. Refuses without
  * a field report (FIELD_REPORT_REQUIRED), then writes the immutable
  * introduction record and the conducted status together.
  */

@@ -3,7 +3,7 @@ import { api } from '@/lib/api';
 import { requireRole, route } from '@/server/http';
 
 /**
- * GET /api/v1/admin/audit — recent audited events (NFR-2).
+ * GET /api/v1/admin/audit - recent audited events (NFR-2).
  *
  * TASK 7-b (additive route, sandbox adaptation): the reference API only ever
  * exposed audit lookup BY SUBJECT; this unfiltered recent-events read is the

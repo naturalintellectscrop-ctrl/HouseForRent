@@ -3,7 +3,7 @@ import { changePassword, InvalidCurrentPasswordError, PasswordPolicyError } from
 import { ApiError, readJson, requireSession, requireString, route } from '@/server/http';
 
 /**
- * POST /api/v1/auth/password — change the signed-in account's password.
+ * POST /api/v1/auth/password - change the signed-in account's password.
  *
  * The service owns every rule: the current password is re-verified (so a
  * stolen cookie cannot replace credentials), the new one meets the same
@@ -13,7 +13,7 @@ import { ApiError, readJson, requireSession, requireString, route } from '@/serv
  * `INVALID_CURRENT_PASSWORD` is a 403, not a 401: the SESSION is fine, the
  * person typing may not be who the cookie says. A 401 here would log a
  * legitimate user out of the page they are looking at for no better reason
- * than a typo — and a locked-out user cannot retry.
+ * than a typo - and a locked-out user cannot retry.
  */
 export const POST = route(async (req: NextRequest) => {
   const session = await requireSession();

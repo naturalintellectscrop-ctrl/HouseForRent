@@ -13,7 +13,7 @@ export default async function TenantDealsPage() {
       <div>
         <h1 className="h1">Your tenancy</h1>
         <p className="lede">
-          Agreements, escrow and move-in — every letting you have been part
+          Agreements, escrow and move-in - every letting you have been part
           of, and what is outstanding on each.
         </p>
       </div>
@@ -61,7 +61,7 @@ export default async function TenantDealsPage() {
                   <span className="faint" style={{ fontSize: '0.8125rem' }}>
                     {deal.monthlyRentSnapshot
                       ? 'agreed rent'
-                      : 'listed rent — not yet agreed'}
+                      : 'listed rent - not yet agreed'}
                   </span>
                 </span>
               </Link>

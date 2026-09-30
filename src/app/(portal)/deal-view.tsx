@@ -15,7 +15,7 @@ import { DealAction } from './deal-action';
  * ── Why tenant and landlord share this component ──
  * They see the same deal, the same ledger position and the same progress.
  * What differs is `availableActions`, and that difference is decided by the
- * SERVER from the caller's role and party — not here. Two components would
+ * SERVER from the caller's role and party - not here. Two components would
  * have been two places to forget to render an action the server offered, or
  * to render one it did not.
  *
@@ -89,7 +89,7 @@ export function DealView({
                       {i === position ? (
                         <span className="trail-note">
                           {' '}
-                          — where you are now
+                          - where you are now
                         </span>
                       ) : null}
                     </div>
@@ -143,7 +143,7 @@ export function DealView({
                       <td className="num">{when(t.occurredAt)}</td>
                       <td>{t.fromStatus.replace(/_/g, ' ')}</td>
                       <td>{t.toStatus.replace(/_/g, ' ')}</td>
-                      <td className="muted">{t.reason ?? '—'}</td>
+                      <td className="muted">{t.reason ?? ' - '}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -201,7 +201,7 @@ export function DealView({
                 <dd className="num">
                   {financial.commissionAmount
                     ? shillings(financial.commissionAmount)
-                    : '—'}
+                    : ' - '}
                 </dd>
               </div>
             </dl>

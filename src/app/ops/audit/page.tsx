@@ -3,7 +3,7 @@ import { api, ApiError, type AuditEvent } from '@/lib/api';
 import { AdminOnly, Empty, when } from '@/app/ui';
 
 /**
- * NFR-2 — the audit trail for one subject.
+ * NFR-2 - the audit trail for one subject.
  *
  * Lookup by subject reference (a deal id, a listing id, a config key)
  * rather than a browsable firehose. The log records money, verification,
@@ -12,7 +12,7 @@ import { AdminOnly, Empty, when } from '@/app/ui';
  * turns an accountability record into a surveillance tool.
  *
  * Payloads are rendered as-is because they contain no personal data by
- * construction — `AuditService` rejects any payload carrying a NIN, phone
+ * construction - `AuditService` rejects any payload carrying a NIN, phone
  * number, password or token before it can be written.
  */
 export default async function AuditPage(props: {
@@ -40,7 +40,7 @@ export default async function AuditPage(props: {
       <h1>Audit trail</h1>
       <p className="lede">
         Money, verification, consent and configuration events for one
-        subject. Rows are append-only and immutable — the database rejects
+        subject. Rows are append-only and immutable - the database rejects
         any attempt to edit or remove one.
       </p>
 
@@ -57,7 +57,7 @@ export default async function AuditPage(props: {
             required
           />
           <p className="hint">
-            Lookup is by subject, not browsable in bulk — an accountability
+            Lookup is by subject, not browsable in bulk - an accountability
             record should not double as a way to page through everyone.
           </p>
         </div>
@@ -84,7 +84,7 @@ export default async function AuditPage(props: {
             </div>
             <dl className="dl">
               <dt>Actor</dt>
-              <dd className="mono">{event.actorName ?? event.actorPartyId ?? '—'}</dd>
+              <dd className="mono">{event.actorName ?? event.actorPartyId ?? ' - '}</dd>
               {event.payload && (
                 <>
                   <dt>Detail</dt>

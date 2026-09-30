@@ -4,7 +4,7 @@ import { markListingAwaitingVerification } from '@/server/ops';
 import { parseShillings, readJson, requireRole, requireString, route } from '@/server/http';
 
 /**
- * POST /api/v1/landlord/properties — the landlord authors the property and
+ * POST /api/v1/landlord/properties - the landlord authors the property and
  * its first listing terms (F-003). FOO verifies it later; publication stays
  * server-gated. The listing lands in `awaiting_verification` so it enters
  * the field queue by construction.

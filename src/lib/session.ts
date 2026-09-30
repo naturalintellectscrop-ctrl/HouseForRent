@@ -1,5 +1,5 @@
 /**
- * Session helpers for server components — resolve the REAL session, not a
+ * Session helpers for server components - resolve the REAL session, not a
  * cookie assertion.
  *
  * The role returned here comes from the session row in the database, not

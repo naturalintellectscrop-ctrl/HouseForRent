@@ -21,7 +21,7 @@ export const metadata = { title: 'Your properties' };
  * listing". It is "why is my property not showing, and what do I do about
  * it". The API answers exactly that, per listing, server-side. This page
  * renders those reasons in the landlord's own vocabulary and holds no
- * opinion of its own about what publishing requires — the moment it did, it
+ * opinion of its own about what publishing requires - the moment it did, it
  * would eventually tell somebody they were ready when the server disagreed.
  */
 export default async function LandlordPage() {
@@ -73,7 +73,7 @@ export default async function LandlordPage() {
           }
         >
           Tell us about the property and your terms. A field officer visits,
-          photographs it and confirms it — then you accept the agreement and it
+          photographs it and confirms it - then you accept the agreement and it
           goes live. Nothing is charged until a tenant moves in.
         </Empty>
       ) : (

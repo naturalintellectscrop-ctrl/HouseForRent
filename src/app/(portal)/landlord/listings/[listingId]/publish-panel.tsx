@@ -23,7 +23,7 @@ const BLOCKER_COPY: Record<string, string> = {
  * refuse.
  *
  * The publish click first asks the server for a DRY RUN. Only when the
- * server answers `canPublish` does it publish for real — so a stale page
+ * server answers `canPublish` does it publish for real - so a stale page
  * produces the server's own list of blockers rather than a mutation that was
  * never going to succeed.
  */
@@ -53,7 +53,7 @@ export function PublishPanel({
     setBlockedBy(null);
     setPublishing(true);
     try {
-      // 1 — the dry run: what does the server say is outstanding?
+      // 1 - the dry run: what does the server say is outstanding?
       const dry = await postJson<{ blockedBy: string[]; canPublish: boolean }>(
         `/landlord/listings/${listingId}/publish`,
         { dryRun: true },
@@ -61,11 +61,11 @@ export function PublishPanel({
       if (!dry.canPublish) {
         setBlockedBy(dry.blockedBy);
         setError({
-          message: 'Not yet — the server reports these steps are still outstanding.',
+          message: 'Not yet - the server reports these steps are still outstanding.',
         });
         return;
       }
-      // 2 — the real thing.
+      // 2 - the real thing.
       await postJson(`/landlord/listings/${listingId}/publish`, {});
       setOk('Your property is live. Tenants can find it now.');
       router.refresh();
@@ -75,7 +75,7 @@ export function PublishPanel({
       } else {
         setError({
           message:
-            'Could not reach House For Rent. Nothing was changed — try again in a moment.',
+            'Could not reach House For Rent. Nothing was changed - try again in a moment.',
         });
       }
       router.refresh();
@@ -99,7 +99,7 @@ export function PublishPanel({
       } else {
         setError({
           message:
-            'Could not reach House For Rent. Nothing was changed — try again in a moment.',
+            'Could not reach House For Rent. Nothing was changed - try again in a moment.',
         });
       }
       router.refresh();
@@ -138,7 +138,7 @@ export function PublishPanel({
       <p className="muted">
         {canPublish
           ? 'Everything is in place. This will put the property into search results.'
-          : 'Not yet — the steps above have to be complete first.'}
+          : 'Not yet - the steps above have to be complete first.'}
       </p>
 
       {blockedBy && blockedBy.length > 0 ? (

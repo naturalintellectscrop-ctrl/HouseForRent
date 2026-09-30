@@ -66,7 +66,7 @@ export interface SearchResponse {
   emptyStateMessage: string | null;
 }
 
-/** What our officer recorded on site — structured, never free text. */
+/** What our officer recorded on site - structured, never free text. */
 export interface FieldConfirmed {
   conditionRating: 'excellent' | 'good' | 'fair' | 'poor';
   matchesListing: boolean;
@@ -79,7 +79,7 @@ export interface ListingDetail extends SearchResult {
   requiredMonthsUpfront: number;
   /**
    * What a tenant funds at agreement, DERIVED SERVER-SIDE from the listing's
-   * own terms — the same basis `fund-escrow` uses (F-012). Displayed here,
+   * own terms - the same basis `fund-escrow` uses (F-012). Displayed here,
    * never recomputed: a second copy of the figure someone is about to pay is
    * exactly the defect that finding was about.
    */
@@ -92,7 +92,7 @@ export interface ListingDetail extends SearchResult {
   fieldConfirmed: FieldConfirmed | null;
   /**
    * The signed-in tenant's bookmark state for this listing, resolved
-   * server-side. `null` for anonymous visitors and non-tenant roles — no
+   * server-side. `null` for anonymous visitors and non-tenant roles - no
    * toggle renders for them (saving is a private tenant surface).
    */
   savedByCaller?: boolean | null;

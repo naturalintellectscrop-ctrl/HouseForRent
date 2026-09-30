@@ -6,14 +6,14 @@ import { postJson, ClientApiError } from '@/lib/client';
 import { ApiAlert } from '@/app/ui';
 
 /**
- * Operations-run identity check (Task 14) — the phone-call path.
+ * Operations-run identity check (Task 14) - the phone-call path.
  *
  * ── Why this is a re-run of the same check, never a shortcut ──
  * The product sells verification, so the fastest way to lose it would be
  * an admin "mark verified" button. This control runs the SAME mock check
  * the account holder runs on themselves, with the details they give over
  * the phone, and the trail records operations as the acting party. A
- * failed result is shown as a true record and stays correctable — the
+ * failed result is shown as a true record and stays correctable - the
  * attempt is already written, pass or fail, and that is stated before the
  * operator confirms.
  */
@@ -56,7 +56,7 @@ export function IdentityCheckControl({
       } else {
         setError({
           message:
-            'Could not reach the House For Rent API. Nothing was recorded — try again when you have signal.',
+            'Could not reach the House For Rent API. Nothing was recorded - try again when you have signal.',
         });
       }
     } finally {
@@ -90,12 +90,12 @@ export function IdentityCheckControl({
       {result === 'verified' ? (
         <p className="notice notice-ok" style={{ margin: 0 }}>
           Identity check verified. The account is marked verified
-          {currentState === 'verified' ? '' : ' — the trail records that operations ran it'}.
+          {currentState === 'verified' ? '' : ' - the trail records that operations ran it'}.
         </p>
       ) : null}
       {result === 'failed' ? (
         <p className="alert alert-error" role="alert" style={{ margin: 0 }}>
-          The check did not pass — and that attempt is now on the
+          The check did not pass - and that attempt is now on the
           account&rsquo;s trail, as attempts on the self-service form are.
           Either the number is malformed or the name does not match the
           account name exactly. Correct the details and run it again.
@@ -148,7 +148,7 @@ export function IdentityCheckControl({
         <>
           <span style={{ fontSize: '0.8125rem' }}>
             Record an identity check against{' '}
-            <strong>{displayName}</strong>&rsquo;s account — pass or fail,
+            <strong>{displayName}</strong>&rsquo;s account - pass or fail,
             the attempt stays on the trail, with operations as the acting
             party. A pass also activates an account still waiting on
             verification.

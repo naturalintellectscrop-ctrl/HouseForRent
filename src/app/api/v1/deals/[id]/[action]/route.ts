@@ -4,14 +4,14 @@ import { DEAL_ACTIONS, type AuthRole } from '@/server/domain';
 import { ApiError, parseShillings, readJson, requireSession, route } from '@/server/http';
 
 /**
- * POST /api/v1/deals/:id/{action} — the transition endpoints.
+ * POST /api/v1/deals/:id/{action} - the transition endpoints.
  *
  * The action name must be one of DEAL_ACTIONS (there is no endpoint for a
  * transition the machine cannot reach, because there is no route for one).
  * Authorisation re-runs here on every request: the role list comes from the
  * SAME table the action catalogue was rendered from, so what was offered
  * and what is allowed cannot drift. Party-scoped actions additionally
- * require the caller to be on the deal — staff pass, as DealPartyGuard lets
+ * require the caller to be on the deal - staff pass, as DealPartyGuard lets
  * them.
  *
  * `availableActions` decides what the client is OFFERED; this decides what
@@ -33,7 +33,7 @@ const HANDLERS: Record<string, (args: { dealId: string; actorPartyId: string; ro
       dealId,
       actorPartyId,
       // Transitional compatibility field: checked against the derived
-      // figure and rejected on mismatch — never trusted (F-012).
+      // figure and rejected on mismatch - never trusted (F-012).
       expectedAmount: body.expectedAmount !== undefined ? parseShillings(body.expectedAmount, 'expectedAmount') : undefined,
       reason: optionalText(body.reason),
     }),
@@ -57,7 +57,7 @@ function optionalText(v: unknown): string | undefined {
 }
 function requiredText(v: unknown, action: string): string {
   if (typeof v !== 'string' || !v.trim()) {
-    throw new ApiError(400, 'VALIDATION', `the ${action} action requires a reason — it is recorded permanently on the transition`);
+    throw new ApiError(400, 'VALIDATION', `the ${action} action requires a reason - it is recorded permanently on the transition`);
   }
   return v.trim();
 }

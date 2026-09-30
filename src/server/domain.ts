@@ -1,5 +1,5 @@
 /**
- * The House For Rent domain — enums, the deal state machine, the commission
+ * The House For Rent domain - enums, the deal state machine, the commission
  * engine and the server-derived action catalogue.
  *
  * Ported line-for-line from apps/api/src/deals/{deal-state-machine,commission,
@@ -113,7 +113,7 @@ export type IdentityMethod = (typeof IDENTITY_METHODS)[number];
 // ── the state machine ────────────────────────────────────────────────────
 
 /**
- * THE STATE MACHINE (Data_Model.md §7.3) — a direct encoding of the
+ * THE STATE MACHINE (Data_Model.md §7.3) - a direct encoding of the
  * transition table. Everything else is rejected (FR-8.1).
  */
 export const ALLOWED_TRANSITIONS: Readonly<
@@ -167,7 +167,7 @@ export function assertTransitionAllowed(from: DealStatus, to: DealStatus): void 
 export class MissingSnapshotError extends Error {
   constructor(field: string) {
     super(
-      `cannot compute commission: ${field} is not set — the deal has not been ` +
+      `cannot compute commission: ${field} is not set - the deal has not been ` +
         'through agreement_signed, where snapshots are taken (FR-7.4)',
     );
     this.name = 'MissingSnapshotError';
@@ -180,7 +180,7 @@ export const BASIS_POINTS_PER_MONTH = 10000n;
 /**
  * commission = monthly_rent_snapshot × commission_rate_bp_snapshot / 10000.
  *
- * Pure function over the deal's OWN SNAPSHOTS — it has no access to a live
+ * Pure function over the deal's OWN SNAPSHOTS - it has no access to a live
  * rate, a listing, or an escrow total. Integer arithmetic, truncating
  * division: any fractional shilling resolves in the payer's favour.
  */
@@ -227,9 +227,9 @@ export interface DealActionSpec {
 }
 
 /**
- * One row per legal transition endpoint — and no others. The `roles` here
+ * One row per legal transition endpoint - and no others. The `roles` here
  * ARE the controller's authorisation matrix (single source; in the real API
- * they are read off the @Roles() decorators at request time — same list).
+ * they are read off the @Roles() decorators at request time - same list).
  */
 export const DEAL_ACTIONS: readonly (DealActionSpec & {
   roles: readonly AuthRole[];
@@ -274,7 +274,7 @@ export const DEAL_ACTIONS: readonly (DealActionSpec & {
     to: 'escrow_funded',
     label: 'Record escrow funding',
     consequence:
-      "Records the tenant's upfront payment into escrow as a liability we owe back. The amount is derived from this deal's own signed terms. No revenue is recognised. Once funded, the deal can only move forward to move-in or back as a full refund — it cannot be cancelled.",
+      "Records the tenant's upfront payment into escrow as a liability we owe back. The amount is derived from this deal's own signed terms. No revenue is recognised. Once funded, the deal can only move forward to move-in or back as a full refund - it cannot be cancelled.",
     reversible: false,
     movesMoney: true,
     partyScoped: true,
@@ -287,7 +287,7 @@ export const DEAL_ACTIONS: readonly (DealActionSpec & {
     to: 'move_in_confirmed',
     label: 'Confirm move-in',
     consequence:
-      "Records that the tenant has moved in. This UNLOCKS commission and settlement — until now their money was protected. It is the tenant's confirmation to give; recording it on their behalf releases their protection.",
+      "Records that the tenant has moved in. This UNLOCKS commission and settlement - until now their money was protected. It is the tenant's confirmation to give; recording it on their behalf releases their protection.",
     reversible: false,
     movesMoney: false,
     partyScoped: true,
@@ -300,7 +300,7 @@ export const DEAL_ACTIONS: readonly (DealActionSpec & {
     to: 'commission_earned',
     label: 'Recognise commission',
     consequence:
-      "Recognises our commission as revenue, computed from this deal's own frozen snapshots — not from the escrow total and not from any current rate. This is an accounting event and it is permanent.",
+      "Recognises our commission as revenue, computed from this deal's own frozen snapshots - not from the escrow total and not from any current rate. This is an accounting event and it is permanent.",
     reversible: false,
     movesMoney: true,
     partyScoped: false,
@@ -311,9 +311,9 @@ export const DEAL_ACTIONS: readonly (DealActionSpec & {
     action: 'settle',
     handler: 'settle',
     to: 'settled',
-    label: 'Settle — pay the landlord',
+    label: 'Settle - pay the landlord',
     consequence:
-      'Instructs the custodian to pay the landlord everything still held for this deal — the commission has already been taken out of it. The amount is the ledger balance, not a figure anyone types. Real money leaves, and a settlement cannot be undone.',
+      'Instructs the custodian to pay the landlord everything still held for this deal - the commission has already been taken out of it. The amount is the ledger balance, not a figure anyone types. Real money leaves, and a settlement cannot be undone.',
     reversible: false,
     movesMoney: true,
     partyScoped: false,
@@ -326,7 +326,7 @@ export const DEAL_ACTIONS: readonly (DealActionSpec & {
     to: 'closed',
     label: 'Close the deal',
     consequence:
-      'Marks a settled deal finished. Terminal — no further transition exists from here. No money moves.',
+      'Marks a settled deal finished. Terminal - no further transition exists from here. No money moves.',
     reversible: false,
     movesMoney: false,
     partyScoped: false,
@@ -339,7 +339,7 @@ export const DEAL_ACTIONS: readonly (DealActionSpec & {
     to: 'refunded',
     label: 'Refund the tenant',
     consequence:
-      'Returns everything still held to the tenant and earns NO commission. The amount is the ledger balance, not a figure anyone types. Real money leaves. Terminal — the deal ends here and cannot be revived.',
+      'Returns everything still held to the tenant and earns NO commission. The amount is the ledger balance, not a figure anyone types. Real money leaves. Terminal - the deal ends here and cannot be revived.',
     reversible: false,
     movesMoney: true,
     partyScoped: false,
@@ -352,7 +352,7 @@ export const DEAL_ACTIONS: readonly (DealActionSpec & {
     to: 'cancelled',
     label: 'Cancel the deal',
     consequence:
-      'Ends the deal before any money is held. Terminal. A deal that has already been funded cannot be cancelled at all — it must be refunded instead, so held client money is never stranded.',
+      'Ends the deal before any money is held. Terminal. A deal that has already been funded cannot be cancelled at all - it must be refunded instead, so held client money is never stranded.',
     reversible: false,
     movesMoney: false,
     partyScoped: true,
@@ -401,7 +401,7 @@ export interface AvailableDealAction {
 /**
  * The actions this caller may take on this deal, in this status.
  *
- * Three conditions, all of which must hold — the same three the request
+ * Three conditions, all of which must hold - the same three the request
  * itself would face: state machine, role matrix, party scope. An action
  * failing any of them is simply absent (never a "blocked" flag, which would
  * leak the shape of the graph to an unprivileged client).
@@ -436,7 +436,7 @@ export function availableDealActions(params: {
     label: spec.label,
     consequence:
       params.pspLive && (spec.action === 'fund-escrow' || spec.action === 'settle' || spec.action === 'refund')
-        ? `${spec.consequence} With the live payment provider this waits on a Nylon Pay payment prompt — the action records as pending and completes when the money is confirmed, not when the button is pressed.`
+        ? `${spec.consequence} With the live payment provider this waits on a Nylon Pay payment prompt - the action records as pending and completes when the money is confirmed, not when the button is pressed.`
         : spec.consequence,
     reversible: spec.reversible,
     movesMoney: spec.movesMoney,

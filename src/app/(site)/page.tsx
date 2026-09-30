@@ -14,9 +14,9 @@ import { Icon, PropertyCard, SectionHeader, TAGLINE } from '@/app/ui';
 export const dynamic = 'force-dynamic';
 
 export const metadata = {
-  title: 'House For Rent — verified homes to rent in Kampala',
+  title: 'House For Rent | verified homes to rent in Kampala',
   description:
-    'Find your next home with ease — every home is visited and confirmed in person by a House For Rent field officer before it reaches you. Free for tenants, in Kampala and Wakiso.',
+    'Find your next home with ease. Every home is visited and confirmed in person by a House For Rent field officer before it reaches you. Free for tenants, in Kampala and Wakiso.',
 };
 
 /**
@@ -39,7 +39,7 @@ export const metadata = {
  * photographs) → the corridor and its real numbers → renting, explained →
  * the landlord proposition. Two reference sections are deliberately not
  * copied: testimonials would be fabricated, and a blog would be scheduled
- * content that does not exist — both slots are filled with true things
+ * content that does not exist - both slots are filled with true things
  * instead (see the field band and the guide cards).
  */
 export default async function HomePage() {
@@ -60,7 +60,7 @@ export default async function HomePage() {
     .sort((a, b) => b.liveListingCount - a.liveListingCount);
 
   // The type tabs are the marketplace's own filters, surfaced one screen
-  // earlier. They are links, not a client-side tab state — the result of
+  // earlier. They are links, not a client-side tab state - the result of
   // pressing one is the real search page with the real filter applied.
   const feedTabs = [
     { label: 'All homes', href: '/properties', current: true },
@@ -72,7 +72,7 @@ export default async function HomePage() {
   // The field band's photographs are the system's own, newest visits
   // first. The hero card already shows the lead photo of the newest
   // listing, so the stack prefers each home's second frame before reusing
-  // a lead — two distinct frames when the data has them, one when it does
+  // a lead - two distinct frames when the data has them, one when it does
   // not, and an honest empty frame when it has none.
   const stackPhotos: ListingPhoto[] = [];
   if (feed.results[0]?.photos[1]) stackPhotos.push(feed.results[0].photos[1]);
@@ -84,18 +84,18 @@ export default async function HomePage() {
   // The reference's blog slot, filled with real content: each card links
   // to a page that genuinely answers the question it raises. There is no
   // editorial desk behind this product, so there are no posts, dates or
-  // authors — and none are invented.
+  // authors - and none are invented.
   const guideCards = [
     {
       tag: 'Verification',
       title: 'What “verified” actually means',
-      body: 'The checks an officer completes on site before a home can go live — and what the badge does not claim.',
+      body: 'The checks an officer completes on site before a home can go live, and what the badge does not claim.',
       href: '/how-it-works',
     },
     {
       tag: 'On a live listing',
       title: 'Reading a field report',
-      body: 'Condition, fixtures, photographs, and the date availability was last confirmed — open any home to see one.',
+      body: 'Condition, fixtures, photographs, and the date availability was last confirmed. Open any home to see one.',
       href: feed.results[0]
         ? `/properties/${feed.results[0].listingId}`
         : '/properties',
@@ -122,7 +122,6 @@ export default async function HomePage() {
           <div className="hero-panel">
             <div className="hero">
               <div className="hero-copy stack">
-                <p className="eyebrow">Kampala &amp; Wakiso</p>
                 <h1 className="display">{TAGLINE}</h1>
                 <p className="lede">
                   We do not publish a listing until one of our field officers
@@ -148,7 +147,7 @@ export default async function HomePage() {
                     autoComplete="off"
                     list="home-areas"
                   />
-                  {/* The same names the marketplace's own search offers — not
+                  {/* The same names the marketplace's own search offers - not
                       a second list that could drift from what search actually
                       knows. Only areas with live homes, for the same reason
                       the home page's picker filters to live areas. */}
@@ -393,7 +392,7 @@ export default async function HomePage() {
             <div className="field-photos">
               {/*
                 Photographs the system itself holds, from real field visits.
-                Demo fixtures are labelled on the image — a label a screenshot
+                Demo fixtures are labelled on the image - a label a screenshot
                 cannot crop away. With nothing live the frame says so.
               */}
               {stackPhotos.map((photo, i) => (
@@ -427,11 +426,10 @@ export default async function HomePage() {
             {/*
               The reference puts an invented client quote here. This product
               does not have invented clients, so the card carries the one
-              statement a visitor can actually hold us to — and every clause
+              statement a visitor can actually hold us to - and every clause
               of it is enforced by the product's own architecture.
             */}
             <div className="card field-card">
-              <p className="eyebrow">The House For Rent guarantee</p>
               <blockquote className="field-quote">
                 If a home is live on this site, a field officer we employ has
                 stood inside it, photographed it, and confirmed with the
@@ -442,7 +440,7 @@ export default async function HomePage() {
                   <Icon.shield size={16} />
                   <span>
                     Every live home carries a structured field report, filed by
-                    the officer on the visit — not the landlord's word.
+                    the officer on the visit - not the landlord's word.
                   </span>
                 </li>
                 <li>
@@ -485,9 +483,8 @@ export default async function HomePage() {
                     ? 'verified home live right now'
                     : 'verified homes live right now'}
                   {feed.totalCount === 0
-                    ? ' — the first visits are under way'
+                    ? '. The first visits are under way'
                     : ''}
-                  .
                 </span>
               </div>
               <div className="num-figure">
@@ -572,16 +569,28 @@ export default async function HomePage() {
       {/* ── landlord cta ─────────────────────────────────────────────── */}
       <section className="section">
         <div className="page">
-          <div className="cta">
+          <div className="cta cta-photograph">
+            {/*
+              The dusk skyline under an ink wash: the landlord panel keeps
+              AA contrast (the wash is part of the CSS), and the photograph
+              is decorative, so it is aria-hidden.
+            */}
+            <img
+              className="cta-photo"
+              src="/site/cta-band.jpg"
+              alt=""
+              aria-hidden="true"
+              loading="lazy"
+              decoding="async"
+            />
             <div className="cta-grid">
               <div className="stack">
-                <p className="eyebrow">For landlords</p>
                 <h2 className="h1" style={{ maxWidth: '18ch' }}>
                   Let to a tenant we have actually met.
                 </h2>
                 <p className="lede">
                   We verify your property, verify the tenant, hold the money in
-                  escrow, and take one commission once — only when someone
+                  escrow, and take one commission once, only when someone
                   moves in. No monthly fee, no listing fee, nothing up front.
                 </p>
                 <div className="row">

@@ -4,7 +4,7 @@ import { hashPassword, issueSession, resolveSession, homeFor } from '@/server/au
 import { ApiError, readJson, requireString, route } from '@/server/http';
 
 /**
- * POST /api/v1/auth/register — self-service registration.
+ * POST /api/v1/auth/register - self-service registration.
  * Only `tenant` and `lister` exist here; staff are provisioned through
  * /api/v1/ops/staff by an admin, and this endpoint refuses any other value
  * regardless of what the client sends (DTO allowlist rule).

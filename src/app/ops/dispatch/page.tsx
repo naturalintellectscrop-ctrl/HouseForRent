@@ -5,21 +5,21 @@ import { AdminOnly, Empty, shillings, ShortId, when } from '@/app/ui';
 import { AssignForm } from './assign-form';
 
 /**
- * Dispatch — FR-5.2, and the fix for F-002.
+ * Dispatch - FR-5.2, and the fix for F-002.
  *
  * ── What was broken ──
  * A tenant could request a viewing and nothing could ever act on it.
  * `POST /v1/viewings/:id/assign` existed, was admin-only and was tested; no
  * client called it, and no endpoint listed the viewings waiting to be
  * assigned. So `requested` was a terminal state in the real product, and
- * every step after it — the field report, the introduction, the deal, the
- * escrow — was unreachable no matter how well it worked.
+ * every step after it - the field report, the introduction, the deal, the
+ * escrow - was unreachable no matter how well it worked.
  *
  * This page is the missing surface. It is deliberately the LAST screen in
  * the chain to be built and the smallest: one queue, one action per row.
  *
  * `blockedBy` is rendered, not filtered out. A viewing outside the corridor
- * must stay visible — a dispatcher needs to know a tenant is waiting on
+ * must stay visible - a dispatcher needs to know a tenant is waiting on
  * something we cannot serve, which is a supply signal, not noise.
  *
  * SANDBOX ADAPTATION: the in-process adapter does not expose the tenant's
@@ -30,7 +30,7 @@ const BLOCKER_COPY: Record<string, string> = {
   outside_service_area:
     'This listing sits outside the active service corridor, so assignment will be refused (FR-5.2, Decision 2).',
   listing_not_live:
-    'The listing is no longer live — it was withdrawn or unpublished after the tenant asked to see it.',
+    'The listing is no longer live - it was withdrawn or unpublished after the tenant asked to see it.',
 };
 
 export default async function DispatchPage() {
@@ -56,7 +56,7 @@ export default async function DispatchPage() {
       {queue.officers.length === 0 && (
         <p className="alert alert-error" role="alert">
           No active field officer accounts exist, so nothing here can be
-          assigned. Staff accounts are provisioned by an admin — until one
+          assigned. Staff accounts are provisioned by an admin - until one
           exists, every requested viewing stays requested.
         </p>
       )}

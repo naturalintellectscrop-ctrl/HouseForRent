@@ -3,7 +3,7 @@ import { setNeighbourhoodServiceArea } from '@/server/ops';
 import { readJson, requireRole, route } from '@/server/http';
 
 /**
- * POST /api/v1/ops/neighbourhoods/:neighbourhoodId/service-area — move the
+ * POST /api/v1/ops/neighbourhoods/:neighbourhoodId/service-area - move the
  * service-area boundary for one neighbourhood.
  *
  * The flag is read LIVE by the public search filter, the publish gates and

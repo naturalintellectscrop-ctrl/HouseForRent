@@ -3,7 +3,7 @@ import { api } from '@/lib/api';
 import { requireRole, route } from '@/server/http';
 
 /**
- * GET /api/v1/listings/:id/photos — the photographs of a listing, each with
+ * GET /api/v1/listings/:id/photos - the photographs of a listing, each with
  * the server-asserted provenance label the UI must display verbatim.
  *
  * Access is staff-or-owner, enforced inside the resolver (403 for tenants;

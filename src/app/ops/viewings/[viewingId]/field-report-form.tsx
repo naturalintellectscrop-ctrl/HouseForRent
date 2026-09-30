@@ -8,17 +8,17 @@ import { ApiAlert } from '@/app/ui';
 const CONDITIONS = ['excellent', 'good', 'fair', 'poor'] as const;
 
 /**
- * FR-5.4 — the structured field report.
+ * FR-5.4 - the structured field report.
  *
  * The three fields that matter are radios, not free text, because they are
  * the ones that become baseline data for future Certified Partner standards
- * (SSOT Decision 9) — you cannot certify against a standard you only ever
+ * (SSOT Decision 9) - you cannot certify against a standard you only ever
  * recorded as prose. `issuesText` and `timingNote` are optional annotations
  * beside them, never instead of them.
  *
  * SANDBOX ADAPTATION: the reference used a server action; here the form
  * POSTs over real HTTP to /api/v1/viewings/:id/field-report from the
- * browser. Presence checks on the three structured fields only — the
+ * browser. Presence checks on the three structured fields only - the
  * backend validates the VALUES and enforces immutability regardless.
  */
 export function FieldReportForm({ viewingId }: { viewingId: string }) {
@@ -39,14 +39,14 @@ export function FieldReportForm({ viewingId }: { viewingId: string }) {
     const matchesListing = data.get('matchesListing');
     const isAvailable = data.get('isAvailable');
 
-    // Presence checks only — these three are required because the report is
+    // Presence checks only - these three are required because the report is
     // structured (FR-5.4), and an unanswered radio would otherwise submit as
     // absent. The backend validates the VALUES; this just avoids a pointless
     // round trip on a field connection.
     if (!conditionRating || matchesListing === null || isAvailable === null) {
       setError({
         message:
-          'Condition, accuracy and availability are all required — they are the structured part of the report.',
+          'Condition, accuracy and availability are all required - they are the structured part of the report.',
       });
       setPending(false);
       return;
@@ -71,7 +71,7 @@ export function FieldReportForm({ viewingId }: { viewingId: string }) {
       } else {
         setError({
           message:
-            'Could not reach the House For Rent API. Your work was not saved — try again when you have signal.',
+            'Could not reach the House For Rent API. Your work was not saved - try again when you have signal.',
         });
       }
     } finally {
@@ -132,7 +132,7 @@ export function FieldReportForm({ viewingId }: { viewingId: string }) {
           </label>
         </div>
         <p className="hint">
-          Either answer refreshes the availability clock — a visit is a visit.
+          Either answer refreshes the availability clock - a visit is a visit.
         </p>
       </fieldset>
 
@@ -156,7 +156,7 @@ export function FieldReportForm({ viewingId }: { viewingId: string }) {
 
       <p className="alert alert-note">
         A report is filed once. It records what you saw at a moment, so it
-        cannot be revised afterwards — check it before submitting.
+        cannot be revised afterwards - check it before submitting.
       </p>
 
       <button type="submit" disabled={pending}>

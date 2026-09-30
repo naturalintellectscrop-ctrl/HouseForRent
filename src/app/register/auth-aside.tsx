@@ -1,4 +1,4 @@
-import { Icon, TAGLINE } from '@/app/ui';
+import { Icon } from '@/app/ui';
 
 /**
  * The panel beside the sign-in and registration forms.
@@ -13,9 +13,19 @@ export function AuthAside() {
   return (
     <aside className="auth-aside">
       <div className="stack">
-        {/* The tagline rides in the eyebrow, uppercase, exactly as the logo
-            paints it — the identity surface should speak in the logo's voice. */}
-        <p className="eyebrow">House For Rent — {TAGLINE}</p>
+        {/* The brand line, in the logo's voice: the mark itself plus the
+            name in normal case. The identity surface should speak in the
+            logo's register without resorting to an all-caps label. */}
+        <p className="auth-brand">
+          <img
+            src="/logo.png"
+            alt=""
+            width={26}
+            height={26}
+            aria-hidden="true"
+          />
+          House For Rent
+        </p>
         <h2 className="h1" style={{ maxWidth: '16ch' }}>
           Every home here has been visited by someone who works for us.
         </h2>

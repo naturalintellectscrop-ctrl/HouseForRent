@@ -3,7 +3,7 @@ import { recentReconciliationChecks, runReconciliation } from '@/server/ops';
 import { readJson, requireRole, route } from '@/server/http';
 
 /**
- * POST /api/v1/ops/reconciliation — run the ledger-vs-PSP assertions.
+ * POST /api/v1/ops/reconciliation - run the ledger-vs-PSP assertions.
  * Records the result; a `false` is REPORTED, never hidden (a non-reconciled
  * state is a real condition an operator must see).
  */
@@ -23,7 +23,7 @@ export const POST = route(async (req: NextRequest) => {
   );
 });
 
-/** GET — recent check history. */
+/** GET - recent check history. */
 export const GET = route(async () => {
   await requireRole(['admin']);
   const checks = await recentReconciliationChecks();

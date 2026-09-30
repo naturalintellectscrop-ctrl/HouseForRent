@@ -3,17 +3,17 @@ import { runIdentityCheckForParty } from '@/server/ops';
 import { readJson, requireRole, requireString, route } from '@/server/http';
 
 /**
- * POST /api/v1/admin/users/:partyId/identity-check — operations runs the
+ * POST /api/v1/admin/users/:partyId/identity-check - operations runs the
  * identity check for an account (Task 14).
  *
  * THE IDENTITY PROVIDER IS A MOCK, and this surface says so. It is the
- * SAME outcome logic the self-service form runs — operations never marks
+ * SAME outcome logic the self-service form runs - operations never marks
  * an account verified by hand; it re-runs the check with details given
  * over the phone and the trail records that operations (not the account
  * holder) was the acting party.
  *
  * A structurally-valid-but-mismatching check comes back 200 with
- * state:'failed' — a failed attempt is a true record, not an error. Only
+ * state:'failed' - a failed attempt is a true record, not an error. Only
  * a missing account (404) or an inapplicable one, e.g. staff (422), is
  * refused.
  */

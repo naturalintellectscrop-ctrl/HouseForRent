@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { postJson, ClientApiError } from '@/lib/client';
 import { ApiAlert } from '@/app/ui';
 
-/** Tomorrow, as a `yyyy-mm-dd` string — the earliest sensible default. */
+/** Tomorrow, as a `yyyy-mm-dd` string - the earliest sensible default. */
 function tomorrow(): string {
   const d = new Date(Date.now() + 86400000);
   return d.toISOString().slice(0, 10);
@@ -13,7 +13,7 @@ function tomorrow(): string {
 
 /**
  * The viewing request. The body carries the listing and the preferred time,
- * and nothing else — the tenant is read from the session server-side, so no
+ * and nothing else - the tenant is read from the session server-side, so no
  * form field here could book a viewing in someone else's name.
  */
 export function RequestViewingForm({ listingId }: { listingId: string }) {
@@ -32,7 +32,7 @@ export function RequestViewingForm({ listingId }: { listingId: string }) {
     const time = String(data.get('time') ?? '').trim();
 
     // The same checks the reference carried, in the same words: nothing
-    // here decides whether the request is ALLOWED — that is the API's job
+    // here decides whether the request is ALLOWED - that is the API's job
     // (TENANT_NOT_VERIFIED / OUTSIDE_SERVICE_AREA / LISTING_NOT_VIEWABLE).
     if (!date || !time) {
       setError({ message: 'Choose a day and a time that suit you.' });
@@ -63,7 +63,7 @@ export function RequestViewingForm({ listingId }: { listingId: string }) {
       } else {
         setError({
           message:
-            'Could not reach House For Rent. Nothing was saved — try again in a moment.',
+            'Could not reach House For Rent. Nothing was saved - try again in a moment.',
         });
       }
       setPending(false);

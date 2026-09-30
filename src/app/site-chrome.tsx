@@ -20,7 +20,7 @@ const NAV = [
  * every cold visit.
  *
  * The session-dependent half is resolved SERVER-side from the real session
- * row. That decides which links render and nothing else — the services
+ * row. That decides which links render and nothing else - the services
  * re-authorise every request regardless (NFR-1).
  */
 export async function SiteHeader() {
@@ -121,7 +121,7 @@ export function SiteFooter() {
           <div>
             <Brand />
             {/* The tagline, exactly as painted on the logo, with the red rule
-                it sits between there — the one place the logo's red has a
+                it sits between there - the one place the logo's red has a
                 genuine job in the interface. */}
             <p className="brand-tagline">{TAGLINE}</p>
             <p className="muted" style={{ marginTop: '0.75rem', maxWidth: '22rem' }}>
@@ -130,7 +130,7 @@ export function SiteFooter() {
             </p>
             {/* Real channels, answered by people. Email opens a compose
                 window; numbers dial directly; the WhatsApp links pre-open a
-                chat — no forms that post nowhere. */}
+                chat - no forms that post nowhere. */}
             <div className="foot-contact">
               <a href={`mailto:${CONTACT.email}`} className="foot-contact-row">
                 <Icon.mail size={15} />
@@ -178,7 +178,7 @@ export function SiteFooter() {
         </div>
 
         {/* Social placeholders: the handles are not live yet, so these are
-            deliberately NOT links — an icon that navigates nowhere is a dead
+            deliberately NOT links - an icon that navigates nowhere is a dead
             end. They render as inert marks with their name exposed to screen
             readers, and become real links the day the profiles exist. */}
         <div className="foot-social" aria-label="Social media (coming soon)">
@@ -187,8 +187,8 @@ export function SiteFooter() {
               key={social.label}
               className="social-logo"
               role="img"
-              aria-label={`${social.label} — coming soon`}
-              title={`${social.label} — coming soon`}
+              aria-label={`${social.label} - coming soon`}
+              title={`${social.label} - coming soon`}
             >
               {social.icon({ size: 18 })}
             </span>

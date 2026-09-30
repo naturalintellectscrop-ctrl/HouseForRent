@@ -82,7 +82,7 @@ export default async function ViewingsPage({
                   {shillings(v.listing.monthlyRent)}
                 </span>
                 {/* The server decides which rows offer the control: only a
-                    viewing the frozen graph can still cancel shows one — a
+                    viewing the frozen graph can still cancel shows one - a
                     conducted visit never grows a button here, no matter how
                     stale this tab is. */}
                 {v.status === 'requested' || v.status === 'scheduled' ? (

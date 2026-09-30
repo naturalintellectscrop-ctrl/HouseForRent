@@ -4,7 +4,7 @@ import { LISTER_TIERS } from '@/server/domain';
 import { ApiError, readJson, requireRole, requireString, route } from '@/server/http';
 
 /**
- * POST /api/v1/admin/users/:partyId/tier — operations sets a landlord
+ * POST /api/v1/admin/users/:partyId/tier - operations sets a landlord
  * account's listing tier.
  *
  * The tier is what gates the mandate requirement, so it is never

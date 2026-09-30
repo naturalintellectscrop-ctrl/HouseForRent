@@ -27,7 +27,7 @@ export const metadata = { title: 'Your listing' };
  *
  * ── The page is organised around `blockedBy` ──
  * The server says what is outstanding. This page turns each item into the
- * panel that resolves it — the agreement blocker renders the agreement, the
+ * panel that resolves it - the agreement blocker renders the agreement, the
  * verification blocker explains that an officer has to come. It never
  * decides for itself whether publishing is possible; `canPublish` is the
  * server's answer and the button follows it.
@@ -135,7 +135,7 @@ export default async function LandlordListingPage({
                       </span>
                       <span className="muted" style={{ fontSize: '0.9375rem' }}>
                         {b === 'field_verification'
-                          ? 'We schedule this — you do not need to do anything. The officer will contact you to arrange a time.'
+                          ? 'We schedule this - you do not need to do anything. The officer will contact you to arrange a time.'
                           : b === 'listing_agreement'
                             ? 'The commission terms are below. Read them and accept when you are ready.'
                             : b === 'outside_service_area'

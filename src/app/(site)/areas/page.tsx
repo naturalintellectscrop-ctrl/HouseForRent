@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { apiGet, type Neighbourhood } from '@/lib/api';
 import { Empty, Icon, PageIntro } from '@/app/ui';
 
-/* Service-area coverage changes when ops edits neighbourhoods — render per request. */
+/* Service-area coverage changes when ops edits neighbourhoods - render per request. */
 export const dynamic = 'force-dynamic';
 
 export const metadata = {
@@ -17,7 +17,7 @@ export const metadata = {
  * ── Why this page exists ──
  * "Where do you operate?" is the first question a landlord asks and the
  * second question a tenant asks. This page answers it with the same counts
- * the search API serves — nothing is hand-written here, so it cannot drift
+ * the search API serves - nothing is hand-written here, so it cannot drift
  * from what a search actually returns.
  *
  * ── Why zero-count areas stay visible ──
@@ -56,16 +56,16 @@ export default async function AreasPage() {
     <>
       <div className="page section" style={{ paddingBottom: '2rem' }}>
         <div className="stack">
-          <PageIntro eyebrow="Kampala &amp; Wakiso" title="Areas we cover">
+          <PageIntro title="Areas we cover">
             <p className="lede" style={{ maxWidth: '46rem' }}>
               Every neighbourhood our field officers work in. The number next
               to each area is how many verified homes are live there right
-              now — the same count search uses, not a figure we wrote by hand.
+              now - the same count search uses, not a figure we wrote by hand.
             </p>
           </PageIntro>
           <p className="faint" style={{ fontSize: '0.875rem' }}>
             {totalLive === 0
-              ? 'No verified homes anywhere yet — the first visits are being scheduled.'
+              ? 'No verified homes anywhere yet - the first visits are being scheduled.'
               : `${totalLive} verified ${totalLive === 1 ? 'home' : 'homes'} across ${taxonomy.neighbourhoods.length} ${
                   taxonomy.neighbourhoods.length === 1 ? 'area' : 'areas'
                 }.`}

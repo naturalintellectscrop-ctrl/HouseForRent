@@ -17,7 +17,7 @@ const TIER_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
  * ── Why the confirm step says the consequence ──
  * The tier is what switches the mandate requirement on (broker / mgmt
  * company) or off (property owner). Moving it silently could hand a
- * middleman a publish path with no owner authority — or burden a genuine
+ * middleman a publish path with no owner authority - or burden a genuine
  * owner with a mandate they cannot produce. So the operator picks a
  * value, reads what it changes, confirms, and the change lands with an
  * audit row carrying the previous tier. A same-value submit is a no-op
@@ -50,7 +50,7 @@ export function TierControl({
       setOk(
         res.changed
           ? `Tier set to ${res.tier.replace(/_/g, ' ')}. The publish gates read it immediately.`
-          : 'That was already the tier — nothing changed.',
+          : 'That was already the tier - nothing changed.',
       );
       setArmed(false);
       router.refresh();
@@ -60,7 +60,7 @@ export function TierControl({
       } else {
         setError({
           message:
-            'Could not reach the House For Rent API. Nothing was changed — try again when you have signal.',
+            'Could not reach the House For Rent API. Nothing was changed - try again when you have signal.',
         });
       }
     } finally {

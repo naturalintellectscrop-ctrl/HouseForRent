@@ -11,11 +11,11 @@ import { currentRole } from '@/lib/session';
 import { BarList, Empty, StatusDot, when } from '@/app/ui';
 
 /**
- * FR-10.3 / FR-10.4 — the operations overview.
+ * FR-10.3 / FR-10.4 - the operations overview.
  *
  * ── On form ──
  * The launch gate is a single ratio against a limit, so it is a HERO FIGURE
- * plus a METER — not a chart, and emphatically not a two-slice pie. The
+ * plus a METER - not a chart, and emphatically not a two-slice pie. The
  * deal-state distribution has eleven classes that all carry meaning, which
  * is past the point where more colours help: it renders as a one-hue
  * magnitude bar list that doubles as a table. Reconciliation is three
@@ -70,7 +70,7 @@ export default async function OpsPage() {
         SANDBOX ADAPTATION: the design system styles the meter fill as
         `.meter > span` (there is no `.meter-fill` rule in globals.css), so
         the fill is rendered as a span carrying its width. Whether the gate
-        is met is still stated in words by the StatusDot below — the bar is
+        is met is still stated in words by the StatusDot below - the bar is
         the ratio, the words are the verdict.
       */}
       <div
@@ -113,7 +113,7 @@ export default async function OpsPage() {
       <p className="muted">
         Qualifying means live, verified, in-corridor <em>and</em> confirmed
         within the freshness window. Stale inventory is counted separately
-        rather than hidden — {gate.staleExcluded} listings one field visit
+        rather than hidden - {gate.staleExcluded} listings one field visit
         away from qualifying is a different problem from not having them.
       </p>
 

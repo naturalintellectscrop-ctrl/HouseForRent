@@ -17,8 +17,8 @@ export const metadata = { title: 'Add a property' };
  *
  * Only in-service-area neighbourhoods are offered. A property outside the
  * corridor can never publish (FR-2.5), so offering one would be setting a
- * landlord up to submit into a void. (The sandbox taxonomy is flat — no
- * parent/child districts — so every row the API returns is offered.)
+ * landlord up to submit into a void. (The sandbox taxonomy is flat - no
+ * parent/child districts - so every row the API returns is offered.)
  */
 export default async function NewPropertyPage() {
   const { neighbourhoods } = await apiGet<{ neighbourhoods: Neighbourhood[] }>(
@@ -41,7 +41,7 @@ export default async function NewPropertyPage() {
           <p className="lede">
             Tell us where it is and what you are asking. Nothing publishes until
             one of our officers has visited it and you have accepted the
-            agreement — and nothing is charged until a tenant moves in.
+            agreement - and nothing is charged until a tenant moves in.
           </p>
         </div>
 
@@ -92,7 +92,7 @@ export default async function NewPropertyPage() {
           <p className="muted">
             A street address is optional and we will never require one. We
             describe location by neighbourhood and landmark, because that is how
-            people here actually give directions — and it is what our officer
+            people here actually give directions - and it is what our officer
             will use to find you.
           </p>
         </div>

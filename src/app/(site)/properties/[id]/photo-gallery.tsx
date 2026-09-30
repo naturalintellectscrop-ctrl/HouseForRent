@@ -10,7 +10,7 @@ import type { ListingPhoto } from '@/lib/contract';
  * ── Why it is a client component at all ──
  * Swapping the selected photograph is presentation state, not business
  * state, so this is the one place on the detail page where browser state is
- * allowed. Everything around it — price, terms, verification — stays
+ * allowed. Everything around it - price, terms, verification - stays
  * server-rendered.
  *
  * ── Accessibility ──
@@ -24,8 +24,8 @@ import type { ListingPhoto } from '@/lib/contract';
  *
  * ── The adjacent preload ──
  * The next photograph is fetched quietly while the current one is being
- * looked at. It is presentation only — a slower connection simply skips
- * it — and it never touches the business boundary.
+ * looked at. It is presentation only - a slower connection simply skips
+ * it - and it never touches the business boundary.
  */
 export function PhotoGallery({
   photos,

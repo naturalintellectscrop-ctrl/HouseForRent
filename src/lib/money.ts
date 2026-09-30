@@ -1,11 +1,11 @@
 /**
- * Money handling — the client half of NFR-4.
+ * Money handling - the client half of NFR-4.
  *
  * ── Why BigInt, in a UI ──
  * The API serialises money as strings so it never passes through a JS
  * number (API Spec §2). That guarantee is worth nothing if the first thing
  * the client does is `Number(amount)`: 2^53 is about 9 quadrillion, and
- * Ugandan shillings reach large integers quickly — a year of rent on a
+ * Ugandan shillings reach large integers quickly - a year of rent on a
  * portfolio is already in the billions, and any arithmetic on it must stay
  * exact.
  *

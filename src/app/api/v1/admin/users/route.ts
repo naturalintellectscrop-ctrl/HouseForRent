@@ -3,9 +3,9 @@ import { api } from '@/lib/api';
 import { requireRole, route } from '@/server/http';
 
 /**
- * GET /api/v1/admin/users?q=…&role=… — the admin's account directory. Rows
+ * GET /api/v1/admin/users?q=…&role=… - the admin's account directory. Rows
  * carry account standing (role, status, identity-verified, usage counts);
- * they deliberately do NOT join identity documents or ledger balances —
+ * they deliberately do NOT join identity documents or ledger balances -
  * those stay subject-scoped behind the audit trail. `role` filters the
  * directory server-side (Task 15); an unknown value is a 422, never a
  * silently ignored filter.

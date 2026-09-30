@@ -5,7 +5,7 @@ import { ApiError, readJson, requireString, route } from '@/server/http';
 
 /**
  * POST /api/v1/auth/login. A wrong number and a wrong password are
- * indistinguishable (dummy-hash compare) — saying more would undo that.
+ * indistinguishable (dummy-hash compare) - saying more would undo that.
  * Account status policy is enforced here: suspended/disabled/archived
  * accounts cannot sign in.
  */

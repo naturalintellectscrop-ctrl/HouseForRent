@@ -1,10 +1,10 @@
 /**
- * Saved listings — a tenant's bookmarks.
+ * Saved listings - a tenant's bookmarks.
  *
  * ADDITIVE (QA round): this service introduces no new financial or legal
  * state. A saved listing is a bookmark: it records interest, nothing else.
  * It is NOT a viewing request, NOT a deal signal, and no landlord can see
- * who saved their listing (deliberately — saving is private to the tenant).
+ * who saved their listing (deliberately - saving is private to the tenant).
  *
  * Rules:
  * - Saving is per-party (from the session), never per client-chosen id.
@@ -32,7 +32,7 @@ export async function isSaved(partyId: string, listingId: string): Promise<boole
   return row !== null;
 }
 
-/** All saved listing ids for a party — cheap read for list pages. */
+/** All saved listing ids for a party - cheap read for list pages. */
 export async function savedIdsFor(partyId: string): Promise<Set<string>> {
   const rows = await db.savedListing.findMany({
     where: { partyId },
@@ -57,7 +57,7 @@ export async function saveListing(partyId: string, listingId: string): Promise<{
   return { saved: true };
 }
 
-/** Remove a bookmark. Idempotent — removing a non-saved listing succeeds. */
+/** Remove a bookmark. Idempotent - removing a non-saved listing succeeds. */
 export async function unsaveListing(partyId: string, listingId: string): Promise<{ saved: boolean }> {
   await db.savedListing.deleteMany({
     where: { partyId, listingId },
@@ -96,7 +96,7 @@ export async function listSaved(
 
   for (const s of saved) {
     const l = s.listing;
-    // The same public gates the feed applies — no special treatment for
+    // The same public gates the feed applies - no special treatment for
     // things you bookmarked, because the bookmark is not a promise.
     const stillPublic =
       l.publicationState === 'live' &&

@@ -8,7 +8,7 @@ import { ApiAlert } from '@/app/ui';
 /**
  * The only client component on this page. It exists for one reason: to show
  * a pending state and an error without a full reload. It POSTs over real
- * HTTP to /api/v1/auth/login — the server resolves the session, enforces
+ * HTTP to /api/v1/auth/login - the server resolves the session, enforces
  * the account-status policy and sets the httpOnly cookie; this component
  * merely carries intent and renders the answer.
  */
@@ -27,7 +27,7 @@ export function LoginForm({ next }: { next: string | null }) {
         primaryPhone: String(data.get('primaryPhone') ?? ''),
         password: String(data.get('password') ?? ''),
       });
-      // Only same-site paths are honoured as redirect targets — an
+      // Only same-site paths are honoured as redirect targets - an
       // unchecked `next` from a query string is an open redirect.
       const safeNext =
         next && next.startsWith('/') && !next.startsWith('//') ? next : res.home;

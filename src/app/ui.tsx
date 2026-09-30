@@ -1,5 +1,5 @@
 /**
- * Presentation shared across the whole product — marketplace, portals and
+ * Presentation shared across the whole product - marketplace, portals and
  * the operations console.
  *
  * All server-rendered: there is no `'use client'` here, so none of it
@@ -128,7 +128,7 @@ export const Icon = {
     </Svg>
   ),
   /* Bookmark (QA round: the saved-homes toggle). Deliberately NOT on the
-     property card — see the PropertyCard note about invented social proof.
+     property card - see the PropertyCard note about invented social proof.
      A bookmark is a private fact the system actually holds; a heart count
      is not. */
   bookmark: (p: { size?: number }) => (
@@ -155,7 +155,7 @@ export const Icon = {
   /* Unlinked social placeholders (the real handles are coming). Drawn in
      the same thin-line register as the rest of the set rather than as
      filled brand artwork, so the footer keeps one visual voice. Each is
-     rendered WITHOUT a link until the real profile exists — a social
+     rendered WITHOUT a link until the real profile exists - a social
      button that goes nowhere is a dead end. */
   whatsapp: (p: { size?: number }) => (
     <Svg {...p}>
@@ -229,28 +229,24 @@ export function Brand({ sub, href = '/' }: { sub?: string; href?: string }) {
 }
 
 /**
- * The opening block of a public page: eyebrow, display heading, intro.
+ * The opening block of a public page: display heading, intro.
  *
- * Before this existed, every public page hand-rolled the same three lines
+ * Before this existed, every public page hand-rolled the same lines
  * and drifted: `maxWidth` was 44rem on one page, 38rem on another, missing
- * on a third, and /areas paired its eyebrow with the wrong heading size —
- * the only page on the site whose hero read smaller than the home page's
- * secondary headings. One component is the fix for both the duplication and
+ * on a third. One component is the fix for both the duplication and
  * the drift: the rhythm a visitor learns on one page now holds on all of
- * them.
+ * them. (The small all-caps label some pages used to carry above the
+ * heading was removed by owner decision; the heading opens the page.)
  */
 export function PageIntro({
-  eyebrow,
   title,
   children,
 }: {
-  eyebrow?: string;
   title: string;
   children?: React.ReactNode;
 }) {
   return (
     <div className="stack" style={{ maxWidth: '44rem' }}>
-      {eyebrow ? <p className="eyebrow">{eyebrow}</p> : null}
       <h1 className="display">{title}</h1>
       {children}
     </div>
@@ -258,19 +254,17 @@ export function PageIntro({
 }
 
 /**
- * A section heading row: eyebrow + heading on the left, one action on the
+ * A section heading row: heading on the left, one action on the
  * right. The homepage feed and the portal lists were building this row by
  * hand with the same two classes; this is the generalised form. The heading
  * step stays a choice of the caller because the marketplace reads "h1"
  * while a card inside a portal list should not.
  */
 export function SectionHeader({
-  eyebrow,
   title,
   size = 'h2',
   action,
 }: {
-  eyebrow?: string;
   title: string;
   size?: 'h1' | 'h2';
   action?: React.ReactNode;
@@ -278,7 +272,6 @@ export function SectionHeader({
   return (
     <div className="row-between">
       <div className="stack-sm">
-        {eyebrow ? <p className="eyebrow">{eyebrow}</p> : null}
         <h2 className={size}>{title}</h2>
       </div>
       {action}
@@ -337,7 +330,7 @@ export function onDayShort(iso: string): string {
   });
 }
 
-/** "today" / "yesterday" / "4 days ago". Null stays null — never "unknown". */
+/** "today" / "yesterday" / "4 days ago". Null stays null - never "unknown". */
 export function daysAgo(days: number | null): string | null {
   if (days === null) return null;
   if (days <= 0) return 'today';
@@ -439,7 +432,7 @@ interface CardListing {
  *
  * ── What is on it and what is not ──
  * Price, place, size, and when someone from this platform last stood there.
- * There is no "★ 4.8", no "3 people viewing now", no saved-search heart —
+ * There is no "★ 4.8", no "3 people viewing now", no saved-search heart -
  * none of those are facts this system holds, and inventing them is how a
  * marketplace stops being believed.
  */
@@ -548,7 +541,7 @@ export function ApiAlert({
 }
 
 /**
- * A status indicator. The label is REQUIRED, not optional — a status colour
+ * A status indicator. The label is REQUIRED, not optional - a status colour
  * must never carry meaning alone (colour-vision deficiency, greyscale
  * print, forced-colors mode).
  */
@@ -594,7 +587,7 @@ export function ShortId({ value }: { value: string }) {
  * What an admin-only page renders when a field officer opens it.
  *
  * The backend is what refuses (403); this turns that into an explanation
- * rather than a stack trace. It is NOT the access control — hiding the link
+ * rather than a stack trace. It is NOT the access control - hiding the link
  * and rendering this page would both be trivially bypassed, which is
  * precisely why neither is relied upon (NFR-1).
  */
@@ -617,7 +610,7 @@ export function AdminOnly({ what }: { what: string }) {
 
 /**
  * A one-hue magnitude bar list. Identity comes from each row's label, never
- * from a per-row colour — cycling hues here would encode identity in a
+ * from a per-row colour - cycling hues here would encode identity in a
  * channel that carries none, and bury whichever row actually matters.
  */
 export function BarList({
@@ -646,7 +639,7 @@ export function BarList({
 
 /**
  * A coloured dot with its label. Kept for the operations console, where a
- * dense row has no room for a full badge — but the label is still required,
+ * dense row has no room for a full badge - but the label is still required,
  * for the same reason `Status` requires one.
  */
 export function StatusDot({

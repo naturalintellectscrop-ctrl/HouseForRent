@@ -6,7 +6,7 @@ export const metadata = { title: 'Security' };
 /**
  * Account security (landlord surface).
  *
- * Same form, same rules, same API call as the tenant's /account/security —
+ * Same form, same rules, same API call as the tenant's /account/security -
  * a landlord's credentials protect money-direction authority, so this page
  * matters at least as much on this side. The warning line is written for
  * the fraud attempt landlords actually face: a "tenant" asking to pay
@@ -19,7 +19,7 @@ export default function LandlordSecurityPage() {
         <h1 className="h1">Security</h1>
         <p className="lede">
           Change your password. When you do, every other device signed in to
-          this account is signed out — the one you are using stays signed in.
+          this account is signed out - the one you are using stays signed in.
         </p>
       </div>
 
@@ -35,7 +35,7 @@ export default function LandlordSecurityPage() {
             <span>
               We never ask you to pay anything to list a property or to be
               verified. Our one commission is deducted when a tenancy is
-              settled — never collected up front.
+              settled - never collected up front.
             </span>
           </li>
           <li>

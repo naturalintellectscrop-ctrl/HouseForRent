@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { markNoShow } from '@/server/viewings';
 import { readJson, requireRole, route } from '@/server/http';
 
-/** POST /api/v1/viewings/:id/no-show — no-shows are tracked, not deleted. */
+/** POST /api/v1/viewings/:id/no-show - no-shows are tracked, not deleted. */
 export const POST = route(async (req: NextRequest, ctx: { params: Promise<{ id: string }> }) => {
   const session = await requireRole(['foo', 'admin']);
   await readJson(req);

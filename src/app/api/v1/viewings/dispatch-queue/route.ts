@@ -3,7 +3,7 @@ import { api } from '@/lib/api';
 import { requireRole, route } from '@/server/http';
 
 /**
- * GET /api/v1/viewings/dispatch-queue — requested viewings waiting for an
+ * GET /api/v1/viewings/dispatch-queue - requested viewings waiting for an
  * officer, with per-row blockers and officer load (FR-5.2, the fix for
  * F-002). Admin-only: dispatch is an admin decision.
  *

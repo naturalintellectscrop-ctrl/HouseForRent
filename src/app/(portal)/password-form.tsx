@@ -7,7 +7,7 @@ import { ApiAlert } from '@/app/ui';
 
 /**
  * The shared password-change form, rendered by BOTH /account/security
- * (tenant surface) and /landlord/security (landlord surface) — one form,
+ * (tenant surface) and /landlord/security (landlord surface) - one form,
  * one API call, because the rules it obeys are not role-specific.
  *
  * ── Client-side checks are courtesies, not rules ──
@@ -16,7 +16,7 @@ import { ApiAlert } from '@/app/ui';
  * (422 PASSWORD_POLICY), because a client-side rule is a suggestion. The
  * server's message is the one shown when it disagrees.
  *
- * The success state says exactly what actually happened — including that
+ * The success state says exactly what actually happened - including that
  * other devices were signed out. A user who then finds their phone logged
  * out should never have to wonder whether that was them.
  */
@@ -55,7 +55,7 @@ export function PasswordForm() {
       } else {
         setError({
           message:
-            'Could not reach House For Rent. Your password was not changed — try again in a moment.',
+            'Could not reach House For Rent. Your password was not changed - try again in a moment.',
         });
       }
     } finally {

@@ -6,7 +6,7 @@ import { postJson, ClientApiError } from '@/lib/client';
 import { ApiAlert } from '@/app/ui';
 
 /**
- * The step after the introduction (FR-8.3) — F-001's missing user action.
+ * The step after the introduction (FR-8.3) - F-001's missing user action.
  *
  * The officer who made the introduction is the one who opens the deal, and
  * the only thing they send is the record's id. Every party on the resulting
@@ -61,7 +61,7 @@ export function OpenDeal({ introductionRecordId }: { introductionRecordId: strin
 
       <p className="hint">
         This creates the rental against the introduction above. Nothing moves
-        yet — the landlord signs the agreement before any money is asked for,
+        yet - the landlord signs the agreement before any money is asked for,
         and the tenant&rsquo;s funds are held in escrow until they confirm
         they have moved in.
       </p>

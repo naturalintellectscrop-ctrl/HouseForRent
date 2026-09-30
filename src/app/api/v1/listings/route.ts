@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { publicSearch, type SearchFilters } from '@/server/listings';
 import { ApiError, route } from '@/server/http';
 
-/** GET /api/v1/listings — the corridor-scoped public feed. */
+/** GET /api/v1/listings - the corridor-scoped public feed. */
 export const GET = route(async (req: NextRequest) => {
   const sp = req.nextUrl.searchParams;
   const filters: SearchFilters = {};

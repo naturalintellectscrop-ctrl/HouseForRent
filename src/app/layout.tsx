@@ -8,11 +8,11 @@ const geistMono = Geist_Mono({ subsets: ['latin'], variable: '--font-geist-mono'
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'),
   title: {
-    default: 'House For Rent — verified homes to rent in Kampala',
+    default: 'House For Rent - verified homes to rent in Kampala',
     template: '%s · House For Rent',
   },
   description:
-    'Find your next home with ease. Every home on House For Rent is visited and confirmed in person by one of our field officers before it reaches you — free for tenants, in Kampala and Wakiso.',
+    'Find your next home with ease. Every home on House For Rent is visited and confirmed in person by one of our field officers before it reaches you - free for tenants, in Kampala and Wakiso.',
   icons: {
     icon: [{ url: '/favicon.ico' }, { url: '/favicon.png', type: 'image/png' }],
     apple: '/apple-touch-icon.png',
@@ -20,7 +20,7 @@ export const metadata: Metadata = {
   openGraph: {
     type: 'website',
     siteName: 'House For Rent',
-    title: 'House For Rent — verified homes to rent in Kampala',
+    title: 'House For Rent - verified homes to rent in Kampala',
     description:
       'Find your next home with ease. Every home is visited and confirmed in person by a field officer before it reaches you. Free for tenants.',
     images: [
@@ -28,7 +28,7 @@ export const metadata: Metadata = {
         url: '/brand/og-cover.png',
         width: 1200,
         height: 630,
-        alt: 'House For Rent — find your next home with ease.',
+        alt: 'House For Rent - find your next home with ease.',
       },
     ],
   },
@@ -44,7 +44,7 @@ export const viewport: Viewport = {
 
 /**
  * ── Fonts ──
- * `next/font/google` downloads Geist at BUILD time and self-hosts it — no
+ * `next/font/google` downloads Geist at BUILD time and self-hosts it - no
  * runtime request to Google, and the CSS is preloaded with `font-display:
  * swap` semantics, so a cold start on a Ugandan mobile connection (NFR-5)
  * pays one cached font file and no third-party round-trip. The identity is
@@ -56,7 +56,7 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   // data-scroll-behavior tells Next.js this smooth scrolling is ours, so
   // route transitions may scroll instantly while in-page anchors stay
-  // smooth — silencing the framework's console warning honestly.
+  // smooth - silencing the framework's console warning honestly.
   return (
     <html
       lang="en"

@@ -1,5 +1,5 @@
 /**
- * The double-entry ledger and the escrow primitives — the authoritative
+ * The double-entry ledger and the escrow primitives - the authoritative
  * record of all value movement (Data_Model.md §8, FR-7.2).
  *
  * Ported from apps/api/src/ledger/{ledger,escrow}.service.ts. Behaviour is
@@ -28,7 +28,7 @@ import { initiateNylonCollect, nylonPayMode } from './nylonpay';
 
 /**
  * An instruction's CURRENT state is the `toState` of its most recent event
- * (psp_instruction is immutable — the `state` column only ever holds the
+ * (psp_instruction is immutable - the `state` column only ever holds the
  * initial `pending`). Every reader MUST go through this helper.
  */
 export function derivedPspState(
@@ -156,7 +156,7 @@ export async function balanceOf(accountId: string): Promise<bigint> {
 }
 
 /**
- * What this deal STILL OWES BACK — the credit-side magnitude of
+ * What this deal STILL OWES BACK - the credit-side magnitude of
  * escrow_liability, positive. Must be read inside the transaction that
  * posts against it (see module header).
  */
@@ -195,7 +195,7 @@ export async function everyPostingBalances(): Promise<boolean> {
 
 /**
  * Finds (or lazily creates) the per-deal account of a given type. Must run
- * on the caller's transaction client when there is one — an account created
+ * on the caller's transaction client when there is one - an account created
  * outside the transaction would survive a rollback that discarded the
  * postings referencing it.
  */
@@ -259,7 +259,7 @@ export async function settle(params: { dealId: string; amount: bigint }, tx?: Tx
   );
 }
 
-/** Settlement part 2: the custodian moves it — debit landlord_payable, credit psp_clearing. */
+/** Settlement part 2: the custodian moves it - debit landlord_payable, credit psp_clearing. */
 export async function releaseToLandlord(params: { dealId: string; amount: bigint }, tx?: Tx) {
   const landlordPayable = await accountFor('landlord_payable', params.dealId, tx);
   const pspClearing = await accountFor('psp_clearing', params.dealId, tx);
@@ -298,7 +298,7 @@ export async function refund(params: { dealId: string; amount: bigint }, tx?: Tx
  *  - the sandbox mock (default), which settles instantly and labels every
  *    instruction MOCK in the database itself; and
  *  - Nylon Pay (NYLONPAY_MODE=live + credentials), whose collections are
- *    async — the instruction goes `pending` and only a verified webhook
+ *    async - the instruction goes `pending` and only a verified webhook
  *    completes it. See issueLiveInstruction below.
  * The ledger is correct under both; what differs is the truth about money,
  * and the instruction record is what carries that truth.
@@ -366,13 +366,13 @@ export async function issuePspInstruction(params: {
  * ── Live Nylon Pay path ──
  * A collection is ASYNC: the tenant approves a prompt on their phone, so the
  * instruction is created `pending` and only a signature-verified webhook
- * (see /api/v1/payments/nylonpay/webhook) moves it to `succeeded` — which is
+ * (see /api/v1/payments/nylonpay/webhook) moves it to `succeeded` - which is
  * the only moment custody is booked (the deal service gates its booking on
  * this state). A provider initiation failure marks the instruction `failed`
  * and rethrows: nothing is booked, the retry creates a fresh instruction.
  *
  * Release/refund instructions are parked `pending` until the payout dispatch
- * is wired to the provider's payout API — the honest alternative to the mock
+ * is wired to the provider's payout API - the honest alternative to the mock
  * pretending the landlord was paid.
  */
 async function issueLiveInstruction(params: {
@@ -381,7 +381,7 @@ async function issueLiveInstruction(params: {
   amount: bigint;
   idempotencyKey: string;
 }) {
-  // Reuse any instruction still in flight or already honoured — the CURRENT
+  // Reuse any instruction still in flight or already honoured - the CURRENT
   // state is derived from events (the row itself is immutable and always
   // reads `pending`). A failed/cancelled instruction does not block a retry.
   const existing = await db.pspInstruction.findFirst({
@@ -390,7 +390,7 @@ async function issueLiveInstruction(params: {
   });
   if (existing && !PSP_TERMINAL_FAILED.has(derivedPspState(existing))) return existing;
 
-  // The provider's reference must be a UUID — it is their dedupe key and the
+  // The provider's reference must be a UUID - it is their dedupe key and the
   // key webhooks use to find this instruction. Fresh instruction, fresh UUID:
   // a FAILED instruction does not block a retry, a live one does.
   const reference = randomUUID();
@@ -415,7 +415,7 @@ async function issueLiveInstruction(params: {
       data: {
         instructionId: instruction.id,
         toState: 'pending',
-        detail: 'Submitted to Nylon Pay — awaiting the tenant’s approval of the payment prompt.',
+        detail: 'Submitted to Nylon Pay - awaiting the tenant’s approval of the payment prompt.',
         occurredAt: new Date(),
       },
     });
@@ -426,7 +426,7 @@ async function issueLiveInstruction(params: {
         // UGX has no subunit: integer shillings map 1:1. Rent-scale amounts
         // are far below Number.MAX_SAFE_INTEGER.
         amountUGX: Number(params.amount),
-        description: 'Rent escrow — House For Rent',
+        description: 'Rent escrow - House For Rent',
         customerName: deal.tenantParty.displayName,
         customerPhone: deal.tenantParty.primaryPhone,
         metadata: { dealId: params.dealId },
@@ -475,12 +475,12 @@ const PSP_TERMINAL_STATES = new Set(['succeeded', 'failed']);
 const PSP_TERMINAL_FAILED = new Set(['failed']);
 
 /**
- * Advance an instruction and append the event — idempotent under the
+ * Advance an instruction and append the event - idempotent under the
  * provider's at-least-once delivery. Rules:
  *  - same state again → acknowledged, no duplicate row (the (instruction,
  *    toState) unique enforces it);
  *  - an already-terminal instruction NEVER changes state (a late `failed`
- *    after `succeeded` is refused and logged — booked custody is only ever
+ *    after `succeeded` is refused and logged - booked custody is only ever
  *    undone through the refund deal action);
  *  - the production state model is three-state (pending/succeeded/failed);
  *    provider "processing" progress belongs in the audit log, not here.
@@ -499,14 +499,14 @@ export async function transitionPspInstruction(params: {
   if (!instruction) return null;
 
   // The instruction row is IMMUTABLE (BEFORE UPDATE OR DELETE trigger raises
-  // on any mutation) — state advances by appending an event; the current
+  // on any mutation) - state advances by appending an event; the current
   // state is always the latest event's toState.
   const current = derivedPspState(instruction);
   const effective = params.toState;
   const occurredAt = params.occurredAt ?? new Date();
 
   if (current === effective) {
-    // Redelivery of an already-recorded state — acknowledge silently (the
+    // Redelivery of an already-recorded state - acknowledge silently (the
     // (instruction, toState) unique would reject the duplicate anyway).
     return instruction;
   }
@@ -514,7 +514,7 @@ export async function transitionPspInstruction(params: {
     // The first terminal outcome stands. A late contradicting delivery is
     // refused here and must never flip the derived state backwards.
     console.error(
-      `[ledger] PSP anomaly: instruction ${instruction.id} already ${current}; ignoring late "${params.toState}" — ${params.detail}`,
+      `[ledger] PSP anomaly: instruction ${instruction.id} already ${current}; ignoring late "${params.toState}" - ${params.detail}`,
     );
     return instruction;
   }
@@ -530,7 +530,7 @@ export async function transitionPspInstruction(params: {
       },
     });
   } catch (err) {
-    // A concurrent delivery recorded the same transition first — the dedup
+    // A concurrent delivery recorded the same transition first - the dedup
     // unique ((instruction_id, to_state)) did its job. Idempotent no-op.
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
       return instruction;

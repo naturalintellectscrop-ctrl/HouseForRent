@@ -8,7 +8,7 @@ import { Empty, shillings, StatusPill, when } from '@/app/ui';
  *
  * A server component: it fetches with the officer's session server-side and
  * ships the rendered list. No client JavaScript, no loading spinner, no
- * second round trip — which is the point on a field connection (NFR-5).
+ * second round trip - which is the point on a field connection (NFR-5).
  *
  * `GET /v1/viewings/assigned/me` returns only viewings assigned to the
  * CALLER, resolved from their session. This page cannot show another
@@ -57,7 +57,7 @@ export default async function DispatchBoard() {
             {/*
               Task 15: the card speaks in landmarks, not ids. An officer
               travelling to a visit needs the home, the meeting point and
-              the rent the tenant was quoted — the row data already carried
+              the rent the tenant was quoted - the row data already carried
               all of it; the card just never used it.
             */}
             <p style={{ fontWeight: 620, margin: '0 0 0.15rem' }}>

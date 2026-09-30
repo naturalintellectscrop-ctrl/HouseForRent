@@ -4,7 +4,7 @@ import { AdminOnly, Empty, when } from '@/app/ui';
 import { ConfigVersionForm, RateVersionForm } from './version-forms';
 
 /**
- * FR-10.1 — configuration management.
+ * FR-10.1 - configuration management.
  *
  * The parameter keys this port's server actually reads. Listed here only to
  * populate a dropdown; the server owns which keys exist and rejects an
@@ -12,9 +12,9 @@ import { ConfigVersionForm, RateVersionForm } from './version-forms';
  * reads.
  *
  * SANDBOX ADAPTATION: the reference listed the five V1 keys of the NestJS
- * API. This port reads two of them — `launch_gate_listings` (the launch
+ * API. This port reads two of them - `launch_gate_listings` (the launch
  * gate on the operations overview) and `freshness_window_days` (the
- * freshness window in the listings service) — so those are the ones
+ * freshness window in the listings service) - so those are the ones
  * offered; creating a key nothing reads would be exactly the typo the
  * dropdown exists to prevent.
  */
@@ -35,7 +35,7 @@ export default async function ConfigPage(props: {
     if (err instanceof ApiError) {
       if (err.status === 401) redirect('/login');
       if (err.status === 403) return <AdminOnly what="Configuration" />;
-      // A parameter that has never been defined has no history yet — not an
+      // A parameter that has never been defined has no history yet - not an
       // error, and not a reason to fail the whole page.
       if (err.status === 404 || err.status === 422) {
         versions = [];
@@ -64,7 +64,7 @@ export default async function ConfigPage(props: {
       <h2>Parameters</h2>
       <ConfigVersionForm keys={CONFIG_KEYS} />
 
-      <h2>History — {selected}</h2>
+      <h2>History - {selected}</h2>
       <form method="get" className="filter-form">
         <label htmlFor="history-key">Show history for</label>
         <select id="history-key" name="key" defaultValue={selected}>
@@ -82,7 +82,7 @@ export default async function ConfigPage(props: {
       {versions.length === 0 ? (
         <Empty title={`No versions recorded for ${selected}.`}>
           A version row exists only where a change was recorded through this
-          console — a parameter seeded directly, as the launch gate was, can
+          console - a parameter seeded directly, as the launch gate was, can
           hold a working value with no version beneath it yet. Reading it
           still works; what is missing is the record of a decision. Setting a
           version here is how that value becomes a choice someone made,
@@ -134,7 +134,7 @@ export default async function ConfigPage(props: {
       )}
 
       <p className="muted">
-        In this port a recorded version takes effect when it is written — the
+        In this port a recorded version takes effect when it is written - the
         API accepts no future effective date, so no row here can yet show as{' '}
         <span className="pill pill-warn">scheduled</span>. Deals already
         signed are unaffected either way: they hold snapshots of the terms

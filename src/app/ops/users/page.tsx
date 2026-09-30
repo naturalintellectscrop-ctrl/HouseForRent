@@ -11,20 +11,20 @@ import { TierControl } from './tier-control';
  * It answers the operational questions: who has an account, is it active,
  * have they completed identity verification, what are they doing on the
  * platform. It does NOT join identity documents, ledger balances or the
- * audit firehose — those remain subject-scoped reads on purpose (see the
+ * audit firehose - those remain subject-scoped reads on purpose (see the
  * audit page). Role, status and verification state come from the server;
  * nothing on this page is computed client-side.
  *
  * ── The role filter (Task 15) ──
  * A row of chips that compose with the search box: both live in the URL
  * (`?q=` and `?role=`), so a filtered view is shareable like every other
- * filter in the product. The chips are the only writer of `role` — but a
+ * filter in the product. The chips are the only writer of `role` - but a
  * hand-typed `?role=` value is still handled honestly: the server refuses
  * unknown values (422), so this page validates FIRST and says so, rather
  * than rendering an error boundary or silently ignoring the filter.
  */
 
-/** The fixed filter vocabulary — mirrors AUTH_ROLES on the server. */
+/** The fixed filter vocabulary - mirrors AUTH_ROLES on the server. */
 const ROLE_FILTERS: ReadonlyArray<{ value: string; label: string }> = [
   { value: 'tenant', label: 'Tenants' },
   { value: 'lister', label: 'Landlords' },
@@ -84,13 +84,13 @@ export default async function UsersPage(props: {
       <h1>Users</h1>
       <p className="lede">
         Every account on the platform, its standing, and how it is used.
-        Documents and money stay in their own subject-scoped records — this
+        Documents and money stay in their own subject-scoped records - this
         is account administration, not surveillance.
       </p>
 
       {!roleKnown && (
         <p className="alert alert-note" role="status">
-          “{role}” is not an account role, so the filter is off — showing
+          “{role}” is not an account role, so the filter is off - showing
           every account.
         </p>
       )}
@@ -202,7 +202,7 @@ export default async function UsersPage(props: {
                     {r.role === 'lister' ? (
                       <TierControl partyId={r.partyId} currentTier={r.listerTier} />
                     ) : (
-                      <span className="faint">—</span>
+                      <span className="faint"> - </span>
                     )}
                   </td>
                   <td>

@@ -3,7 +3,7 @@ import { createServiceAreaNeighbourhood, adminNeighbourhoodDirectory } from '@/s
 import { readJson, requireRole, requireString, route } from '@/server/http';
 
 /**
- * GET /api/v1/ops/neighbourhoods — every neighbourhood with its usage
+ * GET /api/v1/ops/neighbourhoods - every neighbourhood with its usage
  * counts (properties, live listings), for the service-area console.
  */
 export const GET = route(async () => {
@@ -12,7 +12,7 @@ export const GET = route(async () => {
 });
 
 /**
- * POST /api/v1/ops/neighbourhoods — create a neighbourhood (F-015).
+ * POST /api/v1/ops/neighbourhoods - create a neighbourhood (F-015).
  *
  * First reachable HTTP for a path the contract always promised: the body
  * is name + district (+ optional inServiceArea), duplicates are a 409

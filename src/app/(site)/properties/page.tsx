@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { apiGet, type Neighbourhood, type SearchResponse } from '@/lib/api';
 import { Empty, Icon, PropertyCard } from '@/app/ui';
 
-/* Search results must reflect the live inventory — render per request. */
+/* Search results must reflect the live inventory - render per request. */
 export const dynamic = 'force-dynamic';
 
 export const metadata = {
@@ -26,7 +26,7 @@ function one(params: Params, key: string): string | undefined {
  * Every filter lives in the URL. That makes a search shareable, bookmarkable
  * and back-button-correct, it lets the whole page stay a server component
  * with no client JavaScript at all, and it means the filter state cannot
- * drift out of sync with what was actually fetched — because there is only
+ * drift out of sync with what was actually fetched - because there is only
  * one copy of it.
  *
  * ── What this page does NOT decide ──
@@ -110,7 +110,6 @@ export default async function PropertiesPage({
       <div className="page section" style={{ paddingBottom: '1.5rem' }}>
         <div className="stack">
           <div>
-            <p className="eyebrow">Verified homes</p>
             <h1 className="h1">
               {feed.totalCount === 0
                 ? 'No homes match this search'

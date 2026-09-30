@@ -7,7 +7,7 @@ import { ApiAlert } from '@/app/ui';
 
 /**
  * The identity check. It collects exactly the two factors the V1 baseline
- * requires — a National Identification Number and the name it belongs to —
+ * requires - a National Identification Number and the name it belongs to -
  * and no documents (Decision 10).
  *
  * ── What the provider actually is ──
@@ -76,7 +76,7 @@ export function IdentityForm() {
       } else {
         setError({
           message:
-            'Could not reach House For Rent. Nothing was saved — try again in a moment.',
+            'Could not reach House For Rent. Nothing was saved - try again in a moment.',
         });
       }
     } finally {
@@ -123,7 +123,7 @@ export function IdentityForm() {
           placeholder="As it appears on the ID"
         />
         <p className="hint">
-          The name the provider checks against — it must match the name on
+          The name the provider checks against - it must match the name on
           your House For Rent account.
         </p>
       </div>
