@@ -707,3 +707,23 @@ Stage Summary:
 Unresolved issues or risks, and priority recommendations for the next phase:
 - OWNER ACTION (Vercel dashboard, project houseforrentug): 1) Settings → Git → confirm the connected repo is naturalintellectscrop-ctrl/HouseForRent (a v0-imported project is often wired to v0's own source instead); 2) Settings → General → Build & Output Settings → clear ALL overrides (Root Directory / Install / Build / Output) from the monorepo era; 3) Settings → Git → Production Branch = main; 4) Deployments → find the deployment for commit fcb3d6f — if none exists the Git connection is the cause; if one is Error, the log's first red line names the failure; 5) after any env-var change, Redeploy. Cleanest fallback: brand-new project importing the repo + the four NYLONPAY_* vars, then move the domain.
 - Once a current build actually ships, re-run this round's probe suite: / should 200 with live data once DATABASE_URL exists; webhook unsigned → 401 (never 503/404).
+
+---
+Task ID: 25
+Agent: web takeover agent (Vercel build unblock — npm ci lockfile round)
+Task: Owner pasted the failed Vercel build log. Diagnose and fix.
+
+Work Log:
+- BUILD LOG READ: the deployment cloned github.com/naturalintellectscrop-ctrl/HouseForRent @ fcb3d6f (branch main) — the Git connection is FIXED (Task 24's checklist worked). The build then failed in 3 seconds: install command override `npm ci` with NO package-lock.json in the repo (we ship bun.lock) → npm EUSAGE abort. The `npm ci` override is a v0-era project setting.
+- REPO-SIDE FIX (no dashboard action required): generated a real package-lock.json (`npm install --package-lock-only`) so `npm ci` resolves. Verified: lockfile contains @nile-squad/nylonpay-ts@^2.0.1, prisma/@prisma/client, next, react; `npm ci --dry-run` exits 0 (lockfile in sync; the install-scripts warnings are informational, root postinstall `prisma generate` always runs, and its engine download is self-sufficient). Both lockfiles now travel together (bun.lock = local dev, package-lock.json = the project's npm ci install) — deliberate, recorded here.
+- INCIDENT DURING THE ROUND: the sandbox DB was found EMPTY (0 accounts/listings; file mtime 10:18). dev.log had been rotated so the actor is not identifiable; most probable a cron-triggered review round misreading the Task-19 purge instructions. Recovered the standing QA fixture state with the honest-labelled seed: `DEMO_PASSWORD=… seed-demo.mjs` (7 operator accounts + listings + viewings + 2 deals through the real deals service) + qa-reset-password (7 rows). No production impact — this is the sandbox QA database only.
+- VERIFICATION GATE: tsc 0 · ESLint 0 · qa-journey 53/0/5 (baseline restored) · commit 760d8cd pushed to main + sandbox/webapp as naturalintellectsltd@gmail.com. This push auto-triggers a Vercel deployment (Git integration proven live).
+- PRODUCTION POLL (7.5 min post-push): houseforrentug.vercel.app still fingerprinted as the old v0 build (robots.txt 404, webhook 404). Expected if the new build is mid-install (npm ci on 2 cores) or if deployments are manual (Redeploy needed). Fingerprint for success: /robots.txt → 200 and unsigned webhook POST → 401.
+
+Stage Summary:
+- The last repo-side blocker is removed: `npm ci` now resolves. From here, a successful deployment depends only on the Vercel side (build in progress, or a manual Redeploy if auto-deploy is off, or a NEW failure with a log to read).
+- Owner guidance: Deployments tab — look for commit 760d8cd. Building/Ready → nothing to do. Not listed → click Redeploy on latest. Error → paste the log's first red line.
+
+Unresolved issues or risks, and priority recommendations for the next phase:
+- Once robots.txt 200s: homepage still 500s until DATABASE_URL is set (owner provides the DB later, per instruction). Webhook 401-on-unsigned = armed; then register the webhook URL on the Nylon Pay key.
+- The npm-scripts policy on Vercel's npm: if a future build fails at prisma generate, clear the Install Command override in Settings → Build & Output Settings so Vercel uses bun install + bun.lock (the cleaner long-term parity with local dev).
