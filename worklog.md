@@ -660,3 +660,31 @@ Unresolved issues or risks, and priority recommendations for the next phase:
 - Payout dispatch (release/refund → makePayout API) is the next PSP step: instructions park pending honestly until then; wire it before real deals reach settlement in live mode.
 - Webhook end-to-end with a REAL provider delivery cannot be exercised from the sandbox (localhost is not reachable by Nylon Pay; no live instruction was created — the owner said leave the DB alone). The security envelope is proven; the money path is contract-tested. First real delivery should be watched in the Vercel function logs ([nylonpay-webhook] lines) and reconciled against the instruction events.
 - The SDK's freshness window means server CLOCK SKEW >5min would reject genuine deliveries — Vercel clocks are NTP-synced; note for any self-host move.
+
+---
+Task ID: 23
+Agent: web takeover agent (Nylon Pay → Vercel configuration round)
+Task: Owner asked "how do I configure the nylon pay config in vercel?" with the standing constraint: do NOT change any other env vars — everything else is already configured in Vercel. No code changes were needed (Task 22 shipped the full PSP path); this round verified the endpoint with the real secret end-to-end and produced the owner's configuration steps.
+
+Work Log:
+- SCOPE GUARD: working tree inspected first — ~300 files showed modified, but `git diff --summary` proved they were pure filemode flips (100644→100755, sandbox artifact), zero content drift. Silenced locally with `git config core.filemode false` instead of committing noise. Remote state verified in sync: HEAD = origin/main = origin/sandbox/webapp = 571918e.
+- LOCAL ENV RESTORE: the untracked .env had lost the NYLONPAY_* lines (file was rewritten by a later round) — restored exactly the three owner-supplied secrets (API key / API secret / webhook secret) and NOTHING else (DATABASE_URL line untouched, per the owner's constraint). Deliberately NO NYLONPAY_MODE locally: without it the PSP stays the sandbox mock, so no real money instruction can ever be created from the dev sandbox.
+- LIVE SECURITY MATRIX (real webhook secret, running server): valid signature over an unknown reference → 200 {"received":true} (ACK, no retry loop); tampered signature → 401 INVALID_SIGNATURE; unsigned → 401. A first pass returned 503 WEBHOOK_NOT_CONFIGURED — the fail-closed branch proving the route refuses everything while unconfigured (which is also exactly what production does until the owner sets the vars).
+- VERCEL CLI not available in the sandbox and no Vercel credentials by design → configuration is an owner dashboard action; the exact steps (env var names as the code reads them, all-environments, redeploy requirement, webhook URL registration) were delivered in chat and are recorded here.
+- HYGIENE: `.zscripts/dev.pid` (dev-server runtime noise, changed on every restart) untracked + `.zscripts/` ignored — same class as the Task-21 untracking; it is a PID file, not configuration, and no env var or secret is involved.
+
+Stage Summary:
+- The webhook endpoint is verified armed with the owner's real webhook secret: the security envelope (verify-before-parse, freshness, fail-closed) behaves exactly as designed on the current shipped code (571918e). Nothing on the wire changes when the owner adds the env vars — the route goes from 503 (unconfigured) to 200/401 (armed).
+- Owner configuration (Vercel → Settings → Environment Variables, all three environments, then redeploy):
+    NYLONPAY_API_KEY         = npk_…   (owner-supplied npk_lgBD3-…)
+    NYLONPAY_API_SECRET      = nps_…   (owner-supplied nps_J4I-…)
+    NYLONPAY_WEBHOOK_SECRET  = sSsk…   (owner-supplied)
+    NYLONPAY_MODE            = live    (ONLY when ready for real money movement; omit to stay on the sandbox mock)
+  plus the webhook URL registered on the Nylon Pay key (Dashboard > API Settings > Webhook Configuration):
+    https://houseforrentug.vercel.app/api/v1/payments/nylonpay/webhook
+  and NOTHING ELSE — every other env var on the project stays exactly as the owner configured it.
+
+Unresolved issues or risks, and priority recommendations for the next phase:
+- Live-mode arming is the owner's decision: with NYLONPAY_MODE=live, deal fund/settle/refund actions create real collection instructions; without it the keys are stored but dormant (sandbox mock). Recommended sequence: add the three secrets now, watch a sandbox flow, then set MODE=live at go-live.
+- First REAL provider delivery should be watched in Vercel function logs for `[nylonpay-webhook]` lines and reconciled against the instruction events (Task 22 note stands).
+- Payout dispatch (release/refund → provider payout API) remains the next PSP build item before live deals reach settlement.
