@@ -609,3 +609,26 @@ Unresolved issues or risks, and priority recommendations for the next phase:
 - The 5 harness skips (QA-tenant contracts) will re-engage if/when a QA-labelled tenant is recreated via the real staff-provisioning flow.
 - Seed data remains the +256 700 100 0xx demo range; replace via real flows when launch content is ready.
 - External blockers unchanged: real PSP, real identity provider, API host, Vercel + NEXT_PUBLIC_SITE_URL.
+
+---
+Task ID: 21
+Agent: web takeover agent (deployment-unblock round)
+Task: Owner instruction — "push changes as naturalintellectsltd@gmail.com and deployments are not getting deployed." Diagnose why the repo's deployments never ship the real product, fix the blockers, and land the production app on the branch the deployment platform actually builds.
+
+Work Log:
+- ROOT CAUSE (two independent blockers): (1) remote `main` — the branch Vercel builds (its v0-era vercel.json proves the platform is wired) — still pointed at the v0 monorepo (2efa53f: apps/web + _legacy + workspace buildCommand), while the product lived only on sandbox/webapp; every deployment built or failed on the old scaffold, never the app. (2) Even on our lineage, `next build` would have failed on any deployment host: the public data pages (home, properties, listing detail, areas, for-landlords) had no dynamic-rendering markers, so build-time prerendering queried the in-process API → Prisma → a DATABASE_URL/SQLite file that does not exist on a build machine.
+- PER-REQUEST RENDERING: `export const dynamic = 'force-dynamic'` on the five public data pages, each with a one-line honest comment explaining why (marketplace freshness + build independence). The portal/ops dashboards were already request-time (session cookie layouts) and were left alone. Verified zero behavioural change in the sandbox (pages were already rendered per request under dev).
+- BUILD-PIPELINE HARDENING: `postinstall: prisma generate` added to package.json so hosted installs always build the Prisma client. New root `vercel.json`: framework nextjs + the exact security-header set the v0 monorepo carried (X-Frame-Options DENY, nosniff, strict-origin referrer, restrictive Permissions-Policy; Cache-Control private/no-store on /account|/landlord|/ops) so no security parity is lost in the switchover.
+- LINEAGE ADOPTION WITHOUT FORCE: `git merge origin/main --allow-unrelated-histories -s ours` — main's tree became exactly the production app (verified: no apps/, no _legacy/, our vercel.json) while the v0 history stays reachable as a parent commit AND on v0/naturalintellectscrop-7562-d521826e + design-system-implementation branches. The push to main was a clean fast-forward — nothing rewritten, nothing destroyed.
+- HYGIENE FOUND DURING PRE-PUSH TREE CHECK: `.env` (local SQLite DATABASE_URL line only — no secrets) and the stray `--full-page` PNG were tracked since the initial commit, which is why the Task-19 .gitignore rules never applied to them. Untracked both (git rm --cached), deleted the PNG. Secret scan over the tracked tree (github/openai/aws patterns): clean.
+- VERIFICATION GATE: tsc 0 · ESLint 0 · qa-journey 53/0/5 · home/properties/areas/for-landlords/contact all 200 · dev.log clean · browser: homepage renders with live data ("2 verified homes available right now"), no console errors.
+- GIT: three commits authored Natural Intellects Ltd <naturalintellectsltd@gmail.com> and pushed: b1393dc (deploy-ready fixes), 2adbd5e (the -s ours adoption merge), 1a70dad (untrack hygiene). Remote state verified: main = sandbox/webapp = 1a70dad. The deployment platform will now build the production app.
+
+Stage Summary:
+- Deployments were never broken builds of our code — they were builds of a repo state that was never ours. main now IS the product, the build needs no database, installs generate the Prisma client, and the security headers survived the switchover.
+- The full working app is on the company repo's default branch for the first time, authored as naturalintellectsltd@gmail.com per standing policy.
+
+Unresolved issues or risks, and priority recommendations for the next phase:
+- RUNTIME ENV (owner action in the Vercel/host dashboard): the deployment needs DATABASE_URL (and NODE_ENV) set in project settings. The schema is SQLite here; serverless filesystems are ephemeral, so real production data needs either the hosted Postgres the real schema was written for (apps/api lineage) or a persistent-volume host — that is the standing "API host" external blocker, now the ONLY thing between a green deployment and a working site.
+- The .env blob and the stray PNG remain in git history (initial-commit era, already on the remote before this round). Contents are non-sensitive (a sandbox file path); a history scrub (filter-repo + force-push) is available on request but not warranted for this.
+- worklog.md itself is tracked on the company repo (continuity docs travel with the code); passwords referenced in it are sandbox-only seed credentials that also live in scripts/seed-demo.mjs by design.
