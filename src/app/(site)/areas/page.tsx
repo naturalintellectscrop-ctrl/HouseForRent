@@ -2,6 +2,9 @@ import Link from 'next/link';
 import { apiGet, type Neighbourhood } from '@/lib/api';
 import { Empty, Icon, PageIntro } from '@/app/ui';
 
+/* Service-area coverage changes when ops edits neighbourhoods — render per request. */
+export const dynamic = 'force-dynamic';
+
 export const metadata = {
   title: 'Areas we cover',
   description:

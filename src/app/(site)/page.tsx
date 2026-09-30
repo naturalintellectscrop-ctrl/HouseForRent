@@ -4,6 +4,15 @@ import { mediaUrl } from '@/lib/contract';
 import { apiGet, type Neighbourhood, type SearchResponse } from '@/lib/api';
 import { Icon, PropertyCard, SectionHeader, TAGLINE } from '@/app/ui';
 
+/*
+ * The marketplace is rendered per request: listings, escrow figures and
+ * availability change with landlord/officer actions, and prerendering at
+ * build time would freeze the homepage to the build machine's database.
+ * (It would also make `next build` require a live DATABASE_URL, which no
+ * deployment pipeline should.)
+ */
+export const dynamic = 'force-dynamic';
+
 export const metadata = {
   title: 'House For Rent — verified homes to rent in Kampala',
   description:

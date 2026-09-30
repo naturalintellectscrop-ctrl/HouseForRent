@@ -13,6 +13,13 @@ import { currentRole, isSignedIn } from '@/lib/session';
 import { SaveToggle } from './save-toggle';
 import { PhotoGallery } from './photo-gallery';
 
+/*
+ * Listing detail is rendered per request: escrow figures derive from live
+ * config, the gallery/staff state change with officer actions, and the
+ * save/watch state is session-specific.
+ */
+export const dynamic = 'force-dynamic';
+
 const CONDITION_LABEL: Record<string, string> = {
   excellent: 'Excellent',
   good: 'Good',
