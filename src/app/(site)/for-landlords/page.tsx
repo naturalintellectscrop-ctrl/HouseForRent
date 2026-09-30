@@ -2,6 +2,9 @@ import Link from 'next/link';
 import { apiGet } from '@/lib/api';
 import { Icon, PageIntro } from '@/app/ui';
 
+/* Commission figures come from live config versions — render per request. */
+export const dynamic = 'force-dynamic';
+
 export const metadata = {
   title: 'For landlords',
   description:

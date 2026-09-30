@@ -2,6 +2,9 @@ import Link from 'next/link';
 import { apiGet, type Neighbourhood, type SearchResponse } from '@/lib/api';
 import { Empty, Icon, PropertyCard } from '@/app/ui';
 
+/* Search results must reflect the live inventory — render per request. */
+export const dynamic = 'force-dynamic';
+
 export const metadata = {
   title: 'Homes to rent',
   description:
