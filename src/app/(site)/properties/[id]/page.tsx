@@ -76,8 +76,8 @@ export default async function PropertyPage({
       revalidate: 30,
     });
   } catch (err) {
-    // The API returns 404 for anything outside the public feed —
-    // unverified, withdrawn or out of corridor — rather than 403, which
+    // The API returns 404 for anything outside the public feed -
+    // unverified, withdrawn or out of corridor - rather than 403, which
     // would confirm that an unpublished address exists.
     if (err instanceof ApiError && err.status === 404) notFound();
     throw err;
@@ -104,7 +104,7 @@ export default async function PropertyPage({
 
       {/* The gallery is the one client-interactive element here: swapping
           photographs is presentation, not business state. Props are plain
-          data — functions cannot cross the server→client boundary. */}
+          data - functions cannot cross the server→client boundary. */}
       <PhotoGallery
         photos={listing.photos}
         altBase={`${TYPE_LABEL[listing.propertyType] ?? 'Home'} in ${listing.neighbourhoodName}`}
@@ -205,7 +205,7 @@ export default async function PropertyPage({
                     because most properties in this corridor do not usefully
                     have one. */}
                 We describe location by neighbourhood and landmark rather than
-                by street address — that is how people here actually give
+                by street address - that is how people here actually give
                 directions. Your officer will meet you at the property and take
                 you the last part of the way.
               </p>
@@ -263,7 +263,7 @@ export default async function PropertyPage({
                   Request a viewing
                 </Link>
                 {/* Saved-homes toggle (QA round). `savedByCaller` is null for
-                    anonymous visitors — for them this is a quiet sign-in
+                    anonymous visitors - for them this is a quiet sign-in
                     affordance, not a button that pretends it worked. */}
                 {listing.savedByCaller === null || listing.savedByCaller === undefined ? (
                   <p style={{ textAlign: 'center' }}>

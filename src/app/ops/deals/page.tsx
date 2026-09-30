@@ -9,7 +9,7 @@ import { AdminOnly, BarList, Empty, ShortId, shillings, when } from '@/app/ui';
  * ── Why the distribution alone was not enough ──
  * This page used to show only a count per status. "3 deals at
  * commission_earned" tells an operator that three landlords are waiting to
- * be paid and gives them no way to reach any of them — which is how a
+ * be paid and gives them no way to reach any of them - which is how a
  * settlement queue becomes invisible work rather than a list someone can
  * clear.
  *
@@ -122,7 +122,7 @@ export default async function DealsPage(props: {
                   <td>
                     {row.commissionAmount
                       ? shillings(row.commissionAmount)
-                      : '—'}
+                      : ' - '}
                   </td>
                   <td>{when(row.updatedAt)}</td>
                 </tr>
@@ -135,7 +135,7 @@ export default async function DealsPage(props: {
       <p className="muted">
         Open a deal to see its ledger position and the transitions the server
         currently permits. This console holds no copy of the deal state
-        machine — it renders the server&rsquo;s answer.
+        machine - it renders the server&rsquo;s answer.
       </p>
     </>
   );

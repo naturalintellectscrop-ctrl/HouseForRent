@@ -5,7 +5,7 @@
  * SANDBOX ADAPTATION (worklog.md §D-1): in the real repository this module
  * performs HTTP against the NestJS API (`API_BASE_URL`). Here the web app
  * and the API are one Next.js process, so `apiGet`/`api` dispatch
- * IN-PROCESS to the same service layer the /api/v1 route handlers use —
+ * IN-PROCESS to the same service layer the /api/v1 route handlers use -
  * one implementation of the business rules, reached through the same
  * contract shapes. The browser mutations still go over real HTTP
  * (/api/v1/...), so every user journey crosses an API boundary exactly as
@@ -78,7 +78,7 @@ export interface Viewing {
   conductedByRole: 'foo';
   scheduledFor: string;
   status: 'requested' | 'scheduled' | 'conducted' | 'no_show' | 'cancelled';
-  /** When the tenant asked — distinct from the slot they asked for. */
+  /** When the tenant asked - distinct from the slot they asked for. */
   createdAt: string;
   /** Display context so a row can be recognised without a second fetch. */
   tenantName?: string;
@@ -99,7 +99,7 @@ export interface DispatchRow {
 export interface AssignableOfficer {
   partyId: string;
   displayName: string;
-  /** Visits already on their board — dispatch should not be blind to load. */
+  /** Visits already on their board - dispatch should not be blind to load. */
   assignedCount: number;
 }
 
@@ -180,7 +180,7 @@ export interface ReconciliationCheck {
 
 export interface Reconciliation {
   latest: ReconciliationCheck | null;
-  /** The ledger agreeing with ITSELF — a different problem from the above. */
+  /** The ledger agreeing with ITSELF - a different problem from the above. */
   internallyConsistent: boolean;
   history: ReconciliationCheck[];
 }
@@ -332,7 +332,7 @@ export interface PresentedTerms {
 }
 
 /**
- * The listing context a visit record shows the officer — the "where am I
+ * The listing context a visit record shows the officer - the "where am I
  * going, and what is the tenant working from" block (Task 15). Money is
  * derived SERVER-side (`expectedUpfront` uses the same terms expression the
  * escrow flow funds from) so the console never recomputes a shilling.
@@ -348,7 +348,7 @@ export interface ViewingDetailListing {
   monthlyRent: string;
   depositAmount: string;
   requiredMonthsUpfront: number;
-  /** Server-derived: rent × months upfront + deposit — the figure a
+  /** Server-derived: rent × months upfront + deposit - the figure a
    * tenant is asked to fund at agreement (same terms expression as escrow). */
   expectedUpfront: string;
   /** True only when the exact predicate the public detail page answers
@@ -360,7 +360,7 @@ export interface ViewingDetailListing {
 export interface ViewingDetail {
   viewing: Viewing;
   listing: ViewingDetailListing;
-  /** The officer on the visit, once dispatch has named one — the record
+  /** The officer on the visit, once dispatch has named one - the record
    * should say who is going, not just where. */
   officerName: string | null;
   fieldReport: FieldReport | null;
@@ -407,7 +407,7 @@ async function resolveListingsSearch(sp: URLSearchParams): Promise<SearchRespons
 async function resolveListingDetail(id: string) {
   const detail = await publicDetail(id);
   if (!detail) throw new ApiError(404, 'LISTING_NOT_FOUND', 'that listing does not exist or is not public');
-  // The officer's structured verdict on this home, when one exists — the
+  // The officer's structured verdict on this home, when one exists - the
   // same record the verification queue writes.
   const lastConducted = await db.viewing.findFirst({
     where: { listingId: id, status: 'conducted', fieldReport: { isNot: null } },
@@ -423,7 +423,7 @@ async function resolveListingDetail(id: string) {
       }
     : null;
   // The caller's bookmark state, only when the caller is a signed-in tenant
-  // (saving is a tenant surface — anonymous visitors get no toggle).
+  // (saving is a tenant surface - anonymous visitors get no toggle).
   const caller = await resolveSession();
   const savedByCaller = caller?.role === 'tenant' ? await isSaved(caller.partyId, id) : null;
   return {
@@ -480,7 +480,7 @@ async function resolveSavedListings() {
 
 /**
  * The signed-in landlord's money position (QA round: /landlord/earnings).
- * The aggregation is the server's — the page renders what arrives and adds
+ * The aggregation is the server's - the page renders what arrives and adds
  * no arithmetic of its own (CLAUDE.md §5: the browser never computes
  * business value).
  */
@@ -502,7 +502,7 @@ async function resolveActivityMine() {
  * One mandate row, shared by the lister panel and the ops queue (Task 10-b,
  * F-003 second half). Dates are ISO strings; `listerName`/`listerTier` are
  * filled for the ops queue and null on a lister's own rows (they know who
- * they are). The DECISION note is not on this shape — it lives in the audit
+ * they are). The DECISION note is not on this shape - it lives in the audit
  * trail.
  */
 export interface MandateRow {
@@ -579,7 +579,7 @@ async function resolveOpsNeighbourhoods() {
 
 /**
  * The officers dispatch can send, with their open load (Task 16). One
- * implementation lives in the service (`assignableOfficers`) — the queue
+ * implementation lives in the service (`assignableOfficers`) - the queue
  * and the reassign control both read it, so the two selects can never
  * disagree about who is sendable.
  */
@@ -606,7 +606,7 @@ async function resolvePresentedTerms(listingId: string): Promise<PresentedTerms>
       version: 'v1',
       heading: 'The circumvention clause',
       body:
-        'If the tenant we introduced you to rents this home directly, without going through House For Rent, the full commission becomes payable. Our officers record every introduction with a timestamp and the parties present — that record is what makes this enforceable, and it is why we can keep tenants free and charge you only on success.',
+        'If the tenant we introduced you to rents this home directly, without going through House For Rent, the full commission becomes payable. Our officers record every introduction with a timestamp and the parties present - that record is what makes this enforceable, and it is why we can keep tenants free and charge you only on success.',
     },
     payer: 'landlord',
     tenantPays: false,
@@ -807,7 +807,7 @@ async function resolveViewingDetail(viewingId: string): Promise<ViewingDetail> {
       depositAmount: detail.listing.depositAmount,
       requiredMonthsUpfront: detail.listing.requiredMonthsUpfront,
       /** Derived here, once, from the same terms expression the escrow
-       * flow funds from — the page renders it, it never computes it. */
+       * flow funds from - the page renders it, it never computes it. */
       expectedUpfront: (
         BigInt(detail.listing.monthlyRent) * BigInt(detail.listing.requiredMonthsUpfront) +
         BigInt(detail.listing.depositAmount)
@@ -858,7 +858,7 @@ async function resolveIntroductions() {
  * honour that. This one applies the same filters the real API accepted
  * (tenantPartyId, listingId via the service's where-clause; landlordPartyId
  * against the included relation). Its routing line sits immediately before
- * the unfiltered introductions line — order matters, nothing existing was
+ * the unfiltered introductions line - order matters, nothing existing was
  * moved or rewritten, and the mapping is repeated rather than shared for
  * exactly that reason.
  */
@@ -963,7 +963,7 @@ async function resolveDealDetail(dealId: string): Promise<DealDetail> {
 async function resolveLaunchGate(): Promise<LaunchGate> {
   const windowDays = await freshnessWindowDays();
   const cutoff = new Date(Date.now() - windowDays * 24 * 60 * 60 * 1000);
-  // The parameter row carries no value — the current value is the latest
+  // The parameter row carries no value - the current value is the latest
   // config version's.
   const gate = await configIntValue('launch_gate_listings', 12);
 
@@ -1087,7 +1087,7 @@ function resolverFor(path: string, authenticated: boolean): Resolver {
   // public reads
   if (parts[1] === 'listings' && parts.length === 2) return () => resolveListingsSearch(u.searchParams);
   if (parts[1] === 'listings' && parts[2] === 'mine') return () => resolveMyListings();
-  // saved must precede /:id — same ordering rule as /mine above.
+  // saved must precede /:id - same ordering rule as /mine above.
   if (parts[1] === 'listings' && parts[2] === 'saved') return () => resolveSavedListings();
   if (parts[1] === 'listings' && parts.length === 3) return () => resolveListingDetail(parts[2]);
   if (parts[1] === 'listings' && parts[3] === 'agreement') return () => resolvePresentedTerms(parts[2]);
@@ -1101,7 +1101,7 @@ function resolverFor(path: string, authenticated: boolean): Resolver {
   if (parts[1] === 'viewings' && parts[2] === 'assigned' && parts[3] === 'me') return () => resolveAssignedViewings();
   if (parts[1] === 'viewings' && parts[2] === 'dispatch-queue') return () => resolveDispatchQueue();
   if (parts[1] === 'viewings' && parts[2] === 'for-lister') return () => resolveListerViewings();
-  // TASK 7-b (additive): filtered evidence lookup — must precede the
+  // TASK 7-b (additive): filtered evidence lookup - must precede the
   // unfiltered introductions route below.
   if (parts[1] === 'viewings' && parts[2] === 'introductions' && hasIntroductionFilters(u.searchParams)) {
     return () => resolveIntroductionsFiltered(u.searchParams);
@@ -1125,10 +1125,10 @@ function resolverFor(path: string, authenticated: boolean): Resolver {
   }
   if (parts[1] === 'admin' && parts[2] === 'users') return () => resolveAdminUsers(u.searchParams);
   if (parts[1] === 'ops' && parts[2] === 'neighbourhoods') return () => resolveOpsNeighbourhoods();
-  // Task 16: who dispatch can send — the reassign control's select data.
+  // Task 16: who dispatch can send - the reassign control's select data.
   if (parts[1] === 'ops' && parts[2] === 'officers') return () => resolveOpsOfficers();
   // TASK 7-b (additive): the deal queue's "Show only" filter passes ?status=
-  // — must precede the unfiltered admin deals route below. The distribution
+  // - must precede the unfiltered admin deals route below. The distribution
   // stays whole (it is the shape of the whole book); only the rows narrow.
   if (parts[1] === 'admin' && parts[2] === 'deals' && u.searchParams.has('status')) {
     return async () => {
@@ -1160,10 +1160,10 @@ export async function apiGet<T>(path: string, _opts: { revalidate?: number } = {
 
 /**
  * Authenticated GET, in-process. Runs the role check here that the API's
- * guards would run — same rules, one implementation.
+ * guards would run - same rules, one implementation.
  *
  * MUTATIONS DO NOT BELONG HERE: any POST/PUT goes through `postJson()`
- * from '@/lib/client' in a CLIENT component, over real HTTP to /api/v1 —
+ * from '@/lib/client' in a CLIENT component, over real HTTP to /api/v1 -
  * this module is server-only (it imports the database), and every state
  * change must cross an API boundary.
  */

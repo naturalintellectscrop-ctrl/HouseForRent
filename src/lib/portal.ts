@@ -6,7 +6,7 @@
  * No decision about which transition is legal, no arithmetic on money, no
  * mapping from status to available actions. Those come from the server on
  * every deal read (`availableActions`, `financial`), and a copy here would
- * be a second implementation of the state machine — free to drift, and the
+ * be a second implementation of the state machine - free to drift, and the
  * wrong one the moment it did.
  *
  * What IS here is presentation: how far along a trail to draw a marker, and

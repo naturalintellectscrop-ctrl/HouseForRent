@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { withdrawListing } from '@/server/listings';
 import { readJson, requireRole, route } from '@/server/http';
 
-/** POST /api/v1/landlord/listings/:id/withdraw — pull it from the public feed. */
+/** POST /api/v1/landlord/listings/:id/withdraw - pull it from the public feed. */
 export const POST = route(async (req: NextRequest, ctx: { params: Promise<{ id: string }> }) => {
   const session = await requireRole(['lister']);
   await readJson(req);

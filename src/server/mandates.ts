@@ -1,13 +1,13 @@
 /**
  * Property mandates (SSOT Decision 8 / FR-3.2).
  *
- * A lister whose tier is not `property_owner` — a broker agent or a
- * property management company — may register and market a home they do
+ * A lister whose tier is not `property_owner` - a broker agent or a
+ * property management company - may register and market a home they do
  * not own. Before such a listing can publish, the platform must hold a
  * VERIFIED mandate for that specific property: the property owner's
  * written authority for us to market it. The publish gate in
  * `listings.ts` already refuses without one; this service is the open
- * half of F-003 — how a mandate gets submitted, and how operations
+ * half of F-003 - how a mandate gets submitted, and how operations
  * decides it.
  *
  * The load-bearing rules:
@@ -16,12 +16,12 @@
  *    owner lists their own home; a "mandate on your own home" is not a
  *    thing the platform holds.
  *  - One mandate per (lister, property). An existing pending or verified
- *    mandate is returned unchanged — resubmission cannot spam rows or
+ *    mandate is returned unchanged - resubmission cannot spam rows or
  *    reset a decision. A REJECTED mandate is the legitimate resubmission
  *    path: that same row is reset to pending, so the history of a
  *    property's authority is one row per relationship, not a pile.
  *  - The decision reason lives in the AUDIT TRAIL, not on the mandate
- *    row. The production mandate row has no note column at all — the
+ *    row. The production mandate row has no note column at all - the
  *    lister's submission note AND the ops decision note are both audit
  *    content (the row carries only the state); ops-facing reads
  *    deliberately do not re-serve the decision note.
@@ -53,7 +53,7 @@ export class MandateNotNeededError extends Error {
   constructor(partyId: string) {
     super(
       `account ${partyId} lists as a property owner. Property owners list ` +
-        'their own homes and never need a mandate — a mandate is the ' +
+        'their own homes and never need a mandate - a mandate is the ' +
         "owner's written authority given to someone else, so the platform " +
         'does not hold one against the owner themselves.',
     );
@@ -116,9 +116,9 @@ export async function submitMandate(params: {
     orderBy: { createdAt: 'desc' },
   });
 
-  // Verified: the authority is already on file — say so again, change nothing.
+  // Verified: the authority is already on file - say so again, change nothing.
   if (existing?.state === 'verified') return existing;
-  // Pending: an operations decision is already owed — no duplicate, and the
+  // Pending: an operations decision is already owed - no duplicate, and the
   // original submission stays immutable.
   if (existing?.state === 'pending') return existing;
 
@@ -160,7 +160,7 @@ export async function submitMandate(params: {
 }
 
 /**
- * A lister's own mandates, newest first — the panel on the listing page
+ * A lister's own mandates, newest first - the panel on the listing page
  * reads the row for its property from this.
  */
 export async function findMandatesForLister(listerPartyId: string) {
@@ -241,7 +241,7 @@ export async function decideMandate(params: {
 }
 
 /**
- * The ops queue for one state. The decision note is NOT served here —
+ * The ops queue for one state. The decision note is NOT served here -
  * it lives in the audit trail (action `mandate_decided`), and re-serving
  * it would be a second copy that can drift from what was actually
  * recorded.

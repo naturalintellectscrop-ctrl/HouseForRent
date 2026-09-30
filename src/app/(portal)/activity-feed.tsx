@@ -6,7 +6,7 @@ import { Status, when } from '@/app/ui';
  * The "Recent activity" list shared by the tenant overview and the landlord
  * portfolio. Rows arrive fully written from the server (sentence, label,
  * tone, destination); this component only lays them out. No dates are
- * rounded into "2h ago" bubbles — the honest local time is already the
+ * rounded into "2h ago" bubbles - the honest local time is already the
  * friendliest form there is.
  */
 export function ActivityFeed({ rows }: { rows: ActivityRow[] }) {

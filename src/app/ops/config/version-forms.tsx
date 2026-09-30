@@ -6,7 +6,7 @@ import { postJson, ClientApiError } from '@/lib/client';
 import { ApiAlert } from '@/app/ui';
 
 /**
- * FR-10.1 — both forms CREATE VERSIONS. Neither edits anything.
+ * FR-10.1 - both forms CREATE VERSIONS. Neither edits anything.
  *
  * That is not a UI convention: there is no edit endpoint to call, and both
  * tables reject UPDATE at the database level. The forms look this way
@@ -14,7 +14,7 @@ import { ApiAlert } from '@/app/ui';
  *
  * SANDBOX ADAPTATION: the reference posted to two dedicated endpoints
  * (`/v1/admin/commission-rates` and `/v1/admin/config/:key/versions`). This
- * port exposes one admin mutation — `POST /api/v1/ops/config` — which
+ * port exposes one admin mutation - `POST /api/v1/ops/config` - which
  * creates a new rate version when the key is `commission_rate_bp` and a new
  * parameter version otherwise. It accepts no future effective date and no
  * note, so those fields are not shown: offering them and silently dropping
@@ -85,7 +85,7 @@ export function RateVersionForm() {
       <p className="alert alert-note">
         This creates a new version, effective immediately in this port. Deals
         already signed hold a snapshot of the rate they were signed under and
-        are structurally unaffected — there is no path, here or anywhere,
+        are structurally unaffected - there is no path, here or anywhere,
         that re-prices them.
       </p>
 
@@ -166,7 +166,7 @@ export function ConfigVersionForm({ keys }: { keys: string[] }) {
           spellCheck={false}
         />
         <p className="hint">
-          A plain value, stored as recorded — for these parameters, a whole
+          A plain value, stored as recorded - for these parameters, a whole
           number of days or listings.
         </p>
       </div>

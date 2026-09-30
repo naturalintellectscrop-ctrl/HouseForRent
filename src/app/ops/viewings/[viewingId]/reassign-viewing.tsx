@@ -11,8 +11,8 @@ import type { AssignableOfficer } from '@/lib/api';
  *
  * ── Why it exists ──
  * The dispatch page has always promised "re-assigning before the visit is
- * permitted; after it is not" — the frozen graph even encodes
- * `scheduled → scheduled` as a deliberate edge — but no surface could
+ * permitted; after it is not" - the frozen graph even encodes
+ * `scheduled → scheduled` as a deliberate edge - but no surface could
  * reach it: the queue lists only REQUESTED viewings, so once a visit was
  * on an officer's board it was stuck there. An officer falls sick, a
  * corridor changes, and the admin's only honest option was a cancellation
@@ -58,7 +58,7 @@ export function ReassignViewing({
       setDone(
         res.changed
           ? `Reassigned. The visit is now on ${selected?.displayName ?? 'the officer'}'s board and the tenant sees it as scheduled. The audit trail keeps who made the change.`
-          : 'That was already the assignment — nothing changed, and nothing was recorded.',
+          : 'That was already the assignment - nothing changed, and nothing was recorded.',
       );
       router.refresh();
     } catch (err) {
@@ -67,7 +67,7 @@ export function ReassignViewing({
       } else {
         setError({
           message:
-            'Could not reach the House For Rent API. Nothing was changed — try again when you have signal.',
+            'Could not reach the House For Rent API. Nothing was changed - try again when you have signal.',
         });
       }
     } finally {
@@ -85,7 +85,7 @@ export function ReassignViewing({
         <h2 className="h3">Reassign or move this visit</h2>
         <p className="muted" style={{ margin: 0 }}>
           {officerName} is on this visit. Before it happens, moving it to
-          another officer — or moving the time — is ordinary dispatch work,
+          another officer - or moving the time - is ordinary dispatch work,
           not a state change: the tenant keeps a scheduled visit, and the
           audit trail keeps who sent whom. After the visit has happened, the
           record stands.
@@ -117,7 +117,7 @@ export function ReassignViewing({
           <option value="">Choose an officer</option>
           {officers.map((o) => (
             <option key={o.partyId} value={o.partyId}>
-              {o.displayName} — {o.assignedCount} on board
+              {o.displayName} - {o.assignedCount} on board
             </option>
           ))}
         </select>
@@ -137,7 +137,7 @@ export function ReassignViewing({
       <p className="muted" style={{ margin: 0 }}>
         {selected
           ? `${tenantName}'s visit moves to ${selected.displayName}'s board, and the audit trail records the move with the officer it came from.`
-          : 'Choose the officer to send — the consequence shows here before you confirm.'}
+          : 'Choose the officer to send - the consequence shows here before you confirm.'}
       </p>
       <span className="row" style={{ gap: '0.5rem' }}>
         <button

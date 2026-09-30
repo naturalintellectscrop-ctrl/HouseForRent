@@ -5,7 +5,7 @@ import { verifyNylonWebhook } from '@/server/nylonpay';
 export const dynamic = 'force-dynamic';
 
 /**
- * POST /api/v1/payments/nylonpay/webhook — Nylon Pay's delivery endpoint.
+ * POST /api/v1/payments/nylonpay/webhook - Nylon Pay's delivery endpoint.
  *
  * Configure this URL on the API key (Dashboard > API Settings > Webhook
  * Configuration): https://<host>/api/v1/payments/nylonpay/webhook
@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
   if (!process.env.NYLONPAY_WEBHOOK_SECRET) {
     // Fail closed, and in a way the provider retries: the operator has not
     // configured the secret yet, so no delivery can be trusted right now.
-    console.error('[nylonpay-webhook] NYLONPAY_WEBHOOK_SECRET is not configured — rejecting delivery');
+    console.error('[nylonpay-webhook] NYLONPAY_WEBHOOK_SECRET is not configured - rejecting delivery');
     return NextResponse.json({ error: 'WEBHOOK_NOT_CONFIGURED' }, { status: 503 });
   }
 
@@ -69,7 +69,7 @@ export async function POST(req: NextRequest) {
   try {
     body = JSON.parse(rawBody) as NylonWebhookBody;
   } catch {
-    // Authenticated but unintelligible — ack so the provider does not retry
+    // Authenticated but unintelligible - ack so the provider does not retry
     // a permanently malformed payload; the raw body is in our logs.
     console.error('[nylonpay-webhook] non-JSON delivery after valid signature');
     return NextResponse.json({ received: true, note: 'unparseable payload' });
@@ -81,7 +81,7 @@ export async function POST(req: NextRequest) {
   const deliveryId = typeof body.delivery_id === 'string' ? body.delivery_id : null;
 
   if (!HANDLED_EVENTS.has(event) || !reference) {
-    // Genuine but irrelevant delivery (unknown event type) — acknowledge it.
+    // Genuine but irrelevant delivery (unknown event type) - acknowledge it.
     return NextResponse.json({ received: true, note: 'no matching handler' });
   }
 

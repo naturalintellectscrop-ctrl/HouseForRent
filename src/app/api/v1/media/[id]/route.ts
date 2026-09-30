@@ -5,7 +5,7 @@ import { db } from '@/lib/db';
 import { route } from '@/server/http';
 
 /**
- * GET /api/v1/media/:id — byte-serving for stored media.
+ * GET /api/v1/media/:id - byte-serving for stored media.
  *
  * MEDIA_ROOT behaves as DEPLOYMENT.md §2.3 describes: files live on disk,
  * the row names the file and carries its own provenance (field_officer |

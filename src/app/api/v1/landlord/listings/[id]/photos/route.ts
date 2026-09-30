@@ -3,7 +3,7 @@ import { db } from '@/lib/db';
 import { ApiError, requireSession, route } from '@/server/http';
 
 /**
- * GET /api/v1/landlord/listings/:id/photos — the listing's photography with
+ * GET /api/v1/landlord/listings/:id/photos - the listing's photography with
  * its server-asserted provenance (field_officer | lister |
  * development_fixture). The client renders the labels; it never decides
  * them. Uploads are deliberately absent from this port: imagery enters via
@@ -36,7 +36,7 @@ export const GET = route(async (_req: NextRequest, ctx: { params: Promise<{ id: 
       url: `/api/v1/media/${p.mediaAssetId}`,
       caption: p.caption,
       sortOrder: p.sortOrder,
-      // Provenance is on the photo row itself (PhotoSource) — no media join.
+      // Provenance is on the photo row itself (PhotoSource) - no media join.
       source: p.source,
       isFieldVerified: p.source === 'field_officer',
       isDevelopmentFixture: p.source === 'development_fixture',

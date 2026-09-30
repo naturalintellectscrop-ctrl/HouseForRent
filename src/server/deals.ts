@@ -1,5 +1,5 @@
 /**
- * The deal lifecycle (Data_Model.md §7) — the spine that composes Identity,
+ * The deal lifecycle (Data_Model.md §7) - the spine that composes Identity,
  * Agreements and Ledger into the core business flow.
  *
  * Ported from apps/api/src/deals/deals.service.ts. Every transition:
@@ -7,7 +7,7 @@
  *   - writes the new status AND an immutable deal_transition row AND any
  *     ledger effect inside ONE transaction, so money state and deal state
  *     can never diverge;
- *   - is expressed as a named business operation — there is deliberately no
+ *   - is expressed as a named business operation - there is deliberately no
  *     public method that takes an arbitrary target status.
  *
  * Concurrency note (sandbox): SQLite has no SELECT … FOR UPDATE. The
@@ -34,7 +34,7 @@ type Tx = Parameters<Parameters<typeof db.$transaction>[0]>[0];
 /**
  * Every money-bearing transition runs inside an interactive transaction.
  * The budget is raised above Prisma's 5s default so a cold JIT pass or a
- * loaded SQLite checkpoint cannot abort a legitimate posting mid-flight —
+ * loaded SQLite checkpoint cannot abort a legitimate posting mid-flight -
  * a partially-timed-out money path is far worse than a slower one.
  */
 export async function transactional<T>(
@@ -241,7 +241,7 @@ export async function signAgreement(params: {
       throw new SnapshotImmutableError(params.dealId);
     }
 
-    // Scoped to THIS DEAL'S LISTING in both branches — a supplied id that
+    // Scoped to THIS DEAL'S LISTING in both branches - a supplied id that
     // belongs to another listing is refused, not honoured (F-014).
     const agreement = await tx.listingAgreement.findFirst({
       where: {
@@ -289,7 +289,7 @@ export async function fundEscrow(params: {
   expectedAmount?: bigint;
   reason?: string;
 }) {
-  // The custodian instruction is issued BEFORE the transaction opens — same
+  // The custodian instruction is issued BEFORE the transaction opens - same
   // ordering rationale as settle(): a network call (here, the PSP seam)
   // must never run while a database transaction holds its locks. The
   // instruction is idempotent per deal, so a retry reuses it.
@@ -311,7 +311,7 @@ export async function fundEscrow(params: {
   });
 
   // LIVE PSP: the collection is in flight on the tenant's phone. Custody is
-  // booked by the verified webhook when the provider confirms the money —
+  // booked by the verified webhook when the provider confirms the money -
   // never on faith. The untouched deal is returned so the page reloads and
   // shows the deal still unfunded, which is the truth until the webhook.
   const pspState = ledger.derivedPspState(instruction);
@@ -331,11 +331,11 @@ export async function fundEscrow(params: {
 }
 
 /**
- * The funding transaction — the ONLY place escrow custody is ever booked.
+ * The funding transaction - the ONLY place escrow custody is ever booked.
  * The synchronous deal action calls it after the mock instruction settles;
  * the PSP webhook calls it after the provider confirms the money. It
  * re-derives the figure from the deal's own snapshotted terms inside the
- * transaction, so no caller — human, route, or webhook — can post an amount
+ * transaction, so no caller - human, route, or webhook - can post an amount
  * the deal's signed terms do not support.
  */
 export async function applyEscrowFunding(params: {
@@ -377,7 +377,7 @@ export async function applyEscrowFunding(params: {
   });
 }
 
-/** escrow_funded → move_in_confirmed. No ledger effect — this UNLOCKS the earn step. */
+/** escrow_funded → move_in_confirmed. No ledger effect - this UNLOCKS the earn step. */
 export async function confirmMoveIn(params: { dealId: string; actorPartyId: string; reason?: string }) {
   return transactional(async (tx) => {
     const deal = await requireDeal(params.dealId, tx);
@@ -391,14 +391,14 @@ export async function confirmMoveIn(params: { dealId: string; actorPartyId: stri
 
 /**
  * move_in_confirmed → commission_earned. COMMISSION IS EARNED HERE (FR-7.5)
- * — not at funding, not at settlement.
+ * - not at funding, not at settlement.
  */
 export async function earnCommission(params: { dealId: string; actorPartyId: string; reason?: string }) {
   return transactional(async (tx) => {
     const deal = await requireDeal(params.dealId, tx);
     assertTransitionAllowed(deal.status as DealStatus, 'commission_earned');
 
-    // from the SNAPSHOTS — never a live rate, never the escrow total
+    // from the SNAPSHOTS - never a live rate, never the escrow total
     const commissionAmount = computeCommission({
       monthlyRentSnapshot: deal.monthlyRentSnapshot,
       commissionRateBpSnapshot: deal.commissionRateBpSnapshot,
@@ -422,7 +422,7 @@ export async function earnCommission(params: { dealId: string; actorPartyId: str
 /**
  * commission_earned → settled. Releases what is still held to the landlord
  * (FR-7.6). The amount is the OUTSTANDING LIABILITY, read inside the
- * settling transaction — never a caller-supplied total.
+ * settling transaction - never a caller-supplied total.
  */
 export async function settle(params: { dealId: string; actorPartyId: string; reason?: string }) {
   const preflight = await db.deal.findUnique({ where: { id: params.dealId } });
@@ -439,10 +439,10 @@ export async function settle(params: { dealId: string; actorPartyId: string; rea
     idempotencyKey: `settle:${preflight.id}`,
   });
 
-  // LIVE PSP: the payout is not dispatched yet — the instruction parks
+  // LIVE PSP: the payout is not dispatched yet - the instruction parks
   // `pending` rather than pretending the landlord was paid. The verified
   // webhook completes it. (Current state derives from the instruction's
-  // events — the row itself is immutable.)
+  // events - the row itself is immutable.)
   const pspState = ledger.derivedPspState(instruction);
   if (pspState === 'pending') {
     return {
@@ -455,7 +455,7 @@ export async function settle(params: { dealId: string; actorPartyId: string; rea
 }
 
 /**
- * The settlement transaction — shared by the sync path (mock) and the PSP
+ * The settlement transaction - shared by the sync path (mock) and the PSP
  * webhook. Re-reads the outstanding liability INSIDE the transaction: that
  * figure, never a caller-supplied total, is what gets posted.
  */
@@ -514,7 +514,7 @@ export async function refund(params: { dealId: string; actorPartyId: string; rea
     idempotencyKey: `refund:${preflight.id}`,
   });
 
-  // LIVE PSP: same honesty as settlement — the instruction parks `pending`
+  // LIVE PSP: same honesty as settlement - the instruction parks `pending`
   // until the provider confirms the payout, and only then does the ledger
   // release the liability back to the tenant.
   const pspState = ledger.derivedPspState(instruction);
@@ -528,7 +528,7 @@ export async function refund(params: { dealId: string; actorPartyId: string; rea
   return applyRefundCompletion({ dealId: params.dealId, actorPartyId: params.actorPartyId, reason: params.reason });
 }
 
-/** The refund transaction — shared by the sync path and the PSP webhook. */
+/** The refund transaction - shared by the sync path and the PSP webhook. */
 export async function applyRefundCompletion(params: {
   dealId: string;
   actorPartyId?: string;
@@ -647,7 +647,7 @@ async function ledgerEntriesFor(dealId: string) {
 
 /**
  * Everything an operator needs to understand this deal, computed HERE from
- * the ledger — the same rows reconciliation reads — so the console and the
+ * the ledger - the same rows reconciliation reads - so the console and the
  * books cannot disagree. Money leaves as STRINGS of integer shillings.
  */
 export async function financialSummary(dealId: string) {
@@ -679,7 +679,7 @@ export async function financialSummary(dealId: string) {
 
 /**
  * A landlord's money position, aggregated from the same ledger rows the
- * operator console reads — never from the deal's status field.
+ * operator console reads - never from the deal's status field.
  *
  * ── Why this is derived per deal, then summed ──
  * `heldInEscrow`/`owedToLandlord` are LIABILITY balances (credit-negative
@@ -738,7 +738,7 @@ export async function landlordFinancials(partyId: string) {
   };
 }
 
-/** The property and the two parties — minimum to know WHICH rental this is. */
+/** The property and the two parties - minimum to know WHICH rental this is. */
 export async function dealContext(dealId: string) {
   const deal = await db.deal.findUnique({
     where: { id: dealId },
@@ -823,7 +823,7 @@ export async function findForParty(partyId: string) {
 }
 
 /**
- * The deal, its context, its figures and the caller's available actions —
+ * The deal, its context, its figures and the caller's available actions -
  * the whole payload `GET /api/v1/deals/:id` returns.
  */
 export async function getDealForCaller(dealId: string, callerPartyId: string, callerRole: AuthRole) {
@@ -902,7 +902,7 @@ async function requireDeal(dealId: string, tx: Tx) {
 }
 
 /**
- * Webhook-sourced transitions still need an actor party — the production
+ * Webhook-sourced transitions still need an actor party - the production
  * deal_transition.actor_party_id is NOT NULL by design (the real API used
  * labelled PSP actor parties for exactly this). One stable, clearly-labelled
  * system party is provisioned on demand; never a fabricated human actor.
@@ -912,7 +912,7 @@ async function systemPartyId(client: Tx | typeof db = db): Promise<string> {
   const existing = await client.party.findFirst({ where: { displayName: name }, select: { id: true } });
   if (existing) return existing.id;
   const created = await client.party.create({
-    // The placeholder phone is deliberately not a dialable number — it
+    // The placeholder phone is deliberately not a dialable number - it
     // labels the row as plumbing, not a person.
     data: { displayName: name, primaryPhone: 'PSP-WEBHOOK-SYSTEM' },
     select: { id: true },
@@ -930,7 +930,7 @@ async function applyTransition(
   params: {
     deal: { id: string; status: string };
     to: DealStatus;
-    /** Absent when the actor is not a person — e.g. a PSP webhook. */
+    /** Absent when the actor is not a person - e.g. a PSP webhook. */
     actorPartyId?: string;
     actorRole?: string;
     reason?: string;
@@ -988,13 +988,13 @@ async function applyTransition(
 }
 
 /**
- * A verified Nylon Pay webhook arrived — apply its outcome to the instruction
+ * A verified Nylon Pay webhook arrived - apply its outcome to the instruction
  * and, for confirmed money, to the deal. The payload snapshot comes from the
  * route AFTER signature verification; nothing here trusts an unverified body.
  *
  * Money guard: custody/settlement is only ever booked against an amount and
  * currency that match the instruction as issued. A mismatch is recorded and
- * left for ops reconciliation — never auto-posted.
+ * left for ops reconciliation - never auto-posted.
  */
 export async function applyPspWebhookOutcome(payload: {
   event: string;
@@ -1015,7 +1015,7 @@ export async function applyPspWebhookOutcome(payload: {
     payload.transaction.operatorTid ? `operator ref ${payload.transaction.operatorTid}` : null,
   ]
     .filter(Boolean)
-    .join(' — ');
+    .join(' - ');
 
   switch (payload.event) {
     case 'transaction.processing': {
@@ -1039,13 +1039,13 @@ export async function applyPspWebhookOutcome(payload: {
     case 'transaction.failed':
     case 'transaction.cancelled': {
       // The state model has no "cancelled": a provider cancellation is a
-      // failure to complete — nothing is booked and a retry issues a fresh
+      // failure to complete - nothing is booked and a retry issues a fresh
       // instruction. The detail preserves which one the provider sent.
       const cancelled = payload.event === 'transaction.cancelled';
       await ledger.transitionPspInstruction({
         instructionId: instruction.id,
         toState: 'failed',
-        detail: `Nylon Pay reported ${cancelled ? 'cancellation' : 'failure'}${providerBits ? `: ${providerBits}` : ''}. No ledger effect — retry the action to issue a fresh instruction.`,
+        detail: `Nylon Pay reported ${cancelled ? 'cancellation' : 'failure'}${providerBits ? `: ${providerBits}` : ''}. No ledger effect - retry the action to issue a fresh instruction.`,
       });
       return { matched: true as const, action: 'instruction_not_taken' as const };
     }
@@ -1066,7 +1066,7 @@ export async function applyPspWebhookOutcome(payload: {
               confirmed: payload.transaction.amount ?? null,
               currency: payload.transaction.currency ?? null,
               instructionAmount: instruction.amount.toString(),
-              note: 'The provider confirmation does not match the instruction. NOT booked — ops must reconcile before any ledger effect.',
+              note: 'The provider confirmation does not match the instruction. NOT booked - ops must reconcile before any ledger effect.',
             },
             occurredAt: new Date(),
           },

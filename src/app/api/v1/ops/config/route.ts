@@ -4,7 +4,7 @@ import { setConfigParameter } from '@/server/listings';
 import { db } from '@/lib/db';
 import { readJson, requireRole, requireString, route } from '@/server/http';
 
-/** GET /api/v1/ops/config — parameters + effective-dated commission rates. */
+/** GET /api/v1/ops/config - parameters + effective-dated commission rates. */
 export const GET = route(async () => {
   await requireRole(['admin']);
   const [parameters, rates] = await Promise.all([listConfigParameters(), listCommissionRateVersions()]);
@@ -12,7 +12,7 @@ export const GET = route(async () => {
 });
 
 /**
- * POST /api/v1/ops/config — change a parameter. Append-only version history
+ * POST /api/v1/ops/config - change a parameter. Append-only version history
  * records every change (who, when, what the value became).
  */
 export const POST = route(async (req: NextRequest) => {
@@ -40,7 +40,7 @@ export const POST = route(async (req: NextRequest) => {
     valueType: typeof body.valueType === 'string' ? body.valueType : 'text',
     createdByPartyId: session.partyId,
   });
-  // The parameter row no longer carries a value — echo the value just
+  // The parameter row no longer carries a value - echo the value just
   // recorded on the new config version.
   return NextResponse.json({ key: updated.key, value });
 });

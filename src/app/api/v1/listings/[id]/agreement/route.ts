@@ -3,7 +3,7 @@ import { api } from '@/lib/api';
 import { requireRole, route } from '@/server/http';
 
 /**
- * GET /api/v1/listings/:id/agreement — the presented listing-agreement
+ * GET /api/v1/listings/:id/agreement - the presented listing-agreement
  * terms (commission rate, circumvention clause, acceptance state) for one
  * of the signed-in landlord's own listings.
  *

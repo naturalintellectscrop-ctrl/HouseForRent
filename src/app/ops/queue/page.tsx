@@ -4,7 +4,7 @@ import { api, ApiError, type VerificationQueue } from '@/lib/api';
 import { Empty, when } from '@/app/ui';
 
 /**
- * FR-10.2 — the verification queue.
+ * FR-10.2 - the verification queue.
  *
  * A table, deliberately: these rows carry many meaningful columns, which is
  * past the point where a chart helps.
@@ -12,7 +12,7 @@ import { Empty, when } from '@/app/ui';
  * The `blockedBy` column is the reason this page exists at all. A bare list
  * of unpublished listings tells an ops officer nothing about what to do
  * next; "waiting on a field visit" and "waiting on a mandate decision"
- * dispatch to different people. The server computes it — this page does not
+ * dispatch to different people. The server computes it - this page does not
  * re-derive publishability from the raw states beside it.
  */
 const BLOCKER_LABEL: Record<string, string> = {
@@ -89,7 +89,7 @@ export default async function QueuePage() {
                     </span>
                   </td>
                   <td>{row.verificationState}</td>
-                  <td>{row.mandateState ?? '—'}</td>
+                  <td>{row.mandateState ?? ' - '}</td>
                   <td>
                     <span className="tags">
                       {row.blockedBy.length === 0 ? (

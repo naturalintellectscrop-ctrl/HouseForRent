@@ -3,7 +3,7 @@ import { findMandatesForLister, submitMandate } from '@/server/mandates';
 import { readJson, requireRole, requireString, route } from '@/server/http';
 
 /**
- * GET /api/v1/landlord/mandates — the signed-in lister's mandates, newest
+ * GET /api/v1/landlord/mandates - the signed-in lister's mandates, newest
  * first. A mandate is only ever read by the account that submitted it.
  */
 export const GET = route(async () => {
@@ -12,10 +12,10 @@ export const GET = route(async () => {
 });
 
 /**
- * POST /api/v1/landlord/mandates — submit (or, after a rejection, submit
+ * POST /api/v1/landlord/mandates - submit (or, after a rejection, submit
  * again) the mandate for one property: the owner's written authority for
  * us to market it. 201 with the mandate; a pending or already-verified
- * mandate returns the same row unchanged (still 201 — the submission was
+ * mandate returns the same row unchanged (still 201 - the submission was
  * processed, it was just already on file).
  */
 export const POST = route(async (req: NextRequest) => {

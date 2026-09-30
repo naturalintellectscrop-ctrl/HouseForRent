@@ -10,14 +10,14 @@ import { postJson } from '@/lib/client';
  * ── Why a two-step button, not a checkbox gate ──
  * The typed-checkbox gate is for IRREVERSIBLE money actions (confirm
  * move-in, recognise commission). Cancelling a viewing is a normal,
- * recoverable decision — the tenant can simply request another time —
+ * recoverable decision - the tenant can simply request another time -
  * so it gets an ordinary confirm step, sized to the stakes. What it does
  * NOT get is a silent one-click: the landlord's board changes state the
  * moment this is pressed, and an accidental tap should not read as a
  * decision nobody made.
  *
- * The server re-checks everything — ownership, the frozen transition
- * graph — so a stale row (someone else scheduled it between render and
+ * The server re-checks everything - ownership, the frozen transition
+ * graph - so a stale row (someone else scheduled it between render and
  * click) comes back as a 409 with the API's own message, shown here
  * verbatim: the code is the diagnostic.
  */

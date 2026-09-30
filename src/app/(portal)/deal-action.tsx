@@ -9,8 +9,8 @@ import { shillings } from '@/app/ui';
 /**
  * One transition the SERVER says is currently available (F-007).
  *
- * Everything rendered here — the label, the consequence, the fields, whether
- * it moves money, whether it can be undone — arrives from
+ * Everything rendered here - the label, the consequence, the fields, whether
+ * it moves money, whether it can be undone - arrives from
  * `availableActions`. This component knows nothing about deals: it does not
  * know what `settle` means, which status permits it, or who may call it. It
  * renders what it is given and posts it back to
@@ -57,7 +57,7 @@ export function DealAction({
 
   /**
    * The concrete figure this action is about, when the server has one.
-   * Rendered from `financial`, never recomputed — this page does no
+   * Rendered from `financial`, never recomputed - this page does no
    * arithmetic on money.
    */
   const figure =
@@ -88,7 +88,7 @@ export function DealAction({
     const body: Record<string, string> = {};
     for (const [key, value] of data.entries()) {
       // `confirm` is the user's acknowledgement checkbox. It is a UI
-      // safeguard against a mis-click, not a business field — it is
+      // safeguard against a mis-click, not a business field - it is
       // stripped so it cannot be mistaken for one.
       if (key === 'confirm' || typeof value !== 'string') continue;
       const trimmed = value.trim();
@@ -104,7 +104,7 @@ export function DealAction({
       if (err instanceof ClientApiError) {
         if (err.code === 'ILLEGAL_TRANSITION') {
           setError({
-            message: `${err.message} This deal is no longer in the state this page was showing — someone else has acted on it. The state above has been reloaded from the server.`,
+            message: `${err.message} This deal is no longer in the state this page was showing - someone else has acted on it. The state above has been reloaded from the server.`,
             code: err.code,
           });
         } else {
@@ -113,7 +113,7 @@ export function DealAction({
       } else {
         setError({
           message:
-            'Could not reach the House For Rent API. Nothing was changed — the deal is in whatever state the server last recorded.',
+            'Could not reach the House For Rent API. Nothing was changed - the deal is in whatever state the server last recorded.',
         });
       }
       // Refreshed even when the call FAILS: the most likely rejection is
@@ -135,7 +135,7 @@ export function DealAction({
         )}
       </div>
 
-      {/* The server's own words for what happens. Not paraphrased here —
+      {/* The server's own words for what happens. Not paraphrased here -
           the backend owns the meaning of its transitions. */}
       <p className="muted">{action.consequence}</p>
 
@@ -189,7 +189,7 @@ export function DealAction({
 
 /**
  * The same rendering as `ApiAlert` from `@/app/ui`, which is a
- * server-rendered module — a client file re-importing it would pull nothing
+ * server-rendered module - a client file re-importing it would pull nothing
  * harmful, but this keeps the portal's client bundle to the transport only.
  */
 function ApiAlertInline({ message, code }: { message: string; code?: string | null }) {

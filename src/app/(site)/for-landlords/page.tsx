@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { apiGet } from '@/lib/api';
 import { Icon, PageIntro } from '@/app/ui';
 
-/* Commission figures come from live config versions — render per request. */
+/* Commission figures come from live config versions - render per request. */
 export const dynamic = 'force-dynamic';
 
 export const metadata = {
@@ -37,7 +37,7 @@ function describeRate(bp: number): string {
  * It comes from `GET /v1/commission-rate`, the same version an agreement
  * snapshots when a landlord signs. A rate written into this page's copy
  * would be a second copy of a commercial term, free to drift from the one
- * that actually binds — and the direction it drifts is always the one that
+ * that actually binds - and the direction it drifts is always the one that
  * embarrasses us in front of the landlord reading it.
  */
 export default async function ForLandlordsPage() {
@@ -47,7 +47,7 @@ export default async function ForLandlordsPage() {
       revalidate: 300,
     });
   } catch {
-    // If no rate is in force the page still stands — it simply does not
+    // If no rate is in force the page still stands - it simply does not
     // quote a number it cannot substantiate.
     rate = null;
   }
@@ -74,10 +74,62 @@ export default async function ForLandlordsPage() {
         </div>
       </section>
 
+      <section className="section" style={{ paddingTop: 0 }}>
+        <div className="page">
+          <figure className="figure figure-wide">
+            <div className="figure-frame">
+              <img
+                src="/site/landlord-hero.jpg"
+                alt="A landlord standing in front of his small apartment block"
+                loading="eager"
+                decoding="async"
+              />
+            </div>
+            <figcaption>
+              Your property, verified before it ever meets a tenant: our
+              officer photographs it, reports on it, and runs every viewing.
+            </figcaption>
+          </figure>
+        </div>
+      </section>
+
       <section className="section section-sunk">
         <div className="page stack-lg">
           <div>
             <h2 className="h1">The work we do before anyone views</h2>
+          </div>
+
+          <div className="split">
+            <figure className="figure">
+              <div className="figure-frame">
+                <img
+                  src="/site/verify-visit.jpg"
+                  alt="A field officer photographing a small apartment block and checking a clipboard"
+                  loading="lazy"
+                  decoding="async"
+                />
+              </div>
+              <figcaption>
+                Illustration of the verification visit: what the officer
+                records is what the tenant sees on the listing.
+              </figcaption>
+            </figure>
+
+            <div className="stack">
+              <p className="prose">
+                A listing that says one thing and shows another costs both
+                sides a journey. So the listing is built from what our officer
+                finds on the ground, not from what a form was filled with:
+                the photographs come from the visit, the condition report comes
+                from the visit, and the availability date is confirmed with
+                you before the home goes live.
+              </p>
+              <p className="prose">
+                When the availability confirmation goes stale, the listing
+                steps out of search until you re-confirm it. You are never
+                advertised as having a vacancy you do not have.
+              </p>
+            </div>
           </div>
 
           <div className="promise-grid">
@@ -130,7 +182,7 @@ export default async function ForLandlordsPage() {
                   There is no listing fee, no monthly fee, and nothing payable
                   up front. Our commission is charged a single time per
                   tenancy, and it is taken out of the settlement when the money
-                  is released to you — so you never write us a cheque.
+                  is released to you - so you never write us a cheque.
                 </p>
                 <p>
                   The rate is fixed against your agreement at the moment you
@@ -139,8 +191,8 @@ export default async function ForLandlordsPage() {
                   version that binds, and it is recorded.
                 </p>
                 <p>
-                  If the tenancy does not complete — the tenant does not move
-                  in, and the escrow is refunded — no commission is earned. We
+                  If the tenancy does not complete - the tenant does not move
+                  in, and the escrow is refunded - no commission is earned. We
                   are paid for a tenancy, not for an introduction.
                 </p>
               </div>
@@ -149,8 +201,8 @@ export default async function ForLandlordsPage() {
               <div className="prose">
                 <p>
                   Your agreement includes a circumvention clause. Every
-                  introduction we make is recorded — which tenant, which
-                  property, which officer, on what date — so if a tenancy is
+                  introduction we make is recorded - which tenant, which
+                  property, which officer, on what date - so if a tenancy is
                   completed off-platform with a tenant we introduced, the
                   commission is still due.
                 </p>
@@ -185,7 +237,7 @@ export default async function ForLandlordsPage() {
                   </div>
                   <div className="terms-row terms-total">
                     <dt>On a completed move-in</dt>
-                    <dd>{rate ? describeRate(rate.rateBpOfMonth) : '—'}</dd>
+                    <dd>{rate ? describeRate(rate.rateBpOfMonth) : 'Agreed when you sign'}</dd>
                   </div>
                 </dl>
                 <p className="hint">

@@ -4,10 +4,10 @@ import { IDENTITY_PROVIDER_IS_MOCK, submitIdentityVerification } from '@/server/
 import { readJson, requireRole, requireString, route } from '@/server/http';
 
 /**
- * POST /api/v1/identity — submit an identity check.
+ * POST /api/v1/identity - submit an identity check.
  * THE IDENTITY PROVIDER IS A MOCK (structural NIN validation + a name
  * match). Every surface that calls this must say so. V1 collects no
- * payslips, no bank statements — identity only (Decision 10).
+ * payslips, no bank statements - identity only (Decision 10).
  */
 export const POST = route(async (req: NextRequest) => {
   const session = await requireRole(['tenant', 'lister']);
@@ -32,7 +32,7 @@ export const POST = route(async (req: NextRequest) => {
   );
 });
 
-/** GET — the caller's verification state. */
+/** GET - the caller's verification state. */
 export const GET = route(async () => {
   const session = await requireRole(['tenant', 'lister']);
   const records = await db.identityVerification.findMany({

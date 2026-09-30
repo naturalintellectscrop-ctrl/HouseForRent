@@ -35,7 +35,7 @@ interface EarningsSummary {
  * The landlord's money page.
  *
  * ── Where every number comes from ──
- * The API aggregates the ledger — the same postings the reconciliation
+ * The API aggregates the ledger - the same postings the reconciliation
  * check and the operations deal console read. This page performs no
  * arithmetic and holds no opinion about what a status means for money; a
  * deal whose status says "settled" shows whatever the ledger actually
@@ -94,7 +94,7 @@ export default async function EarningsPage() {
           }
         >
           Something went wrong on our side. Nothing has changed in your
-          account — try again in a moment.
+          account - try again in a moment.
         </Empty>
       </div>
     );
@@ -107,7 +107,7 @@ export default async function EarningsPage() {
       <div>
         <h1 className="h1">Earnings</h1>
         <p className="lede">
-          What has been paid to you, what is waiting, and what is still held —
+          What has been paid to you, what is waiting, and what is still held -
           taken from our books, not from a status label.
         </p>
       </div>
@@ -143,7 +143,7 @@ export default async function EarningsPage() {
             }
           >
             When a tenant is introduced and a deal starts, its money trail
-            appears here — held, released and paid, with the date on each step.
+            appears here - held, released and paid, with the date on each step.
           </Empty>
         ) : (
           <ul className="list">
@@ -195,8 +195,8 @@ export default async function EarningsPage() {
       <section className="card stack" style={{ maxWidth: '40rem' }}>
         <h2 className="h3">How money reaches you</h2>
         <p className="muted">
-          The tenant&apos;s rent and deposit are held by House For Rent — not
-          sent to you and not sent back — until the tenant confirms they have
+          The tenant&apos;s rent and deposit are held by House For Rent - not
+          sent to you and not sent back - until the tenant confirms they have
           moved in. Only then is the money released, minus one commission that
           was agreed in your listing agreement before anything went live.
         </p>

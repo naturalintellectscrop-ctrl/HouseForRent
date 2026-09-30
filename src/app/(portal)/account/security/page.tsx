@@ -7,7 +7,7 @@ export const metadata = { title: 'Security' };
  *
  * Deliberately small. The only security action this product actually
  * offers today is changing the password, and the page says exactly what
- * that does — including the part most products hide until it surprises
+ * that does - including the part most products hide until it surprises
  * someone: other signed-in devices are logged out.
  *
  * The "no payment methods here" line is honesty, not filler: a tenant who
@@ -21,7 +21,7 @@ export default function SecurityPage() {
         <h1 className="h1">Security</h1>
         <p className="lede">
           Change your password. When you do, every other device signed in to
-          this account is signed out — the one you are using stays signed in.
+          this account is signed out - the one you are using stays signed in.
         </p>
       </div>
 

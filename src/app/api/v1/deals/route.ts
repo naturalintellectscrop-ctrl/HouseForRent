@@ -2,14 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createFromIntroduction, findForParty } from '@/server/deals';
 import { readJson, requireRole, requireString, route } from '@/server/http';
 
-/** GET /api/v1/deals — every deal the caller is a party to. */
+/** GET /api/v1/deals - every deal the caller is a party to. */
 export const GET = route(async () => {
   const session = await requireRole(['tenant', 'lister', 'admin', 'foo']);
   return NextResponse.json(await findForParty(session.partyId));
 });
 
 /**
- * POST /api/v1/deals — create a deal FROM AN INTRODUCTION RECORD (FR-8.3).
+ * POST /api/v1/deals - create a deal FROM AN INTRODUCTION RECORD (FR-8.3).
  * The body has no field that could name a person: tenant, landlord, listing
  * are all derived server-side from the record.
  */

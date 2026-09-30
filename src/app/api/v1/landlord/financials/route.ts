@@ -3,7 +3,7 @@ import { landlordFinancials } from '@/server/deals';
 import { requireRole, route } from '@/server/http';
 
 /**
- * GET /api/v1/landlord/financials — the signed-in landlord's money position.
+ * GET /api/v1/landlord/financials - the signed-in landlord's money position.
  *
  * Every figure is derived here from the ledger, the same rows the
  * reconciliation and deal consoles read. The landlord cannot see anyone

@@ -1,5 +1,5 @@
 /**
- * The client-side transport — the ONLY module a client component needs for
+ * The client-side transport - the ONLY module a client component needs for
  * mutations.
  *
  * Every state change goes over real HTTP to /api/v1 route handlers, so the

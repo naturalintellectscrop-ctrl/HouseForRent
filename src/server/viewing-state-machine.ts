@@ -1,10 +1,10 @@
 /**
- * The viewing lifecycle over the states of Data_Model.md §5.1 — a frozen
+ * The viewing lifecycle over the states of Data_Model.md §5.1 - a frozen
  * graph, ported verbatim from apps/api/src/viewings/viewing-state-machine.ts.
  *
  * The two absences that carry weight:
  *  - `conducted` is TERMINAL. Retroactively turning a conducted visit into
- *    a no-show would deny an introduction that demonstrably happened —
+ *    a no-show would deny an introduction that demonstrably happened -
  *    precisely the circumvention evidence the record preserves.
  *  - There is no `requested → conducted` edge: a viewing nobody was
  *    dispatched to cannot have been conducted.
@@ -29,7 +29,7 @@ export const TERMINAL_VIEWING_STATUSES: readonly string[] = Object.freeze([
 
 /**
  * A viewing transition the frozen graph refuses. Typed so the HTTP edge can
- * answer 409 instead of a generic 500 — the caller's page is stale or the
+ * answer 409 instead of a generic 500 - the caller's page is stale or the
  * request is wrong, and either way the state did not change.
  */
 export class IllegalViewingTransitionError extends Error {

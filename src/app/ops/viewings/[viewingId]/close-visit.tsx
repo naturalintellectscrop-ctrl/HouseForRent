@@ -9,7 +9,7 @@ import { ApiAlert } from '@/app/ui';
  * The two ways a visit ends.
  *
  * `Close visit` is disabled when the SERVER said it cannot be conducted
- * (`canConduct: false`) — but that is a courtesy, not the enforcement. If it
+ * (`canConduct: false`) - but that is a courtesy, not the enforcement. If it
  * were submitted anyway, the backend returns 422 FIELD_REPORT_REQUIRED and
  * the database refuses beneath it. The button reflects the rule; it does not
  * hold it.
@@ -48,7 +48,7 @@ export function CloseVisit({
       } else {
         setError({
           message:
-            'Could not reach the House For Rent API. Your work was not saved — try again when you have signal.',
+            'Could not reach the House For Rent API. Your work was not saved - try again when you have signal.',
         });
       }
     } finally {
@@ -64,7 +64,7 @@ export function CloseVisit({
       {!canConduct && (
         <p className="alert alert-note">
           File the structured field report first. A visit cannot be closed
-          without one — the introduction record is only created alongside it.
+          without one - the introduction record is only created alongside it.
         </p>
       )}
 

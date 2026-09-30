@@ -6,7 +6,7 @@ import '../proof-strip.css';
  *
  * Everything under this group is readable without an account: browsing is
  * free and requires no sign-up (Decision 3). Nothing here gates on a
- * session — the header simply renders different links when one exists.
+ * session - the header simply renders different links when one exists.
  */
 export default function SiteLayout({
   children,

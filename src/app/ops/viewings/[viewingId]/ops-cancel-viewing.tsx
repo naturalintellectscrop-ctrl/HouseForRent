@@ -10,7 +10,7 @@ import { ApiAlert } from '@/app/ui';
  *
  * ── The case it exists for ──
  * The landlord phones in: the home was let yesterday, or the arrangement
- * collapsed. The viewing must leave the queue — but the record must not
+ * collapsed. The viewing must leave the queue - but the record must not
  * pretend the visit happened, and the decision must not blur with a
  * tenant's own cancellation. Hence: an admin-only control, a confirm step
  * with the consequence in plain words, an optional note, and an audit row
@@ -49,7 +49,7 @@ export function OpsCancelViewing({
       } else {
         setError({
           message:
-            'Could not reach the House For Rent API. Nothing was changed — try again when you have signal.',
+            'Could not reach the House For Rent API. Nothing was changed - try again when you have signal.',
         });
       }
     } finally {
@@ -74,7 +74,7 @@ export function OpsCancelViewing({
         <p className="muted" style={{ margin: 0 }}>
           For the landlord-reported cases: the home was let, the arrangement
           fell through, or the visit cannot go ahead. The tenant's list and
-          the officer's board will show it as cancelled — never as a visit
+          the officer's board will show it as cancelled - never as a visit
           that happened.
         </p>
         {error ? <ApiAlert message={error.message} code={error.code} /> : null}
@@ -93,7 +93,7 @@ export function OpsCancelViewing({
     <div className="card stack-sm">
       <h2 className="h3">Confirm the cancellation</h2>
       <p className="muted" style={{ margin: 0 }}>
-        This viewing is <strong>{status}</strong>. Cancelling it is final —
+        This viewing is <strong>{status}</strong>. Cancelling it is final -
         the tenant can request a new viewing, but this record stays
         cancelled and is visible to the landlord as such.
       </p>

@@ -41,7 +41,7 @@ export default async function LoginPage(props: {
             <Link href={next ? `/register?next=${encodeURIComponent(next)}` : '/register'}>
               Create one
             </Link>{' '}
-            — it takes a minute and costs nothing.
+            - it takes a minute and costs nothing.
           </p>
         </div>
       </div>

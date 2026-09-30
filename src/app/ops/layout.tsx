@@ -10,16 +10,16 @@ import { SiteFooter } from '@/app/site-chrome';
  * This is the one surface deliberately styled for density rather than
  * generosity: an officer standing in a stairwell wants rows and fields, not
  * whitespace (Technical Architecture §7). It shares every design token with
- * the public site — the tighter measure and smaller type are the only
+ * the public site - the tighter measure and smaller type are the only
  * divergence.
  *
- * `requireStaff()` here is a convenience gate, not the security boundary —
+ * `requireStaff()` here is a convenience gate, not the security boundary -
  * the backend refuses a non-staff caller regardless (NFR-1, API Spec §4.3).
  * It only spares someone a confusing 403 page.
  *
  * SANDBOX ADAPTATION: the reference signed out through a server action. Here
  * the sign-out is a plain HTML form POST to /api/v1/auth/logout, which
- * revokes the session server-side and redirects — the same no-JavaScript
+ * revokes the session server-side and redirects - the same no-JavaScript
  * pattern the public site chrome uses.
  */
 export default async function OpsLayout({
@@ -41,7 +41,7 @@ export default async function OpsLayout({
             {/* Ops is FOO-reachable for the launch gate and the queue; the
                 page itself only fetches the admin-only figures when the
                 caller is an admin. Hiding a link is presentation, never
-                access control — the backend refuses regardless. */}
+                access control - the backend refuses regardless. */}
             <Link href="/ops">Ops</Link>
             {role === 'admin' && <Link href="/ops/dispatch">Dispatch</Link>}
             {role === 'admin' && <Link href="/ops/deals">Deals</Link>}

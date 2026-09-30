@@ -1,11 +1,11 @@
 /**
- * Recent activity — the tenant's and landlord's "what has happened" feed.
+ * Recent activity - the tenant's and landlord's "what has happened" feed.
  *
  * This is a PROJECTION, not a source of truth. Every row is derived from a
  * record another service already wrote: a DealTransition row, or a viewing
  * whose status a field officer set. Nothing here is invented, nothing here
  * is written back, and there are no unread counters or notification badges
- * — the product does not claim a notification system it does not have.
+ * - the product does not claim a notification system it does not have.
  *
  * Phrasing rules (worklog D-1: status→copy decisions live server-side):
  * each row's sentence is written here, in one place, from the status the
@@ -26,7 +26,7 @@ export interface ActivityRow {
   href: string;
 }
 
-/** viewing | deal — short past-tense labels for badges. */
+/** viewing | deal - short past-tense labels for badges. */
 function viewingLabel(status: string): string {
   const labels: Record<string, string> = {
     requested: 'requested',
@@ -78,7 +78,7 @@ function dealEventLine(toStatus: string, side: 'tenant' | 'landlord'): string {
   const tenant: Record<string, string> = {
     created: 'Your letting was opened from the introduction record.',
     tenant_matched: 'You were matched to this property.',
-    agreement_signed: 'You signed the agreement — terms are now fixed.',
+    agreement_signed: 'You signed the agreement - terms are now fixed.',
     escrow_funded: 'Your rent and deposit were placed in escrow.',
     move_in_confirmed: 'You confirmed your move-in.',
     commission_earned: 'Our commission was recorded.',
@@ -106,7 +106,7 @@ function dealEventLine(toStatus: string, side: 'tenant' | 'landlord'): string {
 
 /**
  * Viewing sentences, per side. The landlord's feed is NOT the tenant's
- * feed re-rendered — "You asked for a viewing" addressed to a landlord
+ * feed re-rendered - "You asked for a viewing" addressed to a landlord
  * was wrong, and D-1 says status→copy decisions live here, one place.
  */
 function viewingEventLine(status: string, side: 'tenant' | 'landlord'): string {
@@ -190,7 +190,7 @@ export async function recentActivity(
 
   const viewingRows: ActivityRow[] = viewings.map((v) => {
     const l = v.listing;
-    // A landlord follows the letting, a tenant follows their own file —
+    // A landlord follows the letting, a tenant follows their own file -
     // same record, different place to land.
     const href = side === 'tenant' ? '/account/viewings' : '/landlord';
     return {

@@ -3,7 +3,7 @@ import { verifyListingFromVisit } from '@/server/viewings';
 import { readJson, requireRole, requireString, route } from '@/server/http';
 
 /**
- * POST /api/v1/viewings/:id/verify-listing — the officer's verification
+ * POST /api/v1/viewings/:id/verify-listing - the officer's verification
  * verdict from the ground: sets verification_state, availability, and
  * resets the freshness clock. Audited.
  */

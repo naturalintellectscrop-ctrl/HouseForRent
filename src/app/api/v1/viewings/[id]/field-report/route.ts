@@ -3,7 +3,7 @@ import { fileFieldReport } from '@/server/viewings';
 import { readJson, requireRole, requireString, route } from '@/server/http';
 
 /**
- * POST /api/v1/viewings/:id/field-report — the structured visit record.
+ * POST /api/v1/viewings/:id/field-report - the structured visit record.
  * conditionRating / matchesListing / isAvailable are structured fields, not
  * free text: they become the baseline for partner standards. Immutable once
  * filed; corrections are new evidence.

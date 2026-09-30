@@ -3,7 +3,7 @@ import { acceptAgreement, getListingForLister, effectiveCommissionRate } from '@
 import { ApiError, readJson, requireRole, route } from '@/server/http';
 
 /**
- * GET /api/v1/landlord/listings/:id/agreement — the terms as presented:
+ * GET /api/v1/landlord/listings/:id/agreement - the terms as presented:
  * commission computed server-side, never a percentage the landlord does
  * arithmetic on. (Contract path; the landlord listing page reads it
  * in-process, the browser may fetch it directly.)
@@ -27,7 +27,7 @@ export const GET = route(async (_req: NextRequest, ctx: { params: Promise<{ id: 
       version: 'v1',
       heading: 'The circumvention clause',
       body:
-        'If the tenant we introduced you to rents this home directly, without going through House For Rent, the full commission becomes payable. Our officers record every introduction with a timestamp and the parties present — that record is what makes this enforceable, and it is why we can keep tenants free and charge you only on success.',
+        'If the tenant we introduced you to rents this home directly, without going through House For Rent, the full commission becomes payable. Our officers record every introduction with a timestamp and the parties present - that record is what makes this enforceable, and it is why we can keep tenants free and charge you only on success.',
     },
     payer: 'landlord',
     tenantPays: false,
@@ -36,7 +36,7 @@ export const GET = route(async (_req: NextRequest, ctx: { params: Promise<{ id: 
   });
 });
 
-/** POST /api/v1/landlord/listings/:id/agreement — the landlord accepts the terms. */
+/** POST /api/v1/landlord/listings/:id/agreement - the landlord accepts the terms. */
 export const POST = route(async (req: NextRequest, ctx: { params: Promise<{ id: string }> }) => {
   const session = await requireRole(['lister']);
   await readJson(req);

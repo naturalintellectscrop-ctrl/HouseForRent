@@ -3,7 +3,7 @@ import { opsCancelViewing } from '@/server/viewings';
 import { readJson, requireRole, route } from '@/server/http';
 
 /**
- * POST /api/v1/ops/viewings/:id/cancel — operations cancels a requested
+ * POST /api/v1/ops/viewings/:id/cancel - operations cancels a requested
  * or scheduled viewing.
  *
  * The landlord-reported case: the owner says the home was let, the officer

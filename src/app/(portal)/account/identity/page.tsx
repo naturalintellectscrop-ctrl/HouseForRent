@@ -30,7 +30,7 @@ export default async function IdentityPage() {
           <h1 className="h1">Your identity is verified</h1>
           <p className="lede">
             You can request viewings. Landlords are told that you are
-            identity-verified — never your personal details.
+            identity-verified - never your personal details.
           </p>
         </div>
 
@@ -51,7 +51,7 @@ export default async function IdentityPage() {
                     'en-GB',
                     { day: 'numeric', month: 'long', year: 'numeric' },
                   )
-                : '—'}
+                : ' - '}
             </dd>
           </div>
         </dl>
@@ -93,7 +93,7 @@ export default async function IdentityPage() {
         <h2 className="h3">What we keep</h2>
         <p className="muted">
           Your National Identification Number is passed to the identity
-          provider and is <strong>not stored</strong> by House For Rent — only
+          provider and is <strong>not stored</strong> by House For Rent - only
           the verification outcome and an opaque provider reference are kept.
           A landlord is told that you are verified, and never sees the number.
         </p>

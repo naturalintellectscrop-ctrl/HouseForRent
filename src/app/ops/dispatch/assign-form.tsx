@@ -52,7 +52,7 @@ export function AssignForm({
     }
 
     // Optional: dispatch may move the time the tenant proposed. Absent means
-    // "keep it", which the backend treats as such — it does not default to now.
+    // "keep it", which the backend treats as such - it does not default to now.
     const scheduledFor = String(data.get('scheduledFor') ?? '').trim();
 
     try {
@@ -69,7 +69,7 @@ export function AssignForm({
       } else {
         setError({
           message:
-            'Could not reach the House For Rent API. Your work was not saved — try again when you have signal.',
+            'Could not reach the House For Rent API. Your work was not saved - try again when you have signal.',
         });
       }
     } finally {
@@ -90,7 +90,7 @@ export function AssignForm({
           </option>
           {officers.map((officer) => (
             <option key={officer.partyId} value={officer.partyId}>
-              {officer.displayName} — {officer.assignedCount} on board
+              {officer.displayName} - {officer.assignedCount} on board
             </option>
           ))}
         </select>

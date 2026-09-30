@@ -5,7 +5,7 @@ import { ApiError, requireRole, route } from '@/server/http';
 const STATES = ['pending', 'verified', 'rejected'] as const;
 
 /**
- * GET /api/v1/admin/mandates?state=pending|verified|rejected — the ops
+ * GET /api/v1/admin/mandates?state=pending|verified|rejected - the ops
  * mandate queue for one state (default pending: that is the state an
  * operator acts on). The decision note is deliberately not served here;
  * it lives in the audit trail.

@@ -6,7 +6,7 @@ import { postJson, ClientApiError } from '@/lib/client';
 import { ApiAlert } from '@/app/ui';
 
 /**
- * Self-service registration. Only `tenant` and `lister` exist here — staff
+ * Self-service registration. Only `tenant` and `lister` exist here - staff
  * are provisioned by an admin, and the backend refuses any other value
  * regardless of what this sends.
  */
@@ -157,7 +157,7 @@ export function RegisterForm({
 
       <p className="hint">
         Creating an account is free. Tenants are never charged anything on
-        House For Rent — the landlord pays our commission, and only when a
+        House For Rent - the landlord pays our commission, and only when a
         tenancy actually starts.
       </p>
     </form>

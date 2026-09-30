@@ -3,9 +3,9 @@ import { dispatchViewing } from '@/server/viewings';
 import { parseDate, readJson, requireRole, requireString, route } from '@/server/http';
 
 /**
- * POST /api/v1/ops/dispatch — assign (or reassign) a field officer.
+ * POST /api/v1/ops/dispatch - assign (or reassign) a field officer.
  *
- * Absent `scheduledFor` means KEEP the slot the tenant proposed — the
+ * Absent `scheduledFor` means KEEP the slot the tenant proposed - the
  * backend used to default it to `new Date()`, silently stomping the
  * proposal the form promised to keep. The service now owns that rule and
  * additionally refuses any party that is not an active field officer, and

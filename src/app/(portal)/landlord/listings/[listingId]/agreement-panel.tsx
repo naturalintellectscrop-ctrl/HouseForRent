@@ -83,7 +83,7 @@ export function AgreementPanel({
       } else {
         setError({
           message:
-            'Could not reach House For Rent. Nothing was saved — try again in a moment.',
+            'Could not reach House For Rent. Nothing was saved - try again in a moment.',
         });
       }
       setPending(false);
@@ -110,7 +110,7 @@ export function AgreementPanel({
 
       <p className="hint">
         Charged once, only when a tenant moves in, and taken out of the
-        settlement — you never write us a cheque. The tenant pays nothing.
+        settlement - you never write us a cheque. The tenant pays nothing.
       </p>
 
       <details className="agreement-clause">

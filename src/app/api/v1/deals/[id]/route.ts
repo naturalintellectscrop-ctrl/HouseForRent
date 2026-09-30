@@ -3,7 +3,7 @@ import { getDealForCaller } from '@/server/deals';
 import { requireSession, route } from '@/server/http';
 
 /**
- * GET /api/v1/deals/:id — the deal, its context, its ledger-derived figures
+ * GET /api/v1/deals/:id - the deal, its context, its ledger-derived figures
  * and the caller's availableActions. 404, not 403, for non-parties.
  */
 export const GET = route(async (_req: NextRequest, ctx: { params: Promise<{ id: string }> }) => {

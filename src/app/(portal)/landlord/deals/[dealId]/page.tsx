@@ -6,7 +6,7 @@ export const metadata = { title: 'Letting' };
 
 /**
  * A landlord's view of one deal. The API refuses a non-party with 404 (API
- * Spec §7.4) — not 403, which would confirm the deal exists.
+ * Spec §7.4) - not 403, which would confirm the deal exists.
  */
 export default async function LandlordDealPage({
   params,

@@ -1,10 +1,10 @@
 /**
  * Identity verification, staff provisioning, audit reads and reconciliation
- * — the admin/ops module.
+ * - the admin/ops module.
  *
  * The identity provider here is the SANDBOX MOCK, exactly as in the real
  * repo (behind IdentityProvider there). Every surface that calls it must
- * SAY it is a mock — the product sells verification and cannot overstate
+ * SAY it is a mock - the product sells verification and cannot overstate
  * its own. Behaviour: the V1 baseline is identity-only screening (Decision
  * 10); ability to pay is evidenced by the escrow flow, never by documents.
  */
@@ -31,7 +31,7 @@ export interface MockIdentityCheck {
  *
  * Task 14: the outcome logic now lives in ONE place (`mockIdentityOutcome`)
  * because operations gained the ability to run the same check on an
- * account's behalf — the two paths must never disagree about what passes.
+ * account's behalf - the two paths must never disagree about what passes.
  */
 function mockIdentityOutcome(nin: string, fullName: string, displayName: string): 'verified' | 'failed' {
   const normalised = nin.trim().toUpperCase();
@@ -65,14 +65,14 @@ async function recordIdentityCheck(params: {
       method: params.method as IdentityMethod,
       state,
       // The mock provider's reference to this check: a salted-hash of the
-      // NIN, as before — the column is provider_ref on the production row.
+      // NIN, as before - the column is provider_ref on the production row.
       providerRef: createHash('sha256').update(params.nin.trim().toUpperCase()).digest('hex').slice(0, 16),
       verifiedAt: state === 'verified' ? new Date() : null,
     },
   });
 
   if (state === 'verified') {
-    // Completing identity activation makes the account active — the status
+    // Completing identity activation makes the account active - the status
     // lives on the PARTY; user_account mirrors nothing anymore.
     const party = await db.party.findUnique({ where: { id: params.partyId } });
     if (party && party.status === 'pending_verification') {
@@ -117,13 +117,13 @@ export async function submitIdentityVerification(params: {
 
 export class IdentityCheckNotApplicableError extends Error {
   constructor(role: string) {
-    super(`identity verification applies to tenant and lister accounts — this is a ${role} account`);
+    super(`identity verification applies to tenant and lister accounts - this is a ${role} account`);
     this.name = 'IdentityCheckNotApplicableError';
   }
 }
 
 /**
- * POST /v1/admin/users/:partyId/identity-check — operations runs the
+ * POST /v1/admin/users/:partyId/identity-check - operations runs the
  * identity check for an account (Task 14).
  *
  * ── Why operations needs this at all ──
@@ -131,13 +131,13 @@ export class IdentityCheckNotApplicableError extends Error {
  * holder whose check failed on a typo (or whose name on the account no
  * longer matches their ID) calls in, and the honest options are to talk
  * them through the same form or to run the same check for them with the
- * details they give over the phone. This is the second option — the SAME
+ * details they give over the phone. This is the second option - the SAME
  * mock outcome logic, never a manual "mark verified" shortcut, so the
  * record stays one vocabulary.
  *
  * The audit row says by=operations with the admin as the acting actor, so
  * "the account verified themselves" and "operations ran this check" stay
- * distinguishable forever — the same distinction viewing cancellations
+ * distinguishable forever - the same distinction viewing cancellations
  * already carry. A failed result is a true record, not an error: only an
  * inapplicable account (staff) or a missing one is refused.
  */
@@ -173,12 +173,12 @@ export async function runIdentityCheckForParty(params: {
 
 export class StaffRoleError extends Error {
   constructor() {
-    super('staff accounts can only be foo or admin — tenants and listers self-serve');
+    super('staff accounts can only be foo or admin - tenants and listers self-serve');
     this.name = 'StaffRoleError';
   }
 }
 
-/** POST /v1/auth/staff — an admin provisions field officers and admins. */
+/** POST /v1/auth/staff - an admin provisions field officers and admins. */
 export async function provisionStaff(params: {
   actorPartyId: string;
   displayName: string;
@@ -236,7 +236,7 @@ export async function recentAuditEvents(limit = 100) {
 
 // ── verification queues ──────────────────────────────────────────────────
 // The admin verification queue now lives in listings.ts as
-// `adminVerificationQueue()` — one implementation of the publish gate's
+// `adminVerificationQueue()` - one implementation of the publish gate's
 // blocker list, shared with evaluatePublish and findForLister. The previous
 // duplicate here is gone.
 
@@ -253,14 +253,14 @@ export async function markListingAwaitingVerification(listingId: string) {
  * The ops reconciliation view. Two assertions, honestly reported:
  *  1. every ledger posting balances (a false here means corruption bypassing post());
  *  2. PSP-recorded inflow equals ledger-recorded inflow (the mock always
- *     matches because it is the same process — a REAL provider is the point
+ *     matches because it is the same process - a REAL provider is the point
  *     where this check earns its keep).
  */
 export async function runReconciliation() {
   const postingsBalance = await everyPostingBalances();
 
   // PspInstruction rows are IMMUTABLE and `state` only ever holds the
-  // initial `pending` — the CURRENT state is the toState of the newest
+  // initial `pending` - the CURRENT state is the toState of the newest
   // event, so the succeeded total is derived, never read off the column.
   const collectInstructions = await db.pspInstruction.findMany({
     where: { kind: 'collect' },
@@ -349,21 +349,21 @@ export interface DirectoryRow {
  *
  * ── Scope discipline ──
  * This answers "who has an account, is it in good standing, and how are
- * they using the platform" — the questions dispatch and dispute-handling
+ * they using the platform" - the questions dispatch and dispute-handling
  * actually ask. It deliberately does NOT join identity documents, ledger
  * balances or free-text history: those are subject-scoped reads (the audit
  * trail), not a browsable directory. A searchable table here is account
  * administration; an unfiltered firehose of everything would be
  * surveillance, and the audit page already draws that line.
  *
- * Search is a phone/name substring from a GET form — shareable and
+ * Search is a phone/name substring from a GET form - shareable and
  * bookmarkable like every other filter in the product.
  */
 export async function adminUserDirectory(query?: string, role?: string): Promise<DirectoryRow[]> {
   const q = query?.trim();
   // Server-authoritative enum check (same 422 VALIDATION contract as the
   // tier endpoint): an unknown role value is refused, never silently
-  // ignored — a filter that pretends to work is worse than one that fails.
+  // ignored - a filter that pretends to work is worse than one that fails.
   const r = role?.trim();
   if (r && !(AUTH_ROLES as readonly string[]).includes(r)) {
     throw new ApiError(422, 'VALIDATION', `role must be one of: ${AUTH_ROLES.join(', ')}`);
@@ -400,7 +400,7 @@ export async function adminUserDirectory(query?: string, role?: string): Promise
     displayName: a.party.displayName,
     primaryPhone: a.party.primaryPhone,
     role: a.authRole,
-    // The account's standing IS the party's status — user_account carries
+    // The account's standing IS the party's status - user_account carries
     // no status column of its own.
     accountStatus: a.party.status,
     identityVerified: a.party.identityVerifications[0]?.state === 'verified',
@@ -447,7 +447,7 @@ export interface AdminPartyDetail {
     id: string;
     label: string;
     neighbourhood: string;
-    /** The parent neighbourhood's name — there is no district column. */
+    /** The parent neighbourhood's name - there is no district column. */
     district: string | null;
     listingCount: number;
     liveListings: number;
@@ -466,12 +466,12 @@ export interface AdminPartyDetail {
   /**
    * This party's own trail, both directions: events they acted in, and
    * events carried out ON this account (tier changes, provisioning). A
-   * subject-scoped read — exactly what the audit page's scope discipline
+   * subject-scoped read - exactly what the audit page's scope discipline
    * says an account page may do. No free-text, no other parties' rows.
    */
   audit: Array<{
     id: string;
-    /** The event type — the audit row's own vocabulary. */
+    /** The event type - the audit row's own vocabulary. */
     action: string;
     /** No longer recorded: the production audit row carries only subjectRef. */
     entityType: string | null;
@@ -490,8 +490,8 @@ export interface AdminPartyDetail {
  * The directory answers "who and how many"; resolving a dispute or a
  * landlord's phone call needs the one account in front of you: are they
  * verified, what do they hold, what has happened on their account. It
- * stays subject-scoped BY CONSTRUCTION — every query is filtered by this
- * partyId — and it shows deal states, not ledger balances (money detail
+ * stays subject-scoped BY CONSTRUCTION - every query is filtered by this
+ * partyId - and it shows deal states, not ledger balances (money detail
  * lives on the deal page where its audit trail lives too).
  */
 export async function adminPartyDetail(partyId: string): Promise<AdminPartyDetail> {
@@ -530,7 +530,7 @@ export async function adminPartyDetail(partyId: string): Promise<AdminPartyDetai
     }),
   ]);
 
-  // Live listings per owned property — one grouped query, mapped per row.
+  // Live listings per owned property - one grouped query, mapped per row.
   const liveByProperty = await db.listing.groupBy({
     by: ['propertyId'],
     where: { publicationState: 'live', property: { ownerPartyId: partyId } },
@@ -559,7 +559,7 @@ export async function adminPartyDetail(partyId: string): Promise<AdminPartyDetai
   // officer, the visits assigned to them (a bounded read like the
   // tenant's). Dispatch and ops cancellations act with an admin as the
   // audit actor, so without this clause the trail would show only what the
-  // account did — never what was done to its visits. Subject-scoping stays
+  // account did - never what was done to its visits. Subject-scoping stays
   // by construction: only ids from the subject's own viewing queries enter
   // the clause.
   const assignedViewingRows =
@@ -576,7 +576,7 @@ export async function adminPartyDetail(partyId: string): Promise<AdminPartyDetai
   ];
 
   // Identity checks run BY OPERATIONS have the admin as their audit actor,
-  // so they would not match `actorPartyId: partyId` — but they are exactly
+  // so they would not match `actorPartyId: partyId` - but they are exactly
   // what this trail exists to show. Their ids are already in hand from the
   // include above, so the subject-scoping stays by construction.
   const identityRecordIds = party.identityVerifications.map((i) => i.id);
@@ -586,10 +586,10 @@ export async function adminPartyDetail(partyId: string): Promise<AdminPartyDetai
       OR: [
         { actorPartyId: partyId },
         // The audit row's subject is a bare string ref now (no entity-type
-        // column) — ids stay subject-scoped by construction.
+        // column) - ids stay subject-scoped by construction.
         { subjectRef: partyId },
         // Money/consent events carried on this party's OWN deals still
-        // belong on this account's trail — they are what a landlord calling
+        // belong on this account's trail - they are what a landlord calling
         // about "my money" needs to see, and they stay subject-scoped by
         // construction (only ids from the queries above enter this list).
         ...(ownDealIds.length ? [{ subjectRef: { in: ownDealIds } }] : []),
@@ -659,7 +659,7 @@ export async function adminPartyDetail(partyId: string): Promise<AdminPartyDetai
     audit: auditRows.map((r) => ({
       id: r.id,
       action: r.eventType,
-      // The production audit row has no entity-type column — the subject is
+      // The production audit row has no entity-type column - the subject is
       // a bare string ref, so nothing honest can fill this any more.
       entityType: null as string | null,
       entityId: r.subjectRef,
@@ -720,7 +720,7 @@ export class DuplicateNeighbourhoodError extends Error {
  * a duplicate name within the same district is a 409 rather than a silent
  * second row, and the creation is audited like every other boundary move.
  *
- * The production taxonomy has NO district column — a district is the
+ * The production taxonomy has NO district column - a district is the
  * neighbourhood's PARENT row (the hierarchy is how corridors group). The
  * admin's district string therefore resolves to an existing neighbourhood
  * of that name, or materialises one as a grouping parent; the entered
@@ -777,7 +777,7 @@ export async function setNeighbourhoodServiceArea(params: {
   if (!row) throw new NeighbourhoodNotFoundError(params.neighbourhoodId);
 
   if (row.inServiceArea === params.inServiceArea) {
-    // Idempotent by intent: a double-click re-records nothing — but the
+    // Idempotent by intent: a double-click re-records nothing - but the
     // caller still gets the current truth so the UI can confirm it.
     return { ...row, changed: false };
   }
@@ -817,7 +817,7 @@ export class ListerTierNotApplicableError extends Error {
   constructor(partyId: string, role: string) {
     super(
       `account ${partyId} is a ${role}, not a landlord. A listing tier ` +
-        'belongs to landlord accounts only — it states the relationship ' +
+        'belongs to landlord accounts only - it states the relationship ' +
         'they have to the property they list.',
     );
     this.name = 'ListerTierNotApplicableError';
@@ -829,12 +829,12 @@ export class ListerTierNotApplicableError extends Error {
  *
  * ── Why this is an operations decision, not a signup question ──
  * Registration cannot be allowed to self-declare "I am a broker": the
- * tier is exactly what gates the mandate requirement (SSOT Decision 8 —
+ * tier is exactly what gates the mandate requirement (SSOT Decision 8 -
  * a non-owner may not publish without the owner's written authority),
  * so letting a caller choose their own tier would let a middleman skip
  * the one control that restrains them. Operations sets it, the audit
  * trail carries who set it and what it was, and the publish gates read
- * the value live — the effect is immediate and traceable.
+ * the value live - the effect is immediate and traceable.
  */
 export async function setListerTier(params: {
   adminPartyId: string;

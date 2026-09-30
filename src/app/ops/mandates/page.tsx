@@ -13,20 +13,20 @@ const STATE_TABS: ReadonlyArray<{ value: string; label: string }> = [
 ];
 
 /**
- * The mandate queue (SSOT Decision 8 / FR-3.2 — the decision half of
+ * The mandate queue (SSOT Decision 8 / FR-3.2 - the decision half of
  * F-003).
  *
  * ── What this page is deciding ──
  * A lister whose tier is not `property_owner` markets a home they do not
  * own. Before such a listing may publish, the platform must hold the
- * OWNER's written authority for that specific property — the mandate.
+ * OWNER's written authority for that specific property - the mandate.
  * Operations verifies that authority: does the named owner match the
  * property's registered owner, does the document say what it claims.
  *
  * Verifying is consequential: it is the step that unblocks publication of
  * somebody else's property, so the action sits behind a confirm step with
  * the consequence written out. The decision note goes to the audit trail,
- * never to the row — one copy of the reasoning, where the audit lives.
+ * never to the row - one copy of the reasoning, where the audit lives.
  */
 export default async function MandatesPage(props: {
   searchParams: Promise<{ state?: string }>;
@@ -95,7 +95,7 @@ export default async function MandatesPage(props: {
           }
         >
           {state === 'pending'
-            ? 'Every mandate that has been submitted has been decided. A non-owner listing still blocked on "mandate" in the verification queue means its mandate has not been submitted yet — the landlord submits it from their listing page.'
+            ? 'Every mandate that has been submitted has been decided. A non-owner listing still blocked on "mandate" in the verification queue means its mandate has not been submitted yet - the landlord submits it from their listing page.'
             : 'Mandates re-enter this queue only when a lister submits one.'}
         </Empty>
       ) : (
@@ -124,7 +124,7 @@ export default async function MandatesPage(props: {
                           href={`/ops/users/${m.listerPartyId}`}
                           style={{ fontWeight: 600 }}
                         >
-                          {m.listerName ?? '—'}
+                          {m.listerName ?? ' - '}
                         </Link>
                         {m.listerTier ? (
                           <span className="faint" style={{ display: 'block', fontSize: '0.8125rem' }}>
@@ -133,7 +133,7 @@ export default async function MandatesPage(props: {
                         ) : null}
                       </>
                     ) : (
-                      m.listerName ?? '—'
+                      m.listerName ?? ' - '
                     )}
                   </td>
                   <td>
@@ -144,9 +144,9 @@ export default async function MandatesPage(props: {
                   </td>
                   <td>
                     {m.property.ownerId ? (
-                      <Link href={`/ops/users/${m.property.ownerId}`}>{m.property.ownerName ?? '—'}</Link>
+                      <Link href={`/ops/users/${m.property.ownerId}`}>{m.property.ownerName ?? ' - '}</Link>
                     ) : (
-                      (m.property.ownerName ?? '—')
+                      (m.property.ownerName ?? ' - ')
                     )}
                   </td>
                   <td style={{ maxWidth: '18rem' }}>

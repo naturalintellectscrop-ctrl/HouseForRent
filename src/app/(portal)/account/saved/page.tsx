@@ -7,11 +7,11 @@ export const metadata = { title: 'Saved homes' };
 /**
  * The tenant's bookmarked homes.
  *
- * The cards are the SAME component the public feed renders — a saved home
+ * The cards are the SAME component the public feed renders - a saved home
  * is not a second kind of object. What is saved-but-hidden is stated, not
  * silently dropped: if a home you bookmarked left search (withdrawn, stale,
  * let to someone else), `hiddenCount` says so in words. That is the honest
- * answer, and it is also the useful one — it tells you to look again rather
+ * answer, and it is also the useful one - it tells you to look again rather
  * than wonder where the home went.
  */
 export default async function SavedPage() {
@@ -27,7 +27,7 @@ export default async function SavedPage() {
         <h1 className="h1">Saved homes</h1>
         <p className="lede">
           Homes you bookmarked while looking. Nobody is told that you saved a
-          home — it is your list, and saving is not a request or a commitment.
+          home - it is your list, and saving is not a request or a commitment.
         </p>
       </div>
 
@@ -71,7 +71,7 @@ export default async function SavedPage() {
               {saved.hiddenCount}{' '}
               {saved.hiddenCount === 1 ? 'home' : 'homes'} you saved{' '}
               {saved.hiddenCount === 1 ? 'is' : 'are'} no longer shown in
-              search — let, withdrawn, or not confirmed recently.
+              search - let, withdrawn, or not confirmed recently.
             </p>
           ) : null}
         </>

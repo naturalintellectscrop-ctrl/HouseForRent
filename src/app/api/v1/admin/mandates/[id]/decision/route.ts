@@ -3,10 +3,10 @@ import { decideMandate } from '@/server/mandates';
 import { readJson, requireRole, requireString, route } from '@/server/http';
 
 /**
- * POST /api/v1/admin/mandates/:id/decision — operations decides a pending
+ * POST /api/v1/admin/mandates/:id/decision - operations decides a pending
  * mandate: `verified` (the owner's authority checks out) or `rejected`
  * (it does not). The optional note is written to the AUDIT trail, not the
- * mandate row. Only a pending mandate can be decided — a second decision
+ * mandate row. Only a pending mandate can be decided - a second decision
  * is a 409, and a rejected mandate re-enters the queue only through the
  * lister submitting it again.
  */

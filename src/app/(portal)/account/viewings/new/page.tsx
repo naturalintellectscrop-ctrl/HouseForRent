@@ -76,7 +76,7 @@ export default async function NewViewingPage({
           <h1 className="h1">Request a viewing</h1>
           <p className="lede">
             Tell us when suits you. Our operations desk assigns a field officer
-            and confirms the time — you will not be sent an address and left to
+            and confirms the time - you will not be sent an address and left to
             it.
           </p>
         </div>

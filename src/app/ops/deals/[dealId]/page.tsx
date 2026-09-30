@@ -10,7 +10,7 @@ import { AdminOnly, ApiAlert, Empty, ShortId, shillings, when } from '@/app/ui';
 import { DealAction } from './deal-action';
 
 /**
- * One deal, and what can be done to it — F-007.
+ * One deal, and what can be done to it - F-007.
  *
  * ── What was broken ──
  * `earn-commission`, `settle`, `close`, `refund`, `dispute-hold`,
@@ -28,7 +28,7 @@ import { DealAction } from './deal-action';
  * being edited.
  *
  * Every figure below comes from `financial`, computed server-side from the
- * ledger — the same rows reconciliation reads. Nothing on this page performs
+ * ledger - the same rows reconciliation reads. Nothing on this page performs
  * arithmetic on money.
  */
 export default async function DealDetailPage(props: {
@@ -43,7 +43,7 @@ export default async function DealDetailPage(props: {
     if (err instanceof ApiError) {
       if (err.status === 401) redirect('/login');
       // The backend returns 404 rather than 403 for a caller who is not a
-      // party — a 403 would confirm the deal exists and let someone probe
+      // party - a 403 would confirm the deal exists and let someone probe
       // for real ids. This page must not undo that by saying more.
       if (err.status === 404) notFound();
       if (err.status === 403) return <AdminOnly what="Deal operations" />;
@@ -165,7 +165,7 @@ export default async function DealDetailPage(props: {
           <p className="kpi-value">
             {financial.commissionAmount
               ? shillings(financial.commissionAmount)
-              : '—'}
+              : ' - '}
           </p>
         </div>
       </div>
@@ -199,7 +199,7 @@ export default async function DealDetailPage(props: {
             {financial.escrowDischarged ? (
               <span className="pill pill-ok">yes</span>
             ) : (
-              <span className="pill pill-warn">no — a balance remains</span>
+              <span className="pill pill-warn">no - a balance remains</span>
             )}
           </dd>
         </dl>
@@ -210,7 +210,7 @@ export default async function DealDetailPage(props: {
           <p className="alert alert-note">
             The amount funded does not equal what the listing asks upfront.
             The system does not currently check this (finding F-012), so this
-            is shown for your judgement rather than flagged as an error — it
+            is shown for your judgement rather than flagged as an error - it
             may be a part payment, a negotiated figure, or a mistake.
           </p>
         )}
@@ -241,7 +241,7 @@ export default async function DealDetailPage(props: {
       <h2>Lifecycle</h2>
       {transitions.length === 0 ? (
         <p className="muted">
-          No transitions yet — this deal is still at <code>{deal.status}</code>.
+          No transitions yet - this deal is still at <code>{deal.status}</code>.
         </p>
       ) : (
         <div className="table-scroll">
@@ -262,9 +262,9 @@ export default async function DealDetailPage(props: {
                   <td>{row.toStatus.replace(/_/g, ' ')}</td>
                   <td>{when(row.occurredAt)}</td>
                   <td className="mono">
-                    {row.actorPartyId.slice(0, 8) || row.actorRole || '—'}
+                    {row.actorPartyId.slice(0, 8) || row.actorRole || ' - '}
                   </td>
-                  <td>{row.reason ?? '—'}</td>
+                  <td>{row.reason ?? ' - '}</td>
                 </tr>
               ))}
             </tbody>
@@ -283,7 +283,7 @@ export default async function DealDetailPage(props: {
         <p className="muted">
           No audited events yet. Money events are written inside the same
           transaction that causes them, so an empty trail here means no money
-          has moved — not that logging is behind.
+          has moved - not that logging is behind.
         </p>
       ) : (
         <div className="table-scroll">
@@ -301,7 +301,7 @@ export default async function DealDetailPage(props: {
                   <td>{event.eventType.replace(/_/g, ' ')}</td>
                   <td>{when(event.occurredAt)}</td>
                   <td className="mono">
-                    {event.actorName ?? event.actorPartyId ?? '—'}
+                    {event.actorName ?? event.actorPartyId ?? ' - '}
                   </td>
                 </tr>
               ))}
@@ -311,7 +311,7 @@ export default async function DealDetailPage(props: {
       )}
 
       <p className="muted">
-        Audit rows are immutable at the database level — they cannot be edited
+        Audit rows are immutable at the database level - they cannot be edited
         or deleted, here or anywhere.
       </p>
     </>

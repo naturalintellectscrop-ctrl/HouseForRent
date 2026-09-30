@@ -4,14 +4,14 @@ import { api, ApiError, type IntroductionRecord } from '@/lib/api';
 import { Empty, when } from '@/app/ui';
 
 /**
- * FR-5.3 / FR-8.3 — introduction records as queryable circumvention
+ * FR-5.3 / FR-8.3 - introduction records as queryable circumvention
  * evidence.
  *
  * This is the surface the Stage 7 acceptance criterion "introduction records
  * are queryable" refers to. It reads `introduction_record` directly, which
  * is the point: the evidence exists precisely for the case where no deal was
  * ever created. A landlord and tenant who transacted around the platform
- * leave no deal row — but they leave this one.
+ * leave no deal row - but they leave this one.
  *
  * Staff-only, enforced by the backend. Exposing it to either counterparty
  * would tell a landlord which other tenants an officer introduced.

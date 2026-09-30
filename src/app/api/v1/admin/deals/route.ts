@@ -3,7 +3,7 @@ import { api } from '@/lib/api';
 import { requireRole, route } from '@/server/http';
 
 /**
- * GET /api/v1/admin/deals — every deal with its state distribution, for the
+ * GET /api/v1/admin/deals - every deal with its state distribution, for the
  * deal queue and the operations overview (F-007, FR-10.4).
  *
  * TASK 7-b (additive route, sandbox adaptation): delegates to the in-process

@@ -7,7 +7,7 @@ export const metadata = { title: 'Your letting' };
 /**
  * A tenant's view of one deal.
  *
- * The API refuses a non-party with 404 (API Spec §7.4) — not 403, which
+ * The API refuses a non-party with 404 (API Spec §7.4) - not 403, which
  * would confirm the deal exists. This page passes that through rather than
  * checking anything itself; the gate is the deal-party authorisation on the
  * endpoint, and it holds whether or not this page is reached from a browser.

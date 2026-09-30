@@ -1,5 +1,5 @@
 /**
- * The HTTP edge for /api/v1 — session resolution, role guards, and the
+ * The HTTP edge for /api/v1 - session resolution, role guards, and the
  * mapping from domain errors to status codes. The ONLY place that knows
  * about HTTP; services throw domain errors with the same names the real
  * NestJS API uses.

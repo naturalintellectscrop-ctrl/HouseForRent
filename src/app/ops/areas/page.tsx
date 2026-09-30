@@ -4,13 +4,13 @@ import { AdminOnly } from '@/app/ui';
 import { NeighbourhoodCreateForm, ServiceAreaToggle } from './area-controls';
 
 /**
- * The service-area console (admin) — where the platform's physical
+ * The service-area console (admin) - where the platform's physical
  * boundary is set, neighbourhood by neighbourhood.
  *
  * ── What inServiceArea actually controls ──
  * It is read live by three things: the public search filter (out-of-area
  * listings never appear), the publish gate (a listing outside the area
- * cannot go live — the landlord sees "outside the area we currently
+ * cannot go live - the landlord sees "outside the area we currently
  * cover"), and the deal service (an introduction outside it is refused).
  * This page is therefore not a label editor; it is the switch that decides
  * where House For Rent operates. Every move is audited with from/to and
@@ -44,7 +44,7 @@ export default async function AreasPage() {
     throw err;
   }
 
-  // Grouped by district in the page (the service returns a flat list —
+  // Grouped by district in the page (the service returns a flat list -
   // grouping is presentation, not business logic).
   const byDistrict = new Map<string, AreaRow[]>();
   for (const a of areas) {
@@ -73,7 +73,7 @@ export default async function AreasPage() {
 
       {areas.length === 0 ? (
         <p className="notice notice-info" role="status">
-          No neighbourhood recorded yet. Add the first one above — search and
+          No neighbourhood recorded yet. Add the first one above - search and
           the public areas page read this same table, so an area appears
           there the moment it exists.
         </p>
@@ -123,7 +123,7 @@ export default async function AreasPage() {
 
       <p className="faint" style={{ fontSize: '0.8125rem' }}>
         The public <a href="/areas">areas page</a> and property search read
-        this table live — there is no separate publish step for a boundary
+        this table live - there is no separate publish step for a boundary
         move. Every change is audited with the previous state and the live
         listings it affected.
       </p>

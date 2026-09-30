@@ -37,7 +37,7 @@ export function NeighbourhoodCreateForm({ districts }: { districts: string[] }) 
   const [created, setCreated] = useState<string | null>(null);
 
   // Existing districts are offered as starting points (they are the real
-  // taxonomy); typing a new one is allowed — that is how a new district
+  // taxonomy); typing a new one is allowed - that is how a new district
   // opens. The dropdown is a suggestion, not a constraint.
   const suggestions = districts.filter((d) => d.toLowerCase() !== district.toLowerCase());
 
@@ -60,7 +60,7 @@ export function NeighbourhoodCreateForm({ districts }: { districts: string[] }) 
       } else {
         setError({
           message:
-            'Could not reach the House For Rent API. Nothing was created — try again when you have signal.',
+            'Could not reach the House For Rent API. Nothing was created - try again when you have signal.',
         });
       }
     } finally {
@@ -122,7 +122,7 @@ export function NeighbourhoodCreateForm({ districts }: { districts: string[] }) 
           />
           <span>
             <strong>In the service area.</strong> Leave unticked to record the
-            place without offering it yet — out-of-area neighbourhoods stay
+            place without offering it yet - out-of-area neighbourhoods stay
             out of search, cannot publish, and refuse introductions.
           </span>
         </label>
@@ -156,9 +156,9 @@ export function ServiceAreaToggle({ area }: { area: NeighbourhoodRow }) {
       setNote(
         res.changed
           ? to
-            ? 'Back in the service area — search and publishing read it immediately.'
-            : 'Out of the service area — dropped from public search with immediate effect.'
-          : 'That was already the state — nothing changed.',
+            ? 'Back in the service area - search and publishing read it immediately.'
+            : 'Out of the service area - dropped from public search with immediate effect.'
+          : 'That was already the state - nothing changed.',
       );
       setArmed(false);
       router.refresh();
@@ -168,7 +168,7 @@ export function ServiceAreaToggle({ area }: { area: NeighbourhoodRow }) {
       } else {
         setError({
           message:
-            'Could not reach the House For Rent API. Nothing was changed — try again when you have signal.',
+            'Could not reach the House For Rent API. Nothing was changed - try again when you have signal.',
         });
       }
     } finally {
@@ -196,7 +196,7 @@ export function ServiceAreaToggle({ area }: { area: NeighbourhoodRow }) {
           ) : (
             <>
               Move <strong>{area.name}</strong> INTO the service area? Its
-              properties become publishable and searchable — verification
+              properties become publishable and searchable - verification
               still gates each listing.
             </>
           )}

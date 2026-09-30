@@ -5,7 +5,7 @@ import { db } from '@/lib/db';
 import { readJson, requireRole, requireString, route } from '@/server/http';
 
 /**
- * POST /api/v1/ops/staff — an admin provisions a field officer or admin.
+ * POST /api/v1/ops/staff - an admin provisions a field officer or admin.
  * Staff are never self-served (roles table: only tenant/lister self-serve).
  */
 export const POST = route(async (req: NextRequest) => {
@@ -22,7 +22,7 @@ export const POST = route(async (req: NextRequest) => {
   return NextResponse.json({ accountId: account.id }, { status: 201 });
 });
 
-/** GET /api/v1/ops/staff — the staff roster. */
+/** GET /api/v1/ops/staff - the staff roster. */
 export const GET = route(async () => {
   await requireRole(['admin']);
   const accounts = await db.userAccount.findMany({

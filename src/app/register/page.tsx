@@ -6,7 +6,7 @@ import { Brand } from '@/app/ui';
 export const metadata = {
   title: 'Create an account',
   description:
-    'Create a House For Rent account — free for tenants, free to list for landlords.',
+    'Create a House For Rent account - free for tenants, free to list for landlords.',
 };
 
 export default async function RegisterPage(props: {
@@ -15,7 +15,7 @@ export default async function RegisterPage(props: {
   const { role, next } = await props.searchParams;
 
   // The link that brought them here can preselect, but the choice is still
-  // theirs to change — and the backend refuses anything but these two
+  // theirs to change - and the backend refuses anything but these two
   // regardless of what is submitted (API Spec §3).
   const preset = role === 'lister' ? 'lister' : 'tenant';
 

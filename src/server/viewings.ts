@@ -4,17 +4,17 @@
  *
  * Ported from apps/api/src/viewings. The load-bearing rules:
  *  - A tenant must be identity-verified before requesting a viewing
- *    (invariant 6, SSOT Decision 10 — identity is the universal baseline).
+ *    (invariant 6, SSOT Decision 10 - identity is the universal baseline).
  *  - The viewing graph is frozen: `conducted` is TERMINAL (retroactively
  *    denying an introduction that demonstrably happened would destroy the
  *    circumvention evidence), and there is no `requested → conducted` edge,
  *    so a conducted viewing always has an officer.
  *  - `conduct()` refuses without a field report, then writes the immutable
  *    introduction record and the status change together. The landlord on
- *    the record is derived from the property server-side — no party chose
+ *    the record is derived from the property server-side - no party chose
  *    what the evidence says.
  *  - Field reports are STRUCTURED (conditionRating/matchesListing/isAvailable),
- *    not free text — they become the baseline for partner standards.
+ *    not free text - they become the baseline for partner standards.
  */
 import { db } from '@/lib/db';
 import { assertViewingTransitionAllowed } from './viewing-state-machine';
@@ -26,7 +26,7 @@ export class TenantNotVerifiedError extends Error {
   constructor(partyId: string) {
     super(
       `tenant ${partyId} has no verified identity check. A viewing is requested ` +
-        'only after identity verification — the universal baseline (SSOT Decision 10).',
+        'only after identity verification - the universal baseline (SSOT Decision 10).',
     );
     this.name = 'TenantNotVerifiedError';
   }
@@ -61,7 +61,7 @@ export class NotYourViewingError extends Error {
 
 // ── tenant side ──────────────────────────────────────────────────────────
 
-/** FR-5.1 — the tenant asks; the platform schedules and dispatches. */
+/** FR-5.1 - the tenant asks; the platform schedules and dispatches. */
 export async function requestViewing(params: {
   listingId: string;
   tenantPartyId: string;
@@ -93,7 +93,7 @@ export async function requestViewing(params: {
 
 /**
  * A tenant's own viewings, WITH the property behind them, and
- * `whatHappensNext` written HERE server-side — one place knows what
+ * `whatHappensNext` written HERE server-side - one place knows what
  * "requested" means to the person waiting.
  */
 export async function findForTenant(tenantPartyId: string) {
@@ -138,7 +138,7 @@ function nextStepFor(status: string): string {
     case 'no_show':
       return 'The officer could not reach you at the scheduled time. Request another viewing when you are ready.';
     case 'cancelled':
-      // Deliberately NOT "You cancelled" — operations also cancels
+      // Deliberately NOT "You cancelled" - operations also cancels
       // viewings (the landlord-reported case), and a sentence addressed to
       // the wrong actor is a small lie. WHO cancelled lives in the audit
       // trail; the tenant sees the state and the way back.
@@ -174,7 +174,7 @@ export async function dispatchQueue() {
 }
 
 /**
- * FR-5.1 — an admin assigns an officer and confirms the time. Also the
+ * FR-5.1 - an admin assigns an officer and confirms the time. Also the
  * reassignment path the frozen graph permits (`scheduled → scheduled`):
  * moving a visit between officers before it happens is ordinary dispatch
  * work, not a state change.
@@ -192,7 +192,7 @@ export class OfficerNotFoundError extends Error {
 
 /** The officers dispatch can send: active field officers, with their open load. */
 export async function assignableOfficers() {
-  // The account's standing is the PARTY's status now — user_account carries
+  // The account's standing is the PARTY's status now - user_account carries
   // no status column of its own.
   const accounts = await db.userAccount.findMany({
     where: { authRole: 'foo', party: { status: 'active' } },
@@ -211,10 +211,10 @@ export async function assignableOfficers() {
 
 export async function dispatchViewing(params: {
   viewingId: string;
-  /** The admin making the call — the audit row's actor. */
+  /** The admin making the call - the audit row's actor. */
   adminPartyId: string;
   fooPartyId: string;
-  /** Absent means "keep the slot the tenant proposed" — dispatch never
+  /** Absent means "keep the slot the tenant proposed" - dispatch never
    * invents a time. (The HTTP edge used to default this to `new Date()`,
    * silently stomping the tenant's proposal while the form promised it
    * would keep it.) */
@@ -228,7 +228,7 @@ export async function dispatchViewing(params: {
   // route is admin-only, but "who conducted a visit" is exactly what an
   // audit question turns on, so the service refuses anything else rather
   // than trusting the caller's select box. partyId is not unique on
-  // user_account — the lookup is findFirst, and standing is the party's.
+  // user_account - the lookup is findFirst, and standing is the party's.
   const account = await db.userAccount.findFirst({
     where: { partyId: params.fooPartyId },
     include: { party: { select: { status: true } } },
@@ -242,7 +242,7 @@ export async function dispatchViewing(params: {
   const timeChanged = params.scheduledFor
     ? params.scheduledFor.getTime() !== viewing.scheduledFor.getTime()
     : false;
-  // Same officer, same slot: an idempotent no-op that records nothing —
+  // Same officer, same slot: an idempotent no-op that records nothing -
   // the same discipline the tier and service-area toggles follow.
   if (reassigned && sameOfficer && !timeChanged) {
     return { viewing, changed: false };
@@ -393,7 +393,7 @@ export async function fileFieldReport(params: {
   }
 
   const existing = await db.fieldReport.findUnique({ where: { viewingId: params.viewingId } });
-  if (existing) throw new Error('a field report already exists for this viewing — corrections are new evidence, not edits');
+  if (existing) throw new Error('a field report already exists for this viewing - corrections are new evidence, not edits');
 
   return db.fieldReport.create({
     data: {
@@ -411,7 +411,7 @@ export async function fileFieldReport(params: {
 }
 
 /**
- * FR-5.3 — conducting the viewing. THE stage invariant. Refuses without a
+ * FR-5.3 - conducting the viewing. THE stage invariant. Refuses without a
  * field report, then writes the immutable introduction record and the
  * status change together.
  */
@@ -452,7 +452,7 @@ export async function conduct(params: { viewingId: string; fooPartyId: string; i
   });
 }
 
-/** FR-5.2 — no-shows are tracked, not deleted. */
+/** FR-5.2 - no-shows are tracked, not deleted. */
 export async function markNoShow(params: { viewingId: string; fooPartyId: string }) {
   const viewing = await db.viewing.findUnique({ where: { id: params.viewingId } });
   if (!viewing) throw new ViewingNotFoundError(params.viewingId);
@@ -467,13 +467,13 @@ export async function markNoShow(params: { viewingId: string; fooPartyId: string
  * ── The rules the state machine already decided ──
  * The transition graph allows requested/scheduled → cancelled and nothing
  * else out of those states; `conducted` is terminal, so a visit that
- * happened can never be retroactively "cancelled" — that record is the
+ * happened can never be retroactively "cancelled" - that record is the
  * circumvention evidence and it does not bend to anyone's convenience.
  * The cancelled row is kept, not deleted: the landlord's viewing activity
  * shows it as cancelled, which is the honest version of "nobody turned
  * up".
  *
- * The decision is the tenant's, so the audit trail carries the actor —
+ * The decision is the tenant's, so the audit trail carries the actor -
  * ops can distinguish a tenant's own cancellation from an officer's
  * no_show without guessing.
  */
@@ -507,10 +507,10 @@ export async function cancelViewing(params: { viewingId: string; tenantPartyId: 
 }
 
 /**
- * Operations cancels a viewing — the landlord-reported case. The owner
+ * Operations cancels a viewing - the landlord-reported case. The owner
  * says the home is let, or the arrangement fell through; the request must
  * leave the queue without rewriting history. The same frozen graph
- * applies (requested/scheduled only — a conducted visit is evidence), and
+ * applies (requested/scheduled only - a conducted visit is evidence), and
  * the audit detail names OPERATIONS as the actor so a tenant's own
  * cancellation and an ops cancellation stay distinguishable forever.
  */
@@ -580,7 +580,7 @@ export async function verifyListingFromVisit(params: {
 }
 
 /**
- * FR-5.3 / FR-8.3 — introduction records as queryable circumvention
+ * FR-5.3 / FR-8.3 - introduction records as queryable circumvention
  * evidence. Read directly, not through `deal`: the evidence exists
  * precisely for the case where no deal was ever created.
  */
@@ -606,7 +606,7 @@ export async function findIntroductions(filter: { fooPartyId?: string; listingId
  * activity", "prospective tenants").
  *
  * Read-only by design: scheduling and dispatch are House For Rent's
- * operational work (Decision 9 — company-conducted viewings), so the
+ * operational work (Decision 9 - company-conducted viewings), so the
  * landlord sees who is coming and what happened, and does not dispatch.
  * No phone numbers: the officer mediates contact (data minimisation).
  */

@@ -9,8 +9,8 @@ import { ApiAlert, shillings } from '@/app/ui';
 /**
  * One transition the SERVER says is currently available (F-007).
  *
- * Everything rendered here — the label, the consequence, the fields, whether
- * it moves money, whether it can be undone — arrives from
+ * Everything rendered here - the label, the consequence, the fields, whether
+ * it moves money, whether it can be undone - arrives from
  * `availableActions`. This component knows nothing about deals: it does not
  * know what `settle` means, which status permits it, or who may call it. It
  * renders what it is given and posts it back.
@@ -29,7 +29,7 @@ import { ApiAlert, shillings } from '@/app/ui';
  *
  * SANDBOX ADAPTATION: the reference used a server action; here the form
  * POSTs over real HTTP to /api/v1/deals/:id/{action} from the browser. The
- * page re-fetches on failure as well as success — the most likely rejection
+ * page re-fetches on failure as well as success - the most likely rejection
  * (409 ILLEGAL_TRANSITION) means a second operator acted first, so the stale
  * state must leave the screen either way.
  */
@@ -54,7 +54,7 @@ export function DealAction({
 
   /**
    * The concrete figure this action is about, when the server has one.
-   * Rendered from `financial`, never recomputed — the console does no
+   * Rendered from `financial`, never recomputed - the console does no
    * arithmetic on money.
    */
   const figure =
@@ -86,7 +86,7 @@ export function DealAction({
     const body: Record<string, string> = {};
     for (const [key, value] of data.entries()) {
       // `confirm` is the operator's acknowledgement checkbox. It is a UI
-      // safeguard against a mis-click, not a business field — the endpoints
+      // safeguard against a mis-click, not a business field - the endpoints
       // are strict about their bodies, so sending it would be a 400.
       if (key === 'confirm' || typeof value !== 'string') continue;
       const trimmed = value.trim();
@@ -106,7 +106,7 @@ export function DealAction({
         if (err.code === 'ILLEGAL_TRANSITION') {
           setError({
             message:
-              `${err.message} This deal is no longer in the state this page was showing — someone else has acted on it. The state above has been reloaded from the server.`,
+              `${err.message} This deal is no longer in the state this page was showing - someone else has acted on it. The state above has been reloaded from the server.`,
             code: err.code,
           });
         } else {
@@ -115,7 +115,7 @@ export function DealAction({
       } else {
         setError({
           message:
-            'Could not reach the House For Rent API. Nothing was changed — the deal is in whatever state the server last recorded.',
+            'Could not reach the House For Rent API. Nothing was changed - the deal is in whatever state the server last recorded.',
         });
       }
     } finally {
@@ -133,7 +133,7 @@ export function DealAction({
         )}
       </div>
 
-      {/* The server's own words for what happens. Not paraphrased here —
+      {/* The server's own words for what happens. Not paraphrased here -
           the backend owns the meaning of its transitions. */}
       <p className="muted">{action.consequence}</p>
 

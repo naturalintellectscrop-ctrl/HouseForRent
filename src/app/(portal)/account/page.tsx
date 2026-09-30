@@ -63,7 +63,7 @@ export default async function AccountPage() {
             <h2 className="h3">Verify your identity to request a viewing</h2>
           </div>
           <p className="muted">
-            We check who you are before you meet a landlord — that protection
+            We check who you are before you meet a landlord - that protection
             runs both ways, and it is why landlords accept our terms. It takes
             a minute and costs nothing.
           </p>
