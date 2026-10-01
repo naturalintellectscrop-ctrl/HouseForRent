@@ -990,3 +990,18 @@ Stage Summary:
 Unresolved issues or risks, and priority recommendations for the next phase:
 - Local dev DB: paste the validated Supabase pooler string into sandbox .env to restore local data-backed rendering (carried from Task 35); production needs nothing.
 - Standing items unchanged: Supabase Storage adapter for listing media (mock:// refs still 404 on live listings), payout dispatch, production-safe QA harness, freshness-window ops guidance, Search Console submission (owner action).
+---
+Task ID: 37
+Agent: web takeover agent (deployment convention decision)
+Task: Owner asked why pushes go to two branches, then chose between (1) instant publish and (2) approval-gated publish. Owner picked OPTION 1.
+
+Work Log:
+- Explained the dual-branch flow: every commit lands on main AND sandbox/webapp together; Vercel builds one Production deployment (live site) + one Preview deployment (unlisted mirror) per commit, same code.
+- Owner decision recorded: OPTION 1 - instant publish. Every change continues to ship to BOTH branches immediately after the verification gate (ESLint -> route probes -> agent-browser desktop+mobile screenshots). NO approval gate; the owner does not need to preview/authorize each round before it goes live.
+- This is now the standing deployment convention for all future rounds (including cron webDevReview agents): verify fully, then push main + sandbox/webapp in the same round, same commit.
+
+Stage Summary:
+- Deployment convention confirmed and recorded: verify -> commit -> push main + sandbox/webapp, every round, no waiting on owner approval.
+
+Unresolved issues or risks, and priority recommendations for the next phase:
+- None new. Standing items unchanged: Supabase Storage adapter for listing media, payout dispatch, production-safe QA harness, freshness-window ops guidance, Search Console submission (owner action), local .env pooler string.
