@@ -836,3 +836,21 @@ Unresolved issues or risks, and priority recommendations for the next phase:
 - DATABASE_URL credentials in Vercel remain unverified-in-place; if the site ships but data pages 500 with a prisma auth error, replace the value with the validated string (username with .yasuvswiocotmllhhpor ref suffix, no quotes, ?sslmode=require).
 - If the toggle refuses to turn off (dashboard variants), use the explicit value `.next` in the Output Directory field instead.
 - Standing next development items unchanged: Supabase Storage adapter for real listing media, payout dispatch, production-safe QA harness, freshness-window ops guidance.
+
+---
+Task ID: 31
+Agent: web takeover agent (post-toggle verification round)
+Task: Owner asked "I fixed it?" with a screenshot of houseforrentug.vercel.app showing Vercel's "This page doesn't exist" 404 page. Verify whether the fix landed and act accordingly.
+
+Work Log:
+- LIVE PROBES (05:56 UTC): GET / 404, /robots.txt 404, unsigned webhook POST 404 — every response carries x-vercel-error: NOT_FOUND AND the repo's own vercel.json security headers (X-Frame-Options: DENY, X-Content-Type-Options: nosniff, Referrer-Policy, Permissions-Policy camera/microphone/geolocation/payment). Those headers can only come from a deployment built from this repo, so a deployment IS aliased to the domain but contains zero routes — the hollow-deployment state persists exactly as diagnosed in Task 30. The screenshot is that same platform 404.
+- VERDICT: the fix has NOT taken effect yet. Exactly three possible reasons, all owner-side: (1) the Output Directory override toggle is still engaged — Task 30's screenshot showed it ON with the field emptied, and an enabled-but-empty override does NOT fall back to the framework default; (2) settings saved but Redeploy never triggered — dashboard changes never auto-deploy; (3) a redeploy ran and failed, leaving the old hollow deployment aliased and serving 404s.
+- REPO-SIDE HARDENING (this commit): vercel.json now pins "outputDirectory": ".next" — exact schema key spelling verified against 2efa53f:vercel.json (which carried the poisonous apps/web/.next). The moment the dashboard toggle goes OFF, the correct value applies from the repo with zero reliance on framework-default fallback. A dashboard-ON toggle still outranks vercel.json, which is why the toggle itself must go OFF or hold .next — no repo change can bypass it.
+- STATE CHECK: shim intact (@hfr/web → cd ../.. && npm run build), root scripts unchanged, local main = origin/main = origin/sandbox/webapp = b7dd07e before this commit.
+- VERIFICATION GATE: vercel.json parses (framework nextjs, outputDirectory .next, 2 header rules) · ESLint 0 · sandbox home 200 with full content (nav, hero, search, promise region, steps) · /properties 200 with 5+ interactive controls · no horizontal overflow at 412px and 1280px · dev.log clean.
+
+Stage Summary:
+- Production remains a hollow deployment; the single blocking action is owner-side and is two clicks: Settings → Build & Output Settings → Output Directory → turn the Override toggle OFF (or type `.next` into the field) → Save → then Deployments → Redeploy. Success fingerprints after Ready: / 200 with real data, robots.txt 200, unsigned webhook POST 401.
+- If the redeploy runs and fails, paste the first red line of the log; every remaining failure mode maps 1:1 to a named dashboard field.
+- DATABASE_URL reminder: the last build log showed the configured credentials rejected while the sandbox re-verified the owner's original string authenticates (SELECT 1 OK, 2098 neighbourhood rows). The Vercel value must be the validated pooler string (username postgres.yasuvswiocotmllhhpor, no quotes, no whitespace, ?sslmode=require) or the site ships but data pages 500.
+- Standing next development items unchanged: Supabase Storage adapter for real listing media, payout dispatch, production-safe QA harness, freshness-window ops guidance.
