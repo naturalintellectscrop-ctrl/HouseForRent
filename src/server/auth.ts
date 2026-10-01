@@ -227,7 +227,10 @@ export function homeFor(role: AuthRole): string {
     case 'foo':
       return '/ops/today';
     case 'admin':
-      return '/ops';
+      // Task 39: the platform role's home is the global control center, not
+      // the staff console. The console itself remains one click away and is
+      // still the field officers' landing surface.
+      return '/platform';
     default:
       return '/account';
   }
