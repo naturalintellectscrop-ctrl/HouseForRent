@@ -926,3 +926,27 @@ Unresolved issues or risks, and priority recommendations for the next phase:
 - Search Console submission is an owner action (needs the Google account); every technical prerequisite (sitemap, robots, canonicals, structured data) is now in place.
 - Listings appear in the sitemap only while inside the freshness window - with 0 fresh listings today the sitemap carries 7 static URLs; each officer availability re-confirmation adds that home back within the hour.
 - Standing next development items unchanged: Supabase Storage adapter for real listing media (fixture-free OG images already handle the current 404ing mock refs by exclusion), payout dispatch, production-safe QA harness, freshness-window ops guidance.
+
+---
+Task ID: 34-b
+Agent: web takeover agent (production SEO verification + pooler outage fix round)
+Task: Continuation of Task 34. Verify the SEO layer on production - which uncovered a live production database outage behind the SEO problems, diagnosed it, fixed it, and re-verified everything.
+
+Work Log:
+- PRODUCTION DEPLOY of 7bfd4be verified: new keyword title live (the old build's title literally showed the fixed duplication: "House For Rent | verified homes... · House For Rent"), robots.txt new policy, sitemap.xml 200 (7 static URLs - DB state honest), webhook still 401.
+- ANOMALY HUNTED: home + /properties + /areas + listing detail carried a bare <meta name="robots" content="noindex"/> BESIDES our index,follow - Google combines robots metas most-restrictive-wins, so the money pages were effectively noindexed. Source: Next's error-recovery injection (make-get-server-inserted-html) - the prod home HTML was actually an ERROR SHELL (<html id="__next_error__">, empty body, content chunk 13:E{digest}) with a 200 status.
+- ROOT CAUSE CHAIN: /api/v1/listings 500ed on prod under parallel bursts (sequential fine). Direct Supabase probes from the sandbox: DB healthy, but then even single queries failed with FATAL (EMAXCONNSESSION) max clients reached in SESSION mode - max clients limited to pool_size: 15. The owner's DATABASE_URL uses the pooler on port 5432 = SESSION mode: every warm Vercel lambda pins one of 15 server connections forever; worse, resolveNeighbourhoods (src/lib/api.ts) fanned out one parallel listing.count PER service-area neighbourhood (12 rows) per render - a few concurrent renders and the 15-client session pool was exhausted for everyone. Latent since go-live: sequential QA always passed; this round's burst probing exposed it.
+- FIX (29ba43e, pushed main + sandbox/webapp):
+  1. src/lib/db.ts hardenedDatasourceUrl(): runtime rewrite of Supabase-pooler URLs - port 5432 -> 6543 (transaction mode), + pgbouncer=true (Prisma drops session-bound prepared statements), + connection_limit=4 (bounded; 1 starves the app's legitimate parallel fetches), + sslmode=require if absent. Only touches pooler.supabase.com hosts - the owner's Vercel env value stays exactly as pasted.
+  2. src/lib/api.ts resolveNeighbourhoods(): the N+1 is dead - one grouped JOIN query (listing x property GROUP BY neighbourhood_id) replaces 12 parallel COUNTs; counts cross-checked per-area against the old per-row counts (Bugolobi 3, Ntinda 3, Kiwatule 3, Bukoto 2, Naalya 2, Kira 1 ... exact match on rendered chips).
+  3. Home, /properties, /areas: failed fetches now degrade to the honest empty state ("The marketplace could not be reached just now...") instead of escaping to the not-found boundary - no more 200-with-noindex soft error pages even in a worst-case outage.
+- VERIFICATION, ALL PASS: ESLint 0 · local parallel burst 22/22 x200 (was the original killer) · production burst round 1: 10/10 home + 8/8 API x200 (was 2/8 before the fix) · production burst round 2 (mixed pages): 10/10 x200 · zero __next_error__ shells · detail page canonical + RealEstateListing JSON-LD live · webhook 401 · robots+sitemap 200 · agent-browser desktop + 412px: correct titles, h1s, JSON-LD present, no horizontal overflow.
+
+Stage Summary:
+- Production is now stable under concurrency for the first time (session-pool exhaustion eliminated at the client layer), and the SEO layer is fully live and index-safe: no bare noindex on any indexable page, canonicals on the production domain, sitemap mirroring the feed, structured data on every money page.
+- Commits this round: 7bfd4be (SEO layer) + 29ba43e (pooler fix + degradation). Deployed head: 29ba43e.
+
+Unresolved issues or risks, and priority recommendations for the next phase:
+- OWNER: submit the sitemap in Google Search Console (https://houseforrentug.vercel.app/sitemap.xml) - every technical prerequisite is in place.
+- Watch the Supabase dashboard's pooler stats once real traffic arrives; if transaction-pool saturation ever reappears, the next lever is Supabase-side (pool size) or a direct-connection IPv6 path - the client layer is now correct.
+- Standing items unchanged: Supabase Storage adapter for listing media, payout dispatch, production-safe QA harness, freshness-window ops guidance (0 fresh listings today keeps the sitemap at 7 static URLs by design).
