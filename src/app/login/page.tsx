@@ -46,6 +46,14 @@ export default async function LoginPage(props: {
             </Link>{' '}
             - it takes a minute and costs nothing.
           </p>
+
+          {/* The owner's door is deliberate, discoverable, and grants nothing
+              by itself: it leads to the same authentication, and the control
+              center behind it refuses every non-platform role server-side. */}
+          <p className="muted" style={{ fontSize: '0.8125rem' }}>
+            Platform operator?{' '}
+            <Link href="/platform/login">Sign in to the control center</Link>
+          </p>
         </div>
       </div>
 

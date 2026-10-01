@@ -81,6 +81,14 @@ model Party {
   id           String      @id @default(uuid())
   displayName  String      @map("display_name")
   primaryPhone String      @unique @map("primary_phone")
+  /// ADDITIVE (platform-owner access, Task 39): optional email identifier,
+  /// applied to the live database with CREATE COLUMN IF NOT EXISTS + a unique
+  /// index — no pre-existing row is touched (same precedent as SavedListing,
+  /// Task 26). Nullable because phone remains the primary identity primitive;
+  /// sign-in resolves either identifier. No email is collected at self-service
+  /// registration in V1, so only provisioned accounts (the platform owner)
+  /// carry a value.
+  email        String?     @unique
   status       PartyStatus @default(active)
   createdAt    DateTime    @default(now()) @map("created_at")
   updatedAt    DateTime    @updatedAt @map("updated_at")

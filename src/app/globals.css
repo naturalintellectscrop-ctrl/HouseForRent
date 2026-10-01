@@ -3102,3 +3102,311 @@ a.card-link:hover .card-title {
     transition: border-color 160ms ease;
   }
 }
+
+/* ============================================================================
+   Platform Control Center (Task 39) - the owner's register.
+   A different register, the same product: every token is shared with the
+   rest of the app; what differs is the chrome (dark, dense, control-first)
+   and the boundary - this surface operates the platform, not an account.
+   ============================================================================ */
+
+/* ── The operator entry point ── */
+.plat-login {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 2rem 1rem;
+  background:
+    radial-gradient(120rem 60rem at 80% -10%, rgba(28, 185, 84, 0.07), transparent 55%),
+    var(--brand-ink);
+}
+.plat-login-card {
+  width: min(26.5rem, 100%);
+  background: #121917;
+  border: 1px solid #2a332f;
+  border-radius: var(--radius-lg);
+  padding: 2.25rem 1.75rem;
+  color: #f4f7f6;
+}
+.plat-login-mark {
+  width: 3.25rem;
+  height: 3.25rem;
+  border-radius: 11px;
+  background: #ffffff;
+  border: 1px solid #2a332f;
+  padding: 4px;
+  display: grid;
+  place-items: center;
+}
+.plat-login-mark img { width: 100%; height: 100%; object-fit: contain; }
+.plat-eyebrow {
+  font-size: 0.6875rem;
+  font-weight: 640;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  color: #a5aeaa;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.plat-eyebrow::before {
+  content: '';
+  width: 1.375rem;
+  height: 2px;
+  flex: none;
+  background: var(--brand-red);
+}
+.plat-login-title {
+  font-size: 1.625rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+.plat-login-sub { color: #cfd6d2; font-size: 0.9375rem; }
+.plat-login-card .label { color: #cfd6d2; }
+.plat-login-card .input {
+  background: #18211c;
+  border-color: #354039;
+  color: #f4f7f6;
+}
+.plat-login-card .input::placeholder { color: #6b7570; }
+.plat-login-note {
+  color: #8b968f;
+  font-size: 0.8125rem;
+  border-top: 1px solid #2a332f;
+  padding-top: 1rem;
+}
+
+/* ── The control-center shell ── */
+.plat-shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+}
+.plat-head {
+  background: var(--brand-ink);
+  color: #f4f7f6;
+  border-bottom: 1px solid #2a332f;
+  position: sticky;
+  top: 0;
+  z-index: 30;
+}
+.plat-head-inner {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  min-height: 4.25rem;
+  padding-block: 0.6rem;
+  flex-wrap: wrap;
+}
+.plat-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  text-decoration: none;
+  color: #f4f7f6;
+  flex: none;
+}
+.plat-brand-mark {
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 9px;
+  background: #ffffff;
+  border: 1px solid #2a332f;
+  padding: 3px;
+  flex: none;
+}
+.plat-brand-name {
+  display: block;
+  font-weight: 700;
+  font-size: 1.0625rem;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+}
+.plat-brand-sub {
+  display: block;
+  font-size: 0.6875rem;
+  color: #8b968f;
+  letter-spacing: 0.04em;
+}
+.plat-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.125rem;
+  flex-wrap: wrap;
+}
+.plat-nav a {
+  color: #c3cbc7;
+  text-decoration: none;
+  font-size: 0.9rem;
+  font-weight: 600;
+  padding: 0.4rem 0.65rem;
+  border-radius: 8px;
+}
+.plat-nav a:hover { color: #ffffff; background: #1a2420; }
+.plat-nav-sep {
+  width: 1px;
+  height: 1.25rem;
+  background: #2a332f;
+  margin: 0 0.35rem;
+}
+.plat-who {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+.plat-who-id { display: flex; flex-direction: column; line-height: 1.25; }
+.plat-who-name { font-size: 0.875rem; font-weight: 640; color: #f4f7f6; }
+.plat-who-role {
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: #1cb954;
+  font-weight: 700;
+}
+.plat-signout {
+  background: transparent;
+  border: 1px solid #354039;
+  color: #cfd6d2;
+  border-radius: 8px;
+  padding: 0.45rem 0.8rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.plat-signout:hover { border-color: #6b7570; color: #ffffff; }
+.plat-main { flex: 1; width: 100%; padding: 2.5rem 0 3.5rem; }
+
+.plat-foot {
+  margin-top: auto;
+  border-top: 1px solid var(--line);
+  background: color-mix(in srgb, var(--brand-ink) 4%, var(--bg));
+}
+.plat-foot-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-block: 1.1rem;
+  flex-wrap: wrap;
+}
+.plat-foot p { color: var(--ink-soft); font-size: 0.8125rem; max-width: 46rem; }
+.plat-foot a { color: var(--ink-soft); font-size: 0.8125rem; }
+.plat-foot a:hover { color: var(--ink); }
+
+/* ── Data surfaces ── */
+.plat-stats {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(2, 1fr);
+}
+@media (min-width: 48rem) {
+  .plat-stats { grid-template-columns: repeat(4, 1fr); }
+}
+.plat-stat {
+  background: var(--card, #ffffff);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md, 12px);
+  padding: 1.1rem 1.15rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.plat-stat-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.plat-stat-label { color: var(--ink-soft); font-size: 0.8125rem; }
+
+.plat-grid-2 {
+  display: grid;
+  gap: 1.25rem;
+  grid-template-columns: 1fr;
+}
+@media (min-width: 56rem) {
+  .plat-grid-2 { grid-template-columns: 1fr 1fr; }
+}
+.plat-section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+.plat-section-head .h2 { font-size: 1.0625rem; }
+.plat-section-link {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--accent);
+  text-decoration: none;
+}
+.plat-section-link:hover { text-decoration: underline; }
+
+.plat-kv { display: flex; flex-direction: column; }
+.plat-kv li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.9375rem;
+}
+.plat-kv li:last-child { border-bottom: 0; }
+
+.plat-feed { display: flex; flex-direction: column; gap: 0.45rem; }
+.plat-feed li {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  font-size: 0.9375rem;
+}
+.plat-feed-when {
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-soft);
+  font-size: 0.8125rem;
+  flex: none;
+}
+.plat-feed-note { margin-top: 0.85rem; font-size: 0.8125rem; }
+
+.plat-table-wrap { overflow-x: auto; }
+.plat-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+  min-width: 40rem;
+}
+.plat-table th {
+  text-align: left;
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-soft);
+  padding: 0.5rem 0.65rem;
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+.plat-table td {
+  padding: 0.55rem 0.65rem;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+.plat-table tbody tr:hover { background: color-mix(in srgb, var(--accent) 4%, transparent); }
+.plat-code {
+  font-size: 0.8125rem;
+  background: color-mix(in srgb, var(--ink) 5%, transparent);
+  border-radius: 6px;
+  padding: 0.1rem 0.35rem;
+}
+.plat-degraded { padding: 1.5rem; }
+
+/* Phones: the control center stays one column, the head wraps cleanly. */
+@media (max-width: 51.99rem) {
+  .plat-who { margin-left: 0; width: 100%; justify-content: space-between; }
+  .plat-main { padding: 1.75rem 0 2.5rem; }
+}
