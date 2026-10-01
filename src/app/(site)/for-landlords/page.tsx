@@ -1,15 +1,23 @@
 import Link from 'next/link';
 import { apiGet } from '@/lib/api';
+import { pageMetadata } from '@/lib/seo';
 import { Icon, PageIntro } from '@/app/ui';
 
 /* Commission figures come from live config versions - render per request. */
 export const dynamic = 'force-dynamic';
 
-export const metadata = {
-  title: 'For landlords',
+export const metadata = pageMetadata({
+  title: 'List Your Property - For Landlords in Kampala',
   description:
     'List your property with House For Rent. We verify the property, verify the tenant, hold the money in escrow, and take one commission only when someone moves in.',
-};
+  path: '/for-landlords',
+  keywords: [
+    'list property Kampala',
+    'letting agent Uganda',
+    'rent out my house Kampala',
+    'landlord commission Uganda',
+  ],
+});
 
 interface CommissionRate {
   rateBpOfMonth: number;

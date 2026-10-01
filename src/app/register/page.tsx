@@ -7,6 +7,9 @@ export const metadata = {
   title: 'Create an account',
   description:
     'Create a House For Rent account - free for tenants, free to list for landlords.',
+  // Utility page: crawlable (the directive must be visible) but not for
+  // the index - the marketplace content pages are what should rank.
+  robots: { index: false, follow: true },
 };
 
 export default async function RegisterPage(props: {

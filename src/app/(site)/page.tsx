@@ -2,6 +2,7 @@ import Link from 'next/link';
 import type { ListingPhoto } from '@/lib/contract';
 import { mediaUrl } from '@/lib/contract';
 import { apiGet, type Neighbourhood, type SearchResponse } from '@/lib/api';
+import { pageMetadata } from '@/lib/seo';
 import { Icon, PropertyCard, SectionHeader, TAGLINE } from '@/app/ui';
 
 /*
@@ -13,11 +14,19 @@ import { Icon, PropertyCard, SectionHeader, TAGLINE } from '@/app/ui';
  */
 export const dynamic = 'force-dynamic';
 
-export const metadata = {
-  title: 'House For Rent | verified homes to rent in Kampala',
+export const metadata = pageMetadata({
+  title: 'Verified Homes to Rent in Kampala & Wakiso',
   description:
     'Find your next home with ease. Every home is visited and confirmed in person by a House For Rent field officer before it reaches you. Free for tenants, in Kampala and Wakiso.',
-};
+  path: '/',
+  keywords: [
+    'houses for rent in Kampala',
+    'homes for rent Uganda',
+    'verified rentals Kampala',
+    'apartments to rent Wakiso',
+    'rent in Ntinda Kira Bugolobi',
+  ],
+});
 
 /**
  * The home page.

@@ -1,15 +1,23 @@
 import Link from 'next/link';
 import { apiGet, type Neighbourhood, type SearchResponse } from '@/lib/api';
+import { pageMetadata } from '@/lib/seo';
 import { Empty, Icon, PropertyCard } from '@/app/ui';
 
 /* Search results must reflect the live inventory - render per request. */
 export const dynamic = 'force-dynamic';
 
-export const metadata = {
-  title: 'Homes to rent',
+export const metadata = pageMetadata({
+  title: 'Homes to Rent in Kampala & Wakiso',
   description:
     'Verified homes to rent in Kampala and Wakiso. Every property visited in person by a House For Rent field officer.',
-};
+  path: '/properties',
+  keywords: [
+    'homes to rent Kampala',
+    'houses for rent Uganda',
+    'apartments for rent Kampala',
+    'single rooms for rent Kampala',
+  ],
+});
 
 type Params = Record<string, string | string[] | undefined>;
 

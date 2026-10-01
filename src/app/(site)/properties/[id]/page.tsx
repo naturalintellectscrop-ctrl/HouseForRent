@@ -2,6 +2,13 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ApiError, apiGet, type ListingDetail } from '@/lib/api';
 import {
+  absoluteUrl,
+  breadcrumbLd,
+  JsonLd,
+  realEstateListingLd,
+  type SeoListing,
+} from '@/lib/seo';
+import {
   daysAgo,
   FURNISHED_LABEL,
   Icon,
@@ -37,12 +44,42 @@ export async function generateMetadata({
     const l = await apiGet<ListingDetail>(`/v1/listings/${id}`, {
       revalidate: 60,
     });
+    const title = `${l.bedrooms}-bedroom ${TYPE_LABEL[l.propertyType]?.toLowerCase() ?? 'home'} in ${l.neighbourhoodName}`;
+    const description = `${shillings(l.monthlyRent)} a month. ${l.landmarkText}. Verified in person by a House For Rent field officer.`;
+
+    // The share image is the listing's own photography - only frames our
+    // system actually holds (never a development fixture), resolved
+    // against the site URL. With none, the brand cover rides instead.
+    const ogImages = l.photos
+      .filter((p) => !p.isDevelopmentFixture && p.url.startsWith('/'))
+      .slice(0, 5)
+      .map((p) => ({ url: absoluteUrl(p.url) }));
+
     return {
-      title: `${l.bedrooms}-bedroom ${TYPE_LABEL[l.propertyType]?.toLowerCase() ?? 'home'} in ${l.neighbourhoodName}`,
-      description: `${shillings(l.monthlyRent)} a month. ${l.landmarkText}. Verified in person by a House For Rent field officer.`,
+      title,
+      description,
+      alternates: { canonical: `/properties/${id}` },
+      openGraph: {
+        type: 'website' as const,
+        siteName: 'House For Rent',
+        locale: 'en_UG',
+        url: `/properties/${id}`,
+        title,
+        description,
+        images: ogImages.length > 0 ? ogImages : undefined,
+      },
+      twitter: {
+        card: 'summary_large_image' as const,
+        title,
+        description,
+        images: ogImages.length > 0 ? ogImages.map((i) => i.url) : undefined,
+      },
     };
   } catch {
-    return { title: 'Home not found' };
+    return {
+      title: 'Home not found',
+      robots: { index: false, follow: false },
+    };
   }
 }
 
@@ -88,6 +125,26 @@ export default async function PropertyPage({
   const confirmed = daysAgo(listing.daysSinceConfirmed);
   const isFixture = listing.photos.some((p) => p.isDevelopmentFixture);
 
+  const seoTitle = `${listing.bedrooms}-bedroom ${(
+    TYPE_LABEL[listing.propertyType] ?? 'home'
+  ).toLowerCase()} in ${listing.neighbourhoodName}`;
+  const seoListing: SeoListing = {
+    listingId: listing.listingId,
+    monthlyRent: listing.monthlyRent,
+    bedrooms: listing.bedrooms,
+    bathrooms: listing.bathrooms,
+    propertyType: listing.propertyType,
+    neighbourhoodName: listing.neighbourhoodName,
+    landmarkText: listing.landmarkText,
+    descriptionText: listing.descriptionText,
+    isVerified: listing.isVerified,
+    isStale: listing.isStale,
+    geoLat: listing.geoLat,
+    geoLng: listing.geoLng,
+    amenities: listing.amenities,
+    photos: listing.photos,
+  };
+
   const viewingHref = signedIn
     ? `/account/viewings/new?listingId=${listing.listingId}`
     : `/register?role=tenant&next=${encodeURIComponent(
@@ -96,6 +153,20 @@ export default async function PropertyPage({
 
   return (
     <div className="page section">
+      {/* Structured data: the listing as a schema.org RealEstateListing, and
+          the trail to it. Crawlers get the price, location and availability
+          in machine-readable form - the same facts the page asserts. */}
+      <JsonLd
+        data={[
+          realEstateListingLd(seoListing, seoTitle),
+          breadcrumbLd([
+            { name: 'Home', path: '/' },
+            { name: 'Homes to rent', path: '/properties' },
+            { name: seoTitle, path: `/properties/${listing.listingId}` },
+          ]),
+        ]}
+      />
+
       <p style={{ marginBottom: '1.25rem' }}>
         <Link href="/properties" className="btn btn-ghost btn-sm">
           ← All homes
