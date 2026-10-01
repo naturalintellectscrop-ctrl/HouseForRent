@@ -816,3 +816,23 @@ Unresolved issues or risks, and priority recommendations for the next phase:
 - Then Redeploy. Success fingerprints: robots.txt 200, home 200 with real data (2,102 properties in DB), unsigned webhook POST 401.
 - If the next log still fails, paste the first red line; every remaining failure mode now maps 1:1 to a named dashboard field.
 - Standing next development items unchanged: Supabase Storage adapter for real listing media, payout dispatch, production-safe QA harness, freshness-window ops guidance.
+
+---
+Task ID: 30
+Agent: web takeover agent (override-toggle round)
+Task: Owner reported "still error" with two screenshots: the Vercel Build and Deployment settings page and the live site showing a platform 404.
+
+Work Log:
+- SCREENSHOT 1 READ (vercel.com/intellects/houseforrent/settings/build-and-deployment, Hobby plan): Framework Preset Next.js; Build Command override ON with `npm run build --workspace @hfr/web`; Output Directory override ON with the field EMPTIED (placeholder "Next.js default" showing); Install Command override ON with `npm ci`; Development Command off. The owner deleted the apps/web/.next value but left the Override toggle engaged.
+- SCREENSHOT 2 + LIVE PROBES (houseforrentug.vercel.app): GET / 404, /robots.txt 404, /site/keys.jpg 404, /login 404, /api/v1/listings 404, x-vercel-error: NOT_FOUND. The OLD v0 deployment (which served /login 200 and 500s elsewhere) is GONE, replaced by a hollow deployment with no routes. Diagnosis: an Output Directory override that is toggled ON with an empty value does NOT fall back to the framework default; Vercel collected no usable output and shipped a deployment that 404s on every path.
+- FIX DETERMINED (one toggle): turn the Output Directory Override toggle OFF entirely so the Next.js framework default (.next) applies. Build Command and Install Command overrides stay exactly as they are: the 17:42 log proved that exact combination builds successfully end-to-end (shim → root Turbopack build → all routes emitted); the only defect was the output directory. Alternative equivalent: keep the toggle ON and type `.next` into the field. After Save → Redeploy.
+- DATABASE_URL reminder included in the owner message: the last build log showed the configured credentials rejected ("credentials for `postgres` are not valid") while the sandbox re-verified the owner's original string authenticates (SELECT 1 OK, 2098 neighbourhood rows). The Vercel value still needs to match the validated pooler string exactly.
+- No code changes; worklog-only commit pushed to main + sandbox/webapp as naturalintellectsltd@gmail.com.
+
+Stage Summary:
+- The deployment pipeline is proven up to output collection; the sole build-blocking defect is the Output Directory Override toggle state. Success fingerprints after the fix: / 200 with real data (pending valid DATABASE_URL), robots.txt 200, unsigned webhook 401.
+
+Unresolved issues or risks, and priority recommendations for the next phase:
+- DATABASE_URL credentials in Vercel remain unverified-in-place; if the site ships but data pages 500 with a prisma auth error, replace the value with the validated string (username with .yasuvswiocotmllhhpor ref suffix, no quotes, ?sslmode=require).
+- If the toggle refuses to turn off (dashboard variants), use the explicit value `.next` in the Output Directory field instead.
+- Standing next development items unchanged: Supabase Storage adapter for real listing media, payout dispatch, production-safe QA harness, freshness-window ops guidance.
