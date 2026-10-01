@@ -6,6 +6,9 @@ import { Brand } from '@/app/ui';
 export const metadata = {
   title: 'Sign in',
   description: 'Sign in to House For Rent.',
+  // An auth page has nothing to say to a search result page: keep it
+  // crawlable (so the directive is visible) but out of the index.
+  robots: { index: false, follow: true },
 };
 
 export default async function LoginPage(props: {

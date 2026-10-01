@@ -1,7 +1,16 @@
 import Link from 'next/link';
+import type { Metadata } from 'next';
 import { requireStaff } from '@/lib/session';
 import { Brand } from '@/app/ui';
 import { SiteFooter } from '@/app/site-chrome';
+
+/*
+ * The staff console is internal tooling on live operational data - the
+ * entire group stays out of every search index.
+ */
+export const metadata: Metadata = {
+  robots: { index: false, follow: false },
+};
 
 /**
  * The operations console shell.

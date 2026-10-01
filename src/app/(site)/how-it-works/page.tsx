@@ -1,11 +1,19 @@
 import Link from 'next/link';
 import { Icon, PageIntro } from '@/app/ui';
+import { pageMetadata } from '@/lib/seo';
 
-export const metadata = {
-  title: 'How it works',
+export const metadata = pageMetadata({
+  title: 'How It Works - Verified Rentals, Step by Step',
   description:
     'Verification, viewings, escrow and move-in: how a House For Rent tenancy actually happens, step by step.',
-};
+  path: '/how-it-works',
+  keywords: [
+    'renting process Uganda',
+    'how to rent a house in Kampala',
+    'rent escrow Uganda',
+    'verified rentals',
+  ],
+});
 
 /*
  * The process, in plain language.

@@ -1,15 +1,23 @@
 import Link from 'next/link';
 import { apiGet, type Neighbourhood } from '@/lib/api';
+import { pageMetadata } from '@/lib/seo';
 import { Empty, Icon, PageIntro } from '@/app/ui';
 
 /* Service-area coverage changes when ops edits neighbourhoods - render per request. */
 export const dynamic = 'force-dynamic';
 
-export const metadata = {
-  title: 'Areas we cover',
+export const metadata = pageMetadata({
+  title: 'Areas We Cover in Kampala & Wakiso',
   description:
     'The neighbourhoods House For Rent currently covers in Kampala and Wakiso, and how many verified homes each has right now.',
-};
+  path: '/areas',
+  keywords: [
+    'Kampala neighbourhoods',
+    'rentals by area Kampala',
+    'Ntinda rentals',
+    'homes to rent Wakiso',
+  ],
+});
 
 /**
  * The service-area directory.

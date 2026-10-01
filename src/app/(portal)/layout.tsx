@@ -1,7 +1,16 @@
 import Link from 'next/link';
+import type { Metadata } from 'next';
 import { Brand, Icon } from '@/app/ui';
 import { SiteFooter } from '@/app/site-chrome';
 import { currentRole, homeFor, requireRole } from '@/lib/session';
+
+/*
+ * Signed-in, per-user application state. No portal page has any business
+ * in a search index - one directive here covers the whole group.
+ */
+export const metadata: Metadata = {
+  robots: { index: false, follow: false },
+};
 
 /*
  * The portal's link set lives here once. It used to exist twice (desktop

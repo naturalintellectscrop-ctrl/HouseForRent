@@ -1,11 +1,14 @@
 import Link from 'next/link';
 import { CONTACT, Icon, PageIntro } from '@/app/ui';
+import { pageMetadata } from '@/lib/seo';
 
-export const metadata = {
-  title: 'Contact',
+export const metadata = pageMetadata({
+  title: 'Contact House For Rent in Kampala',
   description:
     'Call, WhatsApp or email House For Rent in Kampala. A person answers.',
-};
+  path: '/contact',
+  keywords: ['contact House For Rent', 'rental help Kampala', 'letting agent contact Uganda'],
+});
 
 /*
  * Why there is no contact form: a form that posts nowhere is worse than no

@@ -1,11 +1,14 @@
 import Link from 'next/link';
 import { PageIntro } from '@/app/ui';
+import { pageMetadata } from '@/lib/seo';
 
-export const metadata = {
-  title: 'About',
+export const metadata = pageMetadata({
+  title: 'About House For Rent & Natural Intellects Ltd',
   description:
     'House For Rent is operated by Natural Intellects Ltd in Kampala. Why we verify every property in person, and what that costs us.',
-};
+  path: '/about',
+  keywords: ['about House For Rent', 'Natural Intellects Ltd', 'verified rentals Kampala'],
+});
 
 /*
  * What is not on this page: no founding date we have not checked, no
