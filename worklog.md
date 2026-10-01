@@ -854,3 +854,30 @@ Stage Summary:
 - If the redeploy runs and fails, paste the first red line of the log; every remaining failure mode maps 1:1 to a named dashboard field.
 - DATABASE_URL reminder: the last build log showed the configured credentials rejected while the sandbox re-verified the owner's original string authenticates (SELECT 1 OK, 2098 neighbourhood rows). The Vercel value must be the validated pooler string (username postgres.yasuvswiocotmllhhpor, no quotes, no whitespace, ?sslmode=require) or the site ships but data pages 500.
 - Standing next development items unchanged: Supabase Storage adapter for real listing media, payout dispatch, production-safe QA harness, freshness-window ops guidance.
+
+---
+Task ID: 32
+Agent: web takeover agent (production-live verification round)
+Task: Owner asked "I fixed it?" with a platform-404 screenshot; Task 31 had pinned outputDirectory in vercel.json and re-triggered a deployment. Verify whether production recovered.
+
+Work Log:
+- FINGERPRINT POLL: 06:02 UTC still hollow (home/robots 404) → 06:03:53 UTC FLIP: home 200, robots.txt 200. The owner's dashboard fix (Output Directory override toggle OFF / `.next`) plus the push-triggered deployment (19cc45b) produced the first healthy production build. The hollow deployment is gone.
+- FULL PRODUCTION VERIFICATION SUITE, ALL PASS:
+  - GET / → 200, real content ("House For Rent", "Find your next home", "Recently confirmed"), full security-header set from vercel.json, x-matched-path: /, x-vercel-cache: MISS.
+  - /robots.txt → 200 with correct per-bot policy body.
+  - /properties → 200 (39 KB, DB-backed render) → the DATABASE_URL configured in Vercel now authenticates; the earlier "credentials not valid" prisma error is resolved in production.
+  - /login 200, /how-it-works 200, /about 200.
+  - Unsigned webhook POST → 401 {"error":"INVALID_SIGNATURE"} at the REAL path /api/v1/payments/nylonpay/webhook (note: the Task 30/31 "webhook 401" fingerprint refers to this path; probing /api/webhooks/nylonpay is a wrong-path 404, not a regression).
+  - agent-browser on https://houseforrentug.vercel.app/ → correct title, h1 rendered, 21 main links, no horizontal overflow.
+- Correction to prior worklog phrasing: the success-fingerprint webhook path is /api/v1/payments/nylonpay/webhook; the summary shorthand "/api/webhooks/nylonpay" was a misnomer.
+- No code changes this round; worklog-only commit pushed to main + sandbox/webapp as naturalintellectsltd@gmail.com.
+
+Stage Summary:
+- houseforrentug.vercel.app is LIVE on the full product build with the production Supabase database connected and the payment webhook armed. The three-round deployment saga (No workspaces found → routes-manifest not found → hollow deployment) is closed end-to-end.
+- Deployed head: 19cc45b (outputDirectory pinned in vercel.json; shim + turbopack.root + lockfiles in place).
+
+Unresolved issues or risks, and priority recommendations for the next phase:
+- Listing imagery still points at mock:// refs (404 in production) — next dev item: Supabase Storage adapter to serve real media.
+- Payout dispatch (release/refund → Nylon Pay payout API) remains unimplemented.
+- Production-safe QA harness and freshness-window ops guidance remain open.
+- Monitor first production traffic for runtime errors; watch for 500s on any data page (would indicate an env-var scope issue, e.g. a var missing in one environment).
