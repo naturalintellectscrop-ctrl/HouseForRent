@@ -609,7 +609,9 @@ legend {
   display: flex;
   align-items: center;
   gap: 1rem;
-  min-height: 4rem;
+  /* Sized for the enlarged brand mark below - the mark, not the padding,
+     sets the header's height now. */
+  min-height: 4.5rem;
 }
 
 .brand {
@@ -633,6 +635,22 @@ legend {
   background: #ffffff;
   border: 1px solid var(--line);
   padding: 2px;
+}
+/* The two surfaces where the brand LEADS the screen - the site header and
+   the site footer - carry the mark at 48px (up from the shared 28px utility
+   size), with the wordmark and gap stepped up to match. Every other Brand
+   use (auth asides, portal chrome, ops) keeps the compact size. */
+.site-head .brand-mark,
+.site-foot .brand-mark {
+  width: 3rem;
+  height: 3rem;
+  border-radius: 12px;
+  padding: 4px;
+}
+.site-head .brand,
+.site-foot .brand {
+  font-size: 1.25rem;
+  gap: 0.65rem;
 }
 .brand-tagline {
   display: flex;
@@ -1871,12 +1889,47 @@ a.list-item:hover {
  * Colours inside are deliberately fixed light-on-ink rather than tokenised:
  * mode tokens exist for surfaces that flip between light and dark, and
  * this panel is identical in both - that is what a brand block is.
+ *
+ * ── The photograph ──
+ * The band sits on the corridor photograph from the about page
+ * (/site/about-area.jpg, the Kampala/Wakiso panorama) under an ink scrim.
+ * The scrim is not decoration: the sky in that photo peaks near-white, and
+ * the panel's secondary text only holds WCAG AA over it where the wash is
+ * ~0.9 of brand ink. So the wash runs 0.93 where the copy sits (left on
+ * wide screens, top on phones) and eases to 0.55 at the far edge, where
+ * nothing but the opaque listing card and breathing room live - there the
+ * photo shows through at nearly half strength and the place we actually
+ * cover is unmistakable. If the image ever fails to load, background-color
+ * degrades to the plain ink band this panel has always been.
  */
 .hero-panel {
-  background: var(--brand-ink);
+  background:
+    linear-gradient(
+      90deg,
+      rgba(14, 20, 18, 0.93) 0%,
+      rgba(14, 20, 18, 0.9) 55%,
+      rgba(14, 20, 18, 0.55) 100%
+    ),
+    url('/site/about-area.jpg') center 55% / cover no-repeat;
+  background-color: var(--brand-ink);
   color: #f4f7f6;
   border-block: 1px solid #2a332f;
   padding: 3rem 0 3.5rem;
+}
+/* On a phone the copy runs the full width, so the same protection has to
+   come vertically: dark over the copy, lighter over the card at the foot
+   of the band. */
+@media (max-width: 51.99rem) {
+  .hero-panel {
+    background:
+      linear-gradient(
+        180deg,
+        rgba(14, 20, 18, 0.93) 0%,
+        rgba(14, 20, 18, 0.9) 60%,
+        rgba(14, 20, 18, 0.6) 100%
+      ),
+      url('/site/about-area.jpg') center 55% / cover no-repeat;
+  }
 }
 @media (min-width: 52rem) {
   .hero-panel {
@@ -1896,10 +1949,13 @@ a.list-item:hover {
   color: var(--ink);
 }
 .hero-panel .lede {
-  color: #a5aeaa;
+  /* Lifted from the flat-panel grey: over a photograph that carries a
+     near-white sky, the old #a5aeaa could dip below AA. #cfd6d2 clears 4.5:1
+     under the 0.9 wash even against the brightest pixel in the crop. */
+  color: #cfd6d2;
 }
 .hero-panel .faint {
-  color: #7e8883;
+  color: #b5bdb8;
 }
 .hero-panel .input {
   background: #18211c;
