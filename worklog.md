@@ -881,3 +881,22 @@ Unresolved issues or risks, and priority recommendations for the next phase:
 - Payout dispatch (release/refund → Nylon Pay payout API) remains unimplemented.
 - Production-safe QA harness and freshness-window ops guidance remain open.
 - Monitor first production traffic for runtime errors; watch for 500s on any data page (would indicate an env-var scope issue, e.g. a var missing in one environment).
+
+---
+Task ID: 33
+Agent: web takeover agent (real imagery + full-bleed round)
+Task: Owner direction after go-live: (1) the Vercel Output Directory toggle "cannot be toggled off when there's nothing written" — declared moot, see below; (2) replace every AI-generated image with real online photos, of Black people mostly; (3) the live site reads width-confined — make it full screen and truly responsive.
+
+Work Log:
+- TOGGLE: no action required. Production went healthy at 06:03 UTC with the dashboard toggle still ON-empty, proving the repo's vercel.json "outputDirectory": ".next" pin (19cc45b) now drives output collection. Owner told to leave the dashboard exactly as it is.
+- IMAGE SOURCING (the z-ai image-search upstream service is down — consistent 400/429 from reader.psmoe.com — so a verified-sources pipeline was built instead): Wikimedia Commons API search (keyless, CC-licensed) + Unsplash direct URLs; ~30 candidates downloaded, every single one VISUALLY INSPECTED with the Read tool; wrong subjects (white stock portraits from misremembered IDs, politician/diplomat photos, military vet sets, poverty-tone documentary shots, a toy house, a punk with a key earring) all rejected. Final 9 are real photographs: 7 from Wikimedia Commons (Kampala from the old mosque aerial panorama; Kampala city view; Ntinda residential street; Kololo apartment blocks; a modern compound home in Uganda; two portraits of Ugandan women from the CC-licensed Art+Feminism Uganda 2025 photo set) + 2 from Unsplash (hand signing a document; hand holding house keys at a door lock).
+- DEPLOYMENT OF ASSETS: same-filename overwrite in public/site/ (about-area, cta-band, officer-visit, landlord-hero, verify-visit, viewing, signing, keys, support) so zero code churn for the swaps themselves; sharp (already in node_modules) resized/compressed each to <=1600px, mozjpeg q80, all now 80-230 KB (was 96-213 KB AI output).
+- HONESTY GUARD: alt texts rewritten to describe what is actually shown; every "Illustration of..." figcaption replaced with a truthful caption (e.g. "The visit every listing starts with happens on streets like this one..."); objectPosition tuning ('50% 32%' landlord hero portrait, '62% center' Ntinda street pano) keeps faces and streets in frame under the fixed aspect-ratio cover crops.
+- FULL-BLEED LAYOUT: --page widened 74rem -> 88rem; home hero restructured from a rounded inset card inside .section/.page into a full-bleed ink band (<section className="hero-panel"> wrapping .page > .hero, border-block hairline, vertical-only padding 3/5.5rem, .hero capped at 80rem centered). Proof strip and sunk bands were already edge-to-edge; every boxed band now widens with the container.
+- VERIFICATION GATE: ESLint 0 · all five touched pages 200 (/, /about, /for-landlords, /how-it-works, /contact) · dev.log clean · hero-panel measured exactly 1920px = viewport at 1920x1080 and 412px = viewport at 412x917 (panelFullBleed:true, no horizontal overflow anywhere) · all lazy figures confirmed loaded after scroll-through · screenshots reviewed: desktop hero, landlord hero portrait framing, about cityscape, contact aside.
+- Stage Summary: the marketing surface is now 100% real photography, people-forward where frames are human (landlord hero, contact support), real Kampala places where frames narrate the process (streets, blocks, homes, keys, signatures), and the opening screen is a full-bleed ink band on every viewport. Committed and pushed to main + sandbox/webapp; push auto-triggers the production deployment.
+
+Unresolved issues or risks, and priority recommendations for the next phase:
+- The two people portraits come from the Wikimedia Commons Art+Feminism Uganda 2025 set (CC license); attribution should ride along in a CREDITS file if the owner wants strict license hygiene.
+- The endgame for listing media remains real officer photographs in Supabase Storage (mock:// refs still 404 on live listings) — marketing imagery is now real, but listing media still needs the Storage adapter.
+- Payout dispatch, production-safe QA harness, freshness-window ops guidance: unchanged, still open.

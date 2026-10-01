@@ -88,7 +88,7 @@
   --font-mono: var(--font-geist-mono), ui-monospace, monospace;
 
   --measure: 34rem;
-  --page: 74rem;
+  --page: 88rem;
 }
 
 /*
@@ -1836,6 +1836,8 @@ a.list-item:hover {
   display: grid;
   gap: 2.5rem;
   align-items: center;
+  max-width: 80rem;
+  margin-inline: auto;
 }
 @media (min-width: 62rem) {
   .hero {
@@ -1864,8 +1866,8 @@ a.list-item:hover {
 }
 
 /*
- * The reference's hero sits on a dark rounded panel; ours sits on the
- * brand ink (the same register as the footer and the landlord panel).
+ * The hero is a full-bleed ink band: it runs edge to edge on every screen
+ * so the opening screen never reads as a boxed card floating in white.
  * Colours inside are deliberately fixed light-on-ink rather than tokenised:
  * mode tokens exist for surfaces that flip between light and dark, and
  * this panel is identical in both - that is what a brand block is.
@@ -1873,13 +1875,12 @@ a.list-item:hover {
 .hero-panel {
   background: var(--brand-ink);
   color: #f4f7f6;
-  border: 1px solid #2a332f;
-  border-radius: var(--radius-lg);
-  padding: 2.25rem 1.5rem;
+  border-block: 1px solid #2a332f;
+  padding: 3rem 0 3.5rem;
 }
 @media (min-width: 52rem) {
   .hero-panel {
-    padding: 4.5rem 3.5rem;
+    padding: 5.5rem 0 6.5rem;
   }
 }
 .hero-panel .display {
