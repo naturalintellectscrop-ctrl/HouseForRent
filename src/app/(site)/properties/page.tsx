@@ -70,12 +70,29 @@ export default async function PropertiesPage({
   query.set('limit', '24');
   if (offset > 0) query.set('offset', String(offset));
 
-  const [feed, taxonomy] = await Promise.all([
-    apiGet<SearchResponse>(`/v1/listings?${query}`, { revalidate: 30 }),
-    apiGet<{ neighbourhoods: Neighbourhood[] }>('/v1/neighbourhoods', {
-      revalidate: 300,
-    }),
-  ]);
+  // Same contract as the homepage: a failed fetch shows the honest empty
+  // state, never the not-found shell (a 200-with-noindex page would tell
+  // Google the search page does not exist).
+  let feed: SearchResponse;
+  let taxonomy: { neighbourhoods: Neighbourhood[] };
+  try {
+    [feed, taxonomy] = await Promise.all([
+      apiGet<SearchResponse>(`/v1/listings?${query}`, { revalidate: 30 }),
+      apiGet<{ neighbourhoods: Neighbourhood[] }>('/v1/neighbourhoods', {
+        revalidate: 300,
+      }),
+    ]);
+  } catch {
+    feed = {
+      results: [],
+      totalCount: 0,
+      limit: 24,
+      offset: 0,
+      emptyStateMessage:
+        'The marketplace could not be reached just now. Please refresh in a moment.',
+    };
+    taxonomy = { neighbourhoods: [] };
+  }
 
   const areas = taxonomy.neighbourhoods.filter((n) => n.liveListingCount > 0);
   const shown = feed.offset + feed.results.length;
