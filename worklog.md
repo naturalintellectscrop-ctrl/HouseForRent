@@ -796,3 +796,23 @@ Unresolved issues or risks, and priority recommendations for the next phase:
 - If the deployment still fails, the log's first red line now maps 1:1 to a dashboard field; paste it back.
 - Success fingerprints unchanged: robots.txt 200, unsigned webhook POST 401, home 200 with real data (once DATABASE_URL is live).
 - Standing next development items: Supabase Storage adapter for real listing media (mock:// refs 404), payout dispatch (release/refund → provider payout API), production-safe QA harness, freshness-window ops guidance.
+
+---
+Task ID: 29
+Agent: web takeover agent (output-directory diagnosis round)
+Task: Owner pasted the newest Vercel log after the Task-28 shim commit (2b52789). Diagnose the remaining failure.
+
+Work Log:
+- THE SHIM WORKED: the log shows `npm run build --workspace @hfr/web` resolving to @hfr/web@0.0.0 → `cd ../.. && npm run build` → root next build → "Compiled successfully in 17.8s" → all 60+ routes emitted → build phase completed. The three-round-old "No workspaces found" blocker is gone for good. The deployment now fails AFTER the build: "The file /vercel/path0/apps/web/.next/routes-manifest.json couldn't be found" — Vercel's own error text names the cause: "The Output Directory setting in your project is misconfigured". This confirms the Task-28 prediction: the dashboard carries the v0 outputDirectory override `apps/web/.next` (recovered verbatim from 2efa53f:vercel.json), so the builder looks for the Next output inside the old monorepo folder while our build (correctly) produces `.next` at the repo root. Repo-side mitigation deliberately REJECTED: copying/symlinking .next into apps/web or moving distDir would gamble on @vercel/next internals (trace re-anchoring, public/ location) with a silent-breakage tail risk; one dashboard field is the certain fix.
+- DATABASE_URL DISCOVERY: the build log contains two non-fatal prisma:error lines during static generation: "Authentication failed against database server, the provided database credentials for `postgres` are not valid." Proves (1) a DATABASE_URL IS now configured in Vercel (answers the open Task-28 question), and (2) its value is NOT the string the owner supplied. Verification from the sandbox with the exact .env string: SELECT 1 OK + neighbourhood.count() = 2098 — the Supabase project is up and those credentials are valid RIGHT NOW. Conclusion: the value in Vercel differs (mangled paste, quotes/whitespace, wrong username format, or a different password). Also proved the build is resilient to DB failure: the build completed despite the auth errors (routes bail to dynamic) — build-time DB unavailability cannot fail deployments.
+- NO CODE CHANGES this round (nothing to fix in the repo; the remaining defects are two dashboard fields). Worklog-only commit pushed to main + sandbox/webapp as naturalintellectsltd@gmail.com.
+
+Stage Summary:
+- The build pipeline is fully proven on Vercel's own machine: install, prisma generate, Turbopack compile, route emission all pass. Exactly two dashboard fields separate this project from a live deployment: Output Directory override (apps/web/.next) must be cleared, and DATABASE_URL must hold the validated pooler string.
+
+Unresolved issues or risks, and priority recommendations for the next phase:
+- OWNER ACTION 1: Settings → Build & Output Settings → Output Directory → clear the override (remove apps/web/.next, leave empty). Build Command override may stay (the shim satisfies it) but clearing both is cleaner.
+- OWNER ACTION 2: Settings → Environment Variables → DATABASE_URL → replace with the validated string: postgresql://postgres.yasuvswiocotmllhhpor:<password>@aws-0-eu-central-1.pooler.supabase.com:5432/postgres?sslmode=require (username MUST carry the .yasuvswiocotmllhhpor ref suffix; no quotes; no surrounding whitespace). The publishable key stays unused; every other env var untouched.
+- Then Redeploy. Success fingerprints: robots.txt 200, home 200 with real data (2,102 properties in DB), unsigned webhook POST 401.
+- If the next log still fails, paste the first red line; every remaining failure mode now maps 1:1 to a named dashboard field.
+- Standing next development items unchanged: Supabase Storage adapter for real listing media, payout dispatch, production-safe QA harness, freshness-window ops guidance.
