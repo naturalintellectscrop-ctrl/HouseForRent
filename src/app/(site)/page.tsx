@@ -116,86 +116,84 @@ export default async function HomePage() {
 
   return (
     <div className="stagger">
-      {/* ── hero ─────────────────────────────────────────────────────── */}
-      <section className="section">
+      {/* ── hero (full-bleed ink band) ─────────────────────────────── */}
+      <section className="hero-panel">
         <div className="page">
-          <div className="hero-panel">
-            <div className="hero">
-              <div className="hero-copy stack">
-                <h1 className="display">{TAGLINE}</h1>
-                <p className="lede">
-                  We do not publish a listing until one of our field officers
-                  has visited the property, photographed it, and confirmed
-                  with the landlord that it is genuinely available. Searching,
-                  viewing and renting are free for tenants.
+          <div className="hero">
+            <div className="hero-copy stack">
+              <h1 className="display">{TAGLINE}</h1>
+              <p className="lede">
+                We do not publish a listing until one of our field officers
+                has visited the property, photographed it, and confirmed
+                with the landlord that it is genuinely available. Searching,
+                viewing and renting are free for tenants.
+              </p>
+
+              <form
+                action="/properties"
+                className="hero-search"
+                role="search"
+              >
+                <label className="sr-only" htmlFor="q">
+                  Search by neighbourhood or landmark
+                </label>
+                <input
+                  id="q"
+                  name="q"
+                  type="search"
+                  className="input"
+                  placeholder="Ntinda, Kira, Bugolobi…"
+                  autoComplete="off"
+                  list="home-areas"
+                />
+                {/* The same names the marketplace's own search offers - not
+                    a second list that could drift from what search actually
+                    knows. Only areas with live homes, for the same reason
+                    the home page's picker filters to live areas. */}
+                <datalist id="home-areas">
+                  {areas.map((a) => (
+                    <option key={a.id} value={a.name} />
+                  ))}
+                </datalist>
+                <button type="submit" className="btn btn-primary">
+                  Search homes
+                </button>
+              </form>
+
+              <div className="row-between" style={{ maxWidth: '30rem' }}>
+                <p className="faint" style={{ fontSize: '0.875rem' }}>
+                  {feed.totalCount === 0
+                    ? 'Verification is under way in the first corridor.'
+                    : `${feed.totalCount} verified ${
+                        feed.totalCount === 1 ? 'home' : 'homes'
+                      } available right now.`}
                 </p>
-
-                <form
-                  action="/properties"
-                  className="hero-search"
-                  role="search"
+                <Link
+                  href="/how-it-works"
+                  className="btn btn-secondary btn-sm"
                 >
-                  <label className="sr-only" htmlFor="q">
-                    Search by neighbourhood or landmark
-                  </label>
-                  <input
-                    id="q"
-                    name="q"
-                    type="search"
-                    className="input"
-                    placeholder="Ntinda, Kira, Bugolobi…"
-                    autoComplete="off"
-                    list="home-areas"
-                  />
-                  {/* The same names the marketplace's own search offers - not
-                      a second list that could drift from what search actually
-                      knows. Only areas with live homes, for the same reason
-                      the home page's picker filters to live areas. */}
-                  <datalist id="home-areas">
-                    {areas.map((a) => (
-                      <option key={a.id} value={a.name} />
-                    ))}
-                  </datalist>
-                  <button type="submit" className="btn btn-primary">
-                    Search homes
-                  </button>
-                </form>
+                  How it works
+                </Link>
+              </div>
+            </div>
 
-                <div className="row-between" style={{ maxWidth: '30rem' }}>
-                  <p className="faint" style={{ fontSize: '0.875rem' }}>
-                    {feed.totalCount === 0
-                      ? 'Verification is under way in the first corridor.'
-                      : `${feed.totalCount} verified ${
-                          feed.totalCount === 1 ? 'home' : 'homes'
-                        } available right now.`}
+            {/*
+              The hero image is the newest verified listing, not a stock
+              photograph. If there is nothing live, the frame is honest about
+              that rather than borrowing somebody else's house.
+            */}
+            <div className="hero-media">
+              {feed.results[0] ? (
+                <PropertyCard listing={feed.results[0]} priority />
+              ) : (
+                <div className="card">
+                  <p className="h3">Nothing live yet</p>
+                  <p className="muted" style={{ marginTop: '0.5rem' }}>
+                    The first properties are being verified on the ground.
+                    Nothing appears here until an officer has been.
                   </p>
-                  <Link
-                    href="/how-it-works"
-                    className="btn btn-secondary btn-sm"
-                  >
-                    How it works
-                  </Link>
                 </div>
-              </div>
-
-              {/*
-                The hero image is the newest verified listing, not a stock
-                photograph. If there is nothing live, the frame is honest about
-                that rather than borrowing somebody else's house.
-              */}
-              <div className="hero-media">
-                {feed.results[0] ? (
-                  <PropertyCard listing={feed.results[0]} priority />
-                ) : (
-                  <div className="card">
-                    <p className="h3">Nothing live yet</p>
-                    <p className="muted" style={{ marginTop: '0.5rem' }}>
-                      The first properties are being verified on the ground.
-                      Nothing appears here until an officer has been.
-                    </p>
-                  </div>
-                )}
-              </div>
+              )}
             </div>
           </div>
         </div>

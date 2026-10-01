@@ -36,7 +36,7 @@ export default function AboutPage() {
             <div className="figure-frame">
               <img
                 src="/site/about-area.jpg"
-                alt="Rooftops of a leafy Kampala residential neighbourhood at golden hour"
+                alt="Rooftops and green hills across a Kampala residential corridor"
                 loading="eager"
                 decoding="async"
               />
@@ -101,15 +101,16 @@ export default function AboutPage() {
                   <div className="figure-frame">
                     <img
                       src="/site/officer-visit.jpg"
-                      alt="A field officer photographing a bungalow and noting details on a clipboard"
+                      style={{ objectPosition: '62% center' }}
+                      alt="A quiet residential street with gated compound homes in Ntinda, Kampala"
                       loading="lazy"
                       decoding="async"
                     />
                   </div>
                   <figcaption>
-                    Illustration of the visit every listing starts with: the
-                    officer&rsquo;s photographs and report, not the
-                    landlord&rsquo;s word.
+                    The visit every listing starts with happens on streets like
+                    this one: the officer&rsquo;s photographs and report, not
+                    the landlord&rsquo;s word.
                   </figcaption>
                 </figure>
               </section>

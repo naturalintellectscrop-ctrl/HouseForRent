@@ -123,14 +123,14 @@ export default function ContactPage() {
                 <div className="figure-frame">
                   <img
                     src="/site/support.jpg"
-                    alt="A member of our team taking a call at a bright desk"
+                    alt="A smiling woman at a desk with a laptop, ready to help"
                     loading="lazy"
                     decoding="async"
                   />
                 </div>
                 <figcaption>
-                  Illustration of what we promise on this page: a person
-                  answers, not a phone menu.
+                  What we promise on this page, in person: a person answers,
+                  not a phone menu.
                 </figcaption>
               </figure>
 

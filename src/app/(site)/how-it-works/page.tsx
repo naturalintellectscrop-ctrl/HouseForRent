@@ -85,13 +85,13 @@ export default function HowItWorksPage() {
               <div className="figure-frame">
                 <img
                   src="/site/signing.jpg"
-                  alt="A landlord signing a tenancy agreement on a shaded veranda"
+                  alt="A hand signing a tenancy agreement"
                   loading="lazy"
                   decoding="async"
                 />
               </div>
               <figcaption>
-                Illustration of step three: the agreement is signed before the
+                Step three, in ink: the agreement is signed before the
                 listing publishes, and the version signed is the version that
                 binds.
               </figcaption>
@@ -107,14 +107,15 @@ export default function HowItWorksPage() {
               <div className="figure-frame">
                 <img
                   src="/site/viewing.jpg"
-                  alt="An officer walking a couple through the living room of a home for rent"
+                  alt="Apartment blocks under a clear sky in Kololo, Kampala"
                   loading="lazy"
                   decoding="async"
                 />
               </div>
               <figcaption>
-                Illustration of your viewing: an officer we employ meets you at
-                the property. You are not sent an address and left to it.
+                Your viewing happens at a real place you can stand inside -
+                an officer we employ meets you at the property. You are not
+                sent an address and left to it.
               </figcaption>
             </figure>
 
@@ -244,14 +245,14 @@ export default function HowItWorksPage() {
               <div className="figure-frame">
                 <img
                   src="/site/keys.jpg"
-                  alt="A key being handed over in front of a green front door"
+                  alt="A hand holding new house keys at a front door lock"
                   loading="lazy"
                   decoding="async"
                 />
               </div>
               <figcaption>
-                Illustration of the moment the money is released for: the
-                keys, in your hand, with the move-in confirmed.
+                The moment the money is released for: the keys, in your
+                hand, with the move-in confirmed.
               </figcaption>
             </figure>
           </div>

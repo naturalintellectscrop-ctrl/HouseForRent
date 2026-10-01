@@ -80,7 +80,8 @@ export default async function ForLandlordsPage() {
             <div className="figure-frame">
               <img
                 src="/site/landlord-hero.jpg"
-                alt="A landlord standing in front of his small apartment block"
+                style={{ objectPosition: '50% 32%' }}
+                alt="A property owner standing confidently in her office in Kampala"
                 loading="eager"
                 decoding="async"
               />
@@ -104,13 +105,13 @@ export default async function ForLandlordsPage() {
               <div className="figure-frame">
                 <img
                   src="/site/verify-visit.jpg"
-                  alt="A field officer photographing a small apartment block and checking a clipboard"
+                  alt="A standalone family home on a walled compound in Kampala"
                   loading="lazy"
                   decoding="async"
                 />
               </div>
               <figcaption>
-                Illustration of the verification visit: what the officer
+                The verification visit, in the field: what the officer
                 records is what the tenant sees on the listing.
               </figcaption>
             </figure>
