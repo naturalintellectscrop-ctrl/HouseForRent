@@ -1005,3 +1005,17 @@ Stage Summary:
 
 Unresolved issues or risks, and priority recommendations for the next phase:
 - None new. Standing items unchanged: Supabase Storage adapter for listing media, payout dispatch, production-safe QA harness, freshness-window ops guidance, Search Console submission (owner action), local .env pooler string.
+---
+Task ID: 38
+Agent: web takeover agent (branch retention decision)
+Task: Owner asked whether sandbox/webapp should be deleted since main carries everything. Assessment made; decision recorded.
+
+Work Log:
+- Assessment: KEEP sandbox/webapp. (1) A branch is a pointer - zero storage/cost. (2) It is the same-commit mirror on Vercel Preview; instant fallback if a production deploy ever breaks. (3) Dual-push is a standing workspace sync convention from the handover red lines - removing it risks unverifiable breakage of workspace<->GitHub plumbing and re-creates the lineage-drift incident Task 35 had to reconcile. (4) Deployments-page clutter is solved with a dashboard Environment=Production filter, not branch surgery.
+- Noted honestly: dual-push doubles deploy quota usage (Hobby cap 100/day); if the 15-min cadence ever approaches the cap, the lever is trimming trivial commits, NOT deleting the branch.
+
+Stage Summary:
+- Owner-facing decision: sandbox/webapp STAYS. Do not delete this branch in any future round, including cron webDevReview agents. Both branches continue to receive every commit together per Task 37.
+
+Unresolved issues or risks, and priority recommendations for the next phase:
+- None new. Standing items unchanged.
