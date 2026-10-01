@@ -950,3 +950,25 @@ Unresolved issues or risks, and priority recommendations for the next phase:
 - OWNER: submit the sitemap in Google Search Console (https://houseforrentug.vercel.app/sitemap.xml) - every technical prerequisite is in place.
 - Watch the Supabase dashboard's pooler stats once real traffic arrives; if transaction-pool saturation ever reappears, the next lever is Supabase-side (pool size) or a direct-connection IPv6 path - the client layer is now correct.
 - Standing items unchanged: Supabase Storage adapter for listing media, payout dispatch, production-safe QA harness, freshness-window ops guidance (0 fresh listings today keeps the sitemap at 7 static URLs by design).
+
+---
+Task ID: 35
+Agent: web takeover agent (hero photograph + brand scale round)
+Task: Owner direction (with a production screenshot): "I meant this picture (the about page's Kampala/Wakiso corridor panorama) to be used as the background image of the hero section of the landing page" and "make the logo more bigger" on the header and footer. This supersedes the earlier reading of the same instruction (an earlier in-flight attempt ghosted the logo artwork as the hero watermark; that work was abandoned uncommitted and is gone).
+
+Work Log:
+- LINEAGE RECONCILIATION FIRST: the sandbox working copy was found parked on a Task-22-era head with a UUID auto-commit (769275a) while origin/main had moved to a7ed99d (Tasks 33/34/34-b: real photography, SEO layer, pooler fix). Reset main to origin/main (the auto-commit's only content was the abandoned watermark attempt plus mode noise; the watermark asset/script no longer exist). Synced node_modules afterwards - the pulled code imports bcryptjs, which the stale install lacked (Build Error "Module not found: Can't resolve 'bcryptjs'" on first load; bun install cleared it).
+- HERO PHOTOGRAPH: .hero-panel (the full-bleed ink band) now layers the about page's corridor photograph (/site/about-area.jpg, 1600x602, the exact panorama the owner pointed at) under an ink scrim, via multi-layer background with background-color var(--brand-ink) as the final fallback layer (image failure degrades to the plain ink band, never a broken frame).
+- SCRIM IS READABILITY MATH, NOT DECORATION: the photo's sky peaks near-white; over it the panel's secondary text only holds WCAG AA where the wash is ~0.9 of brand ink. Wide screens: 90deg wash 0.93 -> 0.55 left-to-right (0.93-0.90 across the copy column, easing to 0.55 at the far edge where only the opaque listing card and breathing room sit - the Kampala cityscape shows through at nearly half strength there). Phones (max-width 51.99rem): the same protection runs vertically (0.93 top -> 0.6 at the foot of the band) because the copy spans the full width. Photo position center 55% (slightly city-favouring crop).
+- SECONDARY TEXT LIFTED FOR THE PHOTO: .hero-panel .lede #a5aeaa -> #cfd6d2 and .faint #7e8883 -> #b5bdb8 - over a photographed sky the old greys could dip below AA; the new values clear 4.5:1 under the 0.9 wash against the brightest pixel in the crop. Heading/buttons/inputs unchanged (large or opaque, already safe).
+- BRAND SCALE: .site-head/.site-foot brand mark 28px -> 48px (3rem, radius 12px, padding 4px) with wordmark 1.25rem and gap 0.65rem; .site-head-inner min-height 4rem -> 4.5rem so the mark sets the header's height. Scoped to the two surfaces where the brand leads - auth asides, portal chrome and ops keep the 28px utility size.
+- VERIFICATION GATE, ALL PASS: ESLint 0 - home/about/login/properties all 200 - browser verified desktop 1440px (panorama unmistakable right of the copy, heading/lede/search crisp, 48px header mark) and 412px (vertical scrim variant, photo visible around the card zone, 48px marks in header and footer, no horizontal overflow).
+- ENVIRONMENT NOTE (not a regression): local .env still carries the old SQLite DATABASE_URL while the pulled schema is postgresql-only, so local dev logs show prisma datasource validation errors and pages render the by-design degraded empty state (29ba43e's graceful degradation, working as intended). Production is unaffected (pooler URL lives in Vercel env). The full pooler host string was not recoverable from sandbox tooling, so .env was left untouched rather than half-guessed; restore by pasting the validated pooler string into local .env when needed.
+
+Stage Summary:
+- The landing page opens on the real corridor we cover - the same photograph the about page uses, full-bleed under the brand ink with text contrast guaranteed by the scrim math - and the brand mark now leads the header and footer at 48px.
+- Sandbox working copy is once again level with origin/main (a7ed99d + this round).
+
+Unresolved issues or risks, and priority recommendations for the next phase:
+- Local dev DB: paste the validated Supabase pooler string into sandbox .env to restore local data-backed rendering (see environment note); production needs nothing.
+- Standing items unchanged: Supabase Storage adapter for listing media (mock:// refs still 404 on live listings), payout dispatch, production-safe QA harness, freshness-window ops guidance, Search Console submission (owner action).
