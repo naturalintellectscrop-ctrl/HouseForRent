@@ -439,24 +439,31 @@ async function resolveListingDetail(id: string) {
 
 async function resolveNeighbourhoods() {
   const rows = await listServiceAreaNeighbourhoods();
-  const withCounts = await Promise.all(
-    rows.map(async (n) => ({
-      id: n.id,
-      name: n.name,
-      // No district column: the parent's name is the district-level label.
-      district: n.parent?.name ?? null,
-      parentId: n.parentId,
-      parentName: n.parent?.name ?? null,
-      inServiceArea: n.inServiceArea,
-      liveListingCount: await db.listing.count({
-        where: {
-          publicationState: 'live',
-          verificationState: 'verified',
-          property: { neighbourhoodId: n.id },
-        },
-      }),
-    })),
+  // ONE grouped query instead of one COUNT per neighbourhood. The old
+  // version fanned out a parallel count per area - on the pooler that
+  // meant a dozen simultaneous sessions per request, which is precisely
+  // how a small server-side pool gets exhausted under any concurrency.
+  // Same semantics: live + verified listings, counted per neighbourhood.
+  const counts = await db.$queryRaw<{ neighbourhoodId: string; count: bigint }[]>`
+    SELECT p.neighbourhood_id AS "neighbourhoodId", COUNT(*) AS "count"
+    FROM "listing" l
+    JOIN "property" p ON p.id = l.property_id
+    WHERE l.publication_state = 'live' AND l.verification_state = 'verified'
+    GROUP BY p.neighbourhood_id
+  `;
+  const countByNeighbourhood = new Map(
+    counts.map((row) => [row.neighbourhoodId, Number(row.count)]),
   );
+  const withCounts = rows.map((n) => ({
+    id: n.id,
+    name: n.name,
+    // No district column: the parent's name is the district-level label.
+    district: n.parent?.name ?? null,
+    parentId: n.parentId,
+    parentName: n.parent?.name ?? null,
+    inServiceArea: n.inServiceArea,
+    liveListingCount: countByNeighbourhood.get(n.id) ?? 0,
+  }));
   return { neighbourhoods: withCounts };
 }
 

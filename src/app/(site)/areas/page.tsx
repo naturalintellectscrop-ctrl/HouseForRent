@@ -36,10 +36,17 @@ export const metadata = pageMetadata({
  * verify into, and it tells a tenant the truth instead of a silent gap.
  */
 export default async function AreasPage() {
-  const taxonomy = await apiGet<{ neighbourhoods: Neighbourhood[] }>(
-    '/v1/neighbourhoods',
-    { revalidate: 300 },
-  );
+  // Same contract as the homepage: a database hiccup degrades to the empty
+  // directory, never to the not-found shell.
+  let taxonomy: { neighbourhoods: Neighbourhood[] };
+  try {
+    taxonomy = await apiGet<{ neighbourhoods: Neighbourhood[] }>(
+      '/v1/neighbourhoods',
+      { revalidate: 300 },
+    );
+  } catch {
+    taxonomy = { neighbourhoods: [] };
+  }
 
   const districts = new Map<string, Neighbourhood[]>();
   for (const n of taxonomy.neighbourhoods) {

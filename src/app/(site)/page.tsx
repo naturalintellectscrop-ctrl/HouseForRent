@@ -52,14 +52,32 @@ export const metadata = pageMetadata({
  * instead (see the field band and the guide cards).
  */
 export default async function HomePage() {
-  const [feed, taxonomy] = await Promise.all([
-    apiGet<SearchResponse>('/v1/listings?limit=6&sort=fresh', {
-      revalidate: 60,
-    }),
-    apiGet<{ neighbourhoods: Neighbourhood[] }>('/v1/neighbourhoods', {
-      revalidate: 300,
-    }),
-  ]);
+  // A transient database failure must never turn the homepage into the
+  // not-found shell (an error escaping to the boundary renders a 200 page
+  // with a noindex meta - the worst of both worlds). Degrade to the honest
+  // empty state instead: no homes shown, nothing claimed.
+  let feed: SearchResponse;
+  let taxonomy: { neighbourhoods: Neighbourhood[] };
+  try {
+    [feed, taxonomy] = await Promise.all([
+      apiGet<SearchResponse>('/v1/listings?limit=6&sort=fresh', {
+        revalidate: 60,
+      }),
+      apiGet<{ neighbourhoods: Neighbourhood[] }>('/v1/neighbourhoods', {
+        revalidate: 300,
+      }),
+    ]);
+  } catch {
+    feed = {
+      results: [],
+      totalCount: 0,
+      limit: 6,
+      offset: 0,
+      emptyStateMessage:
+        'The marketplace could not be reached just now. Please refresh in a moment.',
+    };
+    taxonomy = { neighbourhoods: [] };
+  }
 
   // Only areas that currently have something to show. A picker offering
   // eight empty neighbourhoods is a worse first impression than one

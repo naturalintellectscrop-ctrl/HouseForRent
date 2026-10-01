@@ -1,11 +1,59 @@
 import { PrismaClient } from '@prisma/client'
 
+/**
+ * Hardens the database URL for the runtime it actually runs on.
+ *
+ * The owner-supplied string points at Supabase's pooler on port 5432,
+ * which is SESSION mode: every client pins a dedicated server connection
+ * for the client's lifetime, and the free-tier pool holds only 15
+ * clients. Warm Vercel serverless functions never release their
+ * connections, so production eventually exhausts all 15 slots and every
+ * data request fails with EMAXCONNSESSION - the exact 500s the live site
+ * showed (sequential requests fine, parallel bursts dead).
+ *
+ * Three corrections, all Supabase's own serverless recommendation:
+ *
+ * - port 5432 → 6543: TRANSACTION mode. Connections are held only for
+ *   the duration of a transaction and returned to the pool, so warm
+ *   functions stop pinning server sessions.
+ * - `pgbouncer=true`: transaction mode multiplexes server sessions
+ *   across clients, so Prisma's session-bound prepared statements break
+ *   intermittently. This flag switches Prisma to unprepared queries.
+ * - `connection_limit=4` (+ `sslmode=require` if absent): a small bounded
+ *   pool per instance. One connection starves this app's legitimate
+ *   parallel fetches; the old unbounded default fanned a dozen sessions
+ *   per render. Four bounds both failure modes while transaction mode
+ *   multiplexes the shared server side.
+ *
+ * Applied ONLY to Supabase pooler hosts, so local strings and any future
+ * direct connection are untouched. Doing it here - rather than asking
+ * for a specific string in Vercel env - means the value the owner
+ * pasted can stay exactly as it is.
+ */
+function hardenedDatasourceUrl(): string | undefined {
+  const url = process.env.DATABASE_URL;
+  if (!url || !url.includes('pooler.supabase.com')) return url;
+  // Session mode (5432) → transaction mode (6543), same pooler host.
+  let next = url.replace(':5432/', ':6543/');
+  if (!/[?&]pgbouncer=true/.test(next)) {
+    next += (next.includes('?') ? '&' : '?') + 'pgbouncer=true';
+  }
+  if (!/[?&]connection_limit=/.test(next)) {
+    next += (next.includes('?') ? '&' : '?') + 'connection_limit=4';
+  }
+  if (!/[?&]sslmode=/.test(next)) {
+    next += (next.includes('?') ? '&' : '?') + 'sslmode=require';
+  }
+  return next;
+}
+
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined
 }
 
 function createClient(): PrismaClient {
   return new PrismaClient({
+    datasourceUrl: hardenedDatasourceUrl(),
     log: process.env.DEBUG_QUERIES
       ? ['query', 'error', 'warn']
       : ['error', 'warn'],
