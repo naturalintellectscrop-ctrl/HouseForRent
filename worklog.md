@@ -972,3 +972,21 @@ Stage Summary:
 Unresolved issues or risks, and priority recommendations for the next phase:
 - Local dev DB: paste the validated Supabase pooler string into sandbox .env to restore local data-backed rendering (see environment note); production needs nothing.
 - Standing items unchanged: Supabase Storage adapter for listing media (mock:// refs still 404 on live listings), payout dispatch, production-safe QA harness, freshness-window ops guidance, Search Console submission (owner action).
+---
+Task ID: 36
+Agent: web takeover agent (brand scale increment round)
+Task: Owner direction: "make the logo abit bigger" - a further step up from the 48px header/footer brand mark shipped in Task 35.
+
+Work Log:
+- Read the room first: working tree was clean at b9e8ae6 (Task 35's hero photograph + 48px mark round already committed), so this round is a pure increment on the scoped header/footer brand rules - no hero, layout or other-surface changes.
+- BRAND SCALE STEP: .site-head/.site-foot .brand-mark 48px -> 56px (3.5rem), radius 12px -> 14px, tile padding 4px -> 5px (proportional to the tile); wordmark 1.25rem -> 1.375rem (22px), brand gap 0.65rem -> 0.7rem; .site-head-inner min-height 4.5rem -> 5rem (80px) so the mark still sets the header's height. Comment block updated to match (56px). Still scoped to header + footer only - auth asides, portal chrome and ops keep the 28px utility size. No scroll-padding/scroll-margin is coupled to the header height (checked), so nothing else moves.
+- VERIFICATION GATE, ALL PASS: ESLint 0 - home/about/hero-image all 200 - browser-verified desktop 1440px (header mark measured 56px, wordmark 22px, header bar 80px; hero photograph + scrim untouched and crisp; footer mark measured 56px) and mobile 412px (mark 56px, wordmark + menu toggle fit one row, vertical-scrim hero variant intact, footer brand block + tagline rule clean). Measured overflowX false at both widths. Rendered-size assertions came from getBoundingClientRect, not eyeballing.
+- dev.log review: only the documented local-env datasource validation error (sandbox .env still carries the stale SQLite URL against the postgres-only schema; pages render the by-design degraded state, production unaffected). Not a regression from this round.
+
+Stage Summary:
+- The brand mark now leads the header and footer at 56px with a 22px wordmark - visibly the loudest element in both bars, still inside the scoped rules so every other Brand surface keeps its compact size.
+- Deployed head moves from b9e8ae6 with this round (single CSS commit).
+
+Unresolved issues or risks, and priority recommendations for the next phase:
+- Local dev DB: paste the validated Supabase pooler string into sandbox .env to restore local data-backed rendering (carried from Task 35); production needs nothing.
+- Standing items unchanged: Supabase Storage adapter for listing media (mock:// refs still 404 on live listings), payout dispatch, production-safe QA harness, freshness-window ops guidance, Search Console submission (owner action).

@@ -611,7 +611,7 @@ legend {
   gap: 1rem;
   /* Sized for the enlarged brand mark below - the mark, not the padding,
      sets the header's height now. */
-  min-height: 4.5rem;
+  min-height: 5rem;
 }
 
 .brand {
@@ -637,20 +637,20 @@ legend {
   padding: 2px;
 }
 /* The two surfaces where the brand LEADS the screen - the site header and
-   the site footer - carry the mark at 48px (up from the shared 28px utility
+   the site footer - carry the mark at 56px (up from the shared 28px utility
    size), with the wordmark and gap stepped up to match. Every other Brand
    use (auth asides, portal chrome, ops) keeps the compact size. */
 .site-head .brand-mark,
 .site-foot .brand-mark {
-  width: 3rem;
-  height: 3rem;
-  border-radius: 12px;
-  padding: 4px;
+  width: 3.5rem;
+  height: 3.5rem;
+  border-radius: 14px;
+  padding: 5px;
 }
 .site-head .brand,
 .site-foot .brand {
-  font-size: 1.25rem;
-  gap: 0.65rem;
+  font-size: 1.375rem;
+  gap: 0.7rem;
 }
 .brand-tagline {
   display: flex;
