@@ -57,19 +57,19 @@ export function LoginForm({ next }: { next: string | null }) {
 
       <div className="field">
         <label className="label" htmlFor="primaryPhone">
-          Phone number
+          Phone number or email
         </label>
         <input
           id="primaryPhone"
           name="primaryPhone"
-          type="tel"
+          type="text"
           className="input"
-          inputMode="tel"
           autoComplete="username"
-          autoCapitalize="off"
+          autoCapitalize="none"
+          autoCorrect="off"
           spellCheck={false}
           required
-          placeholder="+256 7…"
+          placeholder="+256 7… or name@email.com"
         />
       </div>
 
