@@ -1040,3 +1040,24 @@ Unresolved issues or risks, and priority recommendations for the next phase:
 - OWNER: run the provisioning script with the current Supabase pooler URL (command in the final report), then verify the full owner flow on production.
 - Rate limiter is per-instance (in-memory); move to a shared store if credential attacks ever show in the audit trail.
 - Standing items unchanged: Supabase Storage adapter, payout dispatch, production-safe QA harness, freshness-window ops guidance, Search Console submission (owner action), local .env pooler string.
+---
+Task ID: 40
+Agent: web takeover agent (platform-owner provisioning + email entry completion)
+Task: Owner supplied the live Supabase pooler URL and the owner credentials, and specified the entry flow: sign in on the NORMAL customer sign-in page with the company email, and the system must recognise naturalintellectsltd@gmail.com as the platform owner and route to the separate /platform control center.
+
+Work Log:
+- CREDENTIALS APPLIED, NOTHING COMMITTED: local .env (gitignored) now carries the owner-provided Supabase pooler string; the password for the owner account travelled ONLY as an env var to the provisioning script and exists nowhere in source, seed, .env.example, logs or the audit payload.
+- STALE-ENV ROOT CAUSE FIXED: the first post-provision sign-in 500'd because the persistent tool shell exported the old SQLite DATABASE_URL, and process env overrides .env for the dev server (proc/ environ confirmed). Dev server restarted with a clean env; local rendering is now DB-backed for the first time since Task 35 (the standing "local .env pooler string" item is closed).
+- PROVISIONED: scripts/provision-platform-owner.mjs ran against the live Supabase DB - party 738bb062 (Natural Intellects Ltd) + user_account 896080dc role=admin + bcrypt credential; additive party.email column ensured; audit row 'platform_owner_provisioned' written (contact identifiers only). Idempotent: re-running rotates the credential and revokes sessions.
+- NORMAL-ENTRY EMAIL SUPPORT: the customer sign-in form labelled its identifier field "Phone number" (type=tel) - the API already resolves '@' identifiers as email, but the UI refused the semantics. Relabelled to "Phone number or email" (type=text, no autocapitalize). The same page still serves every phone-keyed user; role-based routing is unchanged: homeFor('admin') -> /platform, everyone else unchanged.
+- E2E VERIFIED (agent-browser, live Supabase): /login with naturalintellectsltd@gmail.com + password -> lands on /platform; control center renders LIVE counts (3,509 people, 406 tenants, 137 landlords, 399 field officers, 1,019 homes live, 1,099 deals in flight); Users/Listings/Transactions/System pages all render; desktop 1280 + mobile 412 screenshots clean, no horizontal overflow; Sign out clears the session and a subsequent /platform visit redirects to /platform/login.
+- SERVER-LEVEL VERIFIED: unauthenticated /platform -> 307 /platform/login; wrong password against the owner account -> 401 INVALID_CREDENTIALS and a 'signin_failed' audit row (targeted-attempt signal); /platform/login 200; sitemap carries zero /platform refs; audit trail shows the full chain platform_owner_provisioned -> signed_in(email, admin) -> signin_failed -> signed_in(email, admin).
+- SHIPPED: ESLint 0; commit e661d2f pushed to main AND sandbox/webapp per the standing instant-publish convention. Production picks it up via Vercel; the owner account is already in the production database, so the owner can sign in at /login (or /platform/login) immediately.
+
+Stage Summary:
+- The owner's requested flow is live end-to-end: one identity system, one sign-in page, the system recognises the platform owner by the account's server-side role (never by URL), and lands them in the global /platform control center with live operational data.
+- The last blocked item from Task 39 (provisioning) is complete; local dev now also runs against the real database.
+
+Unresolved issues or risks, and priority recommendations for the next phase:
+- The owner password was shared in chat; rotating it is one command (re-run the provisioning script with OWNER_PASSWORD) and revokes existing sessions. Recommended at the owner's discretion.
+- Rate limiter remains per-instance in-memory (documented); standing items unchanged: Supabase Storage adapter, payout dispatch, production-safe QA harness, freshness-window ops guidance, Search Console submission.
