@@ -20,7 +20,7 @@
 // Run:  bun scripts/production-recovery-drill.mjs --file backups/export-….ndjson.gz
 import { PGlite } from '@electric-sql/pglite';
 import { PGLiteSocketServer } from '@electric-sql/pglite-socket';
-import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, unlinkSync } from 'node:fs';
 import { execFileSync, spawn } from 'node:child_process';
 import { PrismaClient } from '@prisma/client';
 import path from 'node:path';
@@ -175,6 +175,6 @@ await server.stop?.().catch?.(() => {});
 await db.close?.();
 // The REAL export is intentionally KEPT (owner's backup artifact). Only the
 // regenerated schema file is cleaned.
-try { require('node:fs').unlinkSync(SCHEMA_SQL); } catch {}
+try { unlinkSync(SCHEMA_SQL); } catch {}
 console.log(failures === 0 ? '\n== PRODUCTION RECOVERY DRILL: ALL CHECKS PASSED' : `\n== PRODUCTION RECOVERY DRILL: ${failures} CHECK(S) FAILED`);
 process.exit(failures === 0 ? 0 : 1);

@@ -2,8 +2,16 @@
 //
 // This is the real repository's schema (recovered from the v0 lineage in git
 // history, apps/api/prisma/schema.prisma @ 2efa53f) and it EXACTLY matches
-// the owner's live Supabase database (introspected 2026-09-30: 33 models,
-// 26 enums, 11 applied migrations, zero drift).
+// the owner's live Supabase database. Parity re-verified after the 2026-10-23
+// project resumption with `prisma migrate diff` (read-only): 33 models, all
+// enums/columns identical, zero drift; the only DB-side extras are the
+// out-of-band tables (ba_*, _applied_migrations — see
+// scripts/recovery-out-of-band-tables.sql) and the SavedListing listing_id
+// index, now declared below. NOTE: the historical prisma/migrations folder is
+// no longer present in the repo — the immutability triggers it installed LIVE
+// ON PRODUCTION (verified via pg_trigger, 11 append-only tables + the
+// conducted-viewing evidence gate) and their SQL is preserved in git history
+// (migration 20260727150100_immutable_tables).
 //
 // ── RULES THAT KEEP THE BUSINESS DATA ALIVE ──
 //   1. NEVER run `prisma db push` or `prisma migrate reset` against
@@ -13,6 +21,8 @@
 //      by the owner, never a push.
 //   2. Append-only tables (🔒 below) are guarded by BEFORE UPDATE OR DELETE
 //      triggers that raise on ANY mutation — corrections are new rows.
+//      Trigger SQL lives in git history
+//      (prisma/migrations/20260727150100_immutable_tables/migration.sql).
 //   3. PspInstruction.state is the INITIAL state only; current state is the
 //      toState of the latest PspInstructionEvent (deduped per (instruction, state)).
 //
@@ -1064,6 +1074,9 @@ model SavedListing {
   listing Listing @relation(fields: [listingId], references: [id])
 
   @@unique([partyId, listingId])
+  // Declared 2026-10-23 to match the production index that already exists on
+  // listing_id (found by the Gate-1 schema-parity diff; additive, no push).
+  @@index([listingId])
   @@map("saved_listing")
 }
 
