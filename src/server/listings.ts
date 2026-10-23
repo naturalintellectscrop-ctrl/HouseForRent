@@ -432,21 +432,47 @@ export class NotYourListingError extends Error {
   }
 }
 
-/** The landlord accepts the agreement: commission terms + circumvention clause. */
+/** The landlord accepts the agreement: commission terms + circumvention clause.
+ *
+ * ── Append-only, because the database says so ──
+ * listing_agreement sits under the immutability wall (reject_mutation
+ * triggers reject UPDATE in production), so "flipping" the offer row to
+ * accepted is not an option - and rewriting history would be the wrong
+ * model anyway. The offer row stays exactly as drafted; acceptance APPENDS
+ * a signed row carrying the same frozen terms. Readers ask for
+ * `accepted: true`, so the signed row is the agreement everywhere; the
+ * unsigned offer row is the offer that was made. Idempotent: accepting
+ * again returns the existing acceptance.
+ */
 export async function acceptAgreement(params: { listingId: string; listerPartyId: string }) {
   const listing = await db.listing.findUnique({ where: { id: params.listingId }, include: { property: true } });
-  if (!listing) throw new Error('listing not found');
+  if (!listing) throw new ApiError(404, 'LISTING_NOT_FOUND', 'listing not found');
   if (listing.property.ownerPartyId !== params.listerPartyId) throw new NotYourListingError();
 
-  const agreement = await db.listingAgreement.findFirst({
+  const accepted = await db.listingAgreement.findFirst({
+    where: { listingId: params.listingId, listerPartyId: params.listerPartyId, accepted: true },
+    orderBy: { createdAt: 'desc' },
+  });
+  if (accepted) return accepted;
+
+  const offer = await db.listingAgreement.findFirst({
     where: { listingId: params.listingId, listerPartyId: params.listerPartyId, accepted: false },
     orderBy: { createdAt: 'desc' },
   });
-  if (!agreement) throw new Error('no draft agreement to accept');
+  if (!offer) {
+    throw new ApiError(409, 'MISSING_LISTING_AGREEMENT', 'no offer to accept for this listing');
+  }
 
-  return db.listingAgreement.update({
-    where: { id: agreement.id },
-    data: { accepted: true, acceptedAt: new Date() },
+  return db.listingAgreement.create({
+    data: {
+      listingId: offer.listingId,
+      listerPartyId: offer.listerPartyId,
+      commissionRateVersionId: offer.commissionRateVersionId,
+      monthlyRentAtSigning: offer.monthlyRentAtSigning,
+      circumventionClauseVersion: offer.circumventionClauseVersion,
+      accepted: true,
+      acceptedAt: new Date(),
+    },
   });
 }
 

@@ -70,6 +70,19 @@ function requireEnv(name: string): string {
 
 // ── Supabase Storage (private bucket, service-role REST) ────────────────────
 
+/** The store's error body, truncated and token-redacted, for operator
+ * diagnostics. Storage error payloads name the refusal (bucket missing,
+ * RLS policy, size cap) and carry no credentials; long opaque runs are
+ * redacted anyway so nothing key-shaped can ever reach a log. */
+async function safeBody(res: Response): Promise<string> {
+  try {
+    const text = (await res.text()).slice(0, 300);
+    return text.replace(/[A-Za-z0-9+/_-]{32,}/g, '[redacted-token]').replace(/\s+/g, ' ').trim() || '(empty body)';
+  } catch {
+    return '(body unreadable)';
+  }
+}
+
 class SupabaseMediaStorage implements MediaStorageProvider {
   private readonly baseUrl: string;
   private readonly bucket: string;
@@ -104,7 +117,10 @@ class SupabaseMediaStorage implements MediaStorageProvider {
       throw new MediaStoreError(`media store unreachable: ${String(err)}`);
     }
     if (!res.ok) {
-      throw new MediaStoreError(`media store rejected upload (HTTP ${res.status})`);
+      // The store's own reason (bucket missing vs RLS refusal vs size cap)
+      // is exactly what an operator needs; without it a 502 is guesswork.
+      // Token-shaped runs are redacted before the body reaches a log.
+      throw new MediaStoreError(`media store rejected upload (HTTP ${res.status}): ${await safeBody(res)}`);
     }
   }
 
@@ -119,11 +135,13 @@ class SupabaseMediaStorage implements MediaStorageProvider {
     } catch (err) {
       throw new MediaStoreError(`media store unreachable: ${String(err)}`);
     }
-    if (res.status === 404 || res.status === 400) {
+    if (res.status === 404) {
       throw new MediaNotFoundError('media file missing from store');
     }
     if (!res.ok) {
-      throw new MediaStoreError(`media store read failed (HTTP ${res.status})`);
+      // 400 here is a configuration refusal (RLS/key), not a missing file -
+      // reporting it as MEDIA_GONE would hide a real deployment fault.
+      throw new MediaStoreError(`media store read failed (HTTP ${res.status}): ${await safeBody(res)}`);
     }
     return new Uint8Array(await res.arrayBuffer());
   }
