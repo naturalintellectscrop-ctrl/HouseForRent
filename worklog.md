@@ -1129,3 +1129,63 @@ Unresolved issues or risks, and priority recommendations for the next phase:
 - OWNER: resume the Supabase project (or supply the pooler URL) — blocks Phase C backup work, Phase D webhook E2E and Phase E business-flow verification.
 - OWNER: Vercel deployment SHA/timestamp confirmation (dashboard) and Supabase project ref confirmation.
 - Next: Phase B1 Supabase Storage adapter + media access control; B2 build safety (ignoreBuildErrors, CSP); B3 legal pages.
+
+---
+Task ID: 43 (continued) — Phases B/C/D implementation
+Agent: web takeover agent (production gate round 1)
+
+Work Log:
+- PHASE B1 — PROPERTY MEDIA (implemented, committed 5d10b58):
+  - `src/server/media-storage.ts`: the MediaStorageProvider seam the SSOT reserved. SupabaseStorageMediaProvider = PRIVATE bucket, service-role REST (put/get/delete), server-side key only, never a public object URL; LocalDiskMediaStorage = the historical MEDIA_ROOT behavior. Selection env-driven (MEDIA_STORAGE=supabase|local, auto-detect fallback), and `assertUploadableStorage()` REFUSES local-disk uploads in production — an ephemeral filesystem cannot honour "the photograph outlives the request", so the failure is a 503, not a broken listing tomorrow.
+  - `src/server/media.ts`: uploadViewingMedia (assigned officer only, viewing.status==='scheduled' window, content-sniffed JPEG/PNG via magic bytes, MEDIA_MAX_BYTES default 4 MB — the honest Vercel body ceiling, declared-MIME cross-check, transactional rows+bytes with compensating storage delete on DB failure); resolveMediaAccess (public ⇔ asset decorates a LIVE listing; else uploader/staff/property-owner/mandate-lister); deleteMediaAsset (staff, REFUSED while a live listing shows the asset — withdraw first; rows+bytes move together).
+  - Routes: POST /api/v1/viewings/:id/media (multipart); /api/v1/media/:id rewritten (GET proxied+authorized, public→immutable cache, private→no-store; DELETE admin-only). Error map extended (MEDIA_WINDOW_CLOSED, MEDIA_ON_LIVE_LISTING, MEDIA_STORE_UNAVAILABLE, MEDIA_STORE_FAILED).
+  - Ops capture console (media-capture.tsx) replaced the honest stub with a real uploader + provenance-labelled strip (photo-strip CSS added to the design system). Landlord PhotoManager intentionally UNCHANGED — lister-uploaded photography stays out of product scope by the SSOT provenance decision; documented, not smuggled.
+  - PRIVACY FIX shipped with it: the old media route served ANY asset to ANYONE unauthenticated (mandate evidence included) — now access-controlled server-side.
+  - Publication-rule finding (not changed, flagged for the owner): publishBlockers does not require ≥1 photograph, so a live listing CAN have an empty gallery. Recommended product decision for the gate table.
+- PHASE B2 — BUILD & DEPLOYMENT SAFETY:
+  - typescript.ignoreBuildErrors REMOVED; production build executed in an isolated copy (/tmp/hfr-build, shared node_modules, dummy unreachable DB — all DB pages force-dynamic so prerender is safe): BUILD SUCCEEDED with strict type checking.
+  - Security headers consolidated into next.config.ts headers() (single source for dev/standalone/Vercel; vercel.json trimmed to framework+outputDirectory to eliminate duplicate-header risk). CSP added: default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; img-src 'self' data:; style-src 'unsafe-inline' (hand-written inline styles), script-src 'unsafe-inline' (Next hydration; nonce-based strict CSP documented as follow-up, NOT claimed), connect-src 'self' (+ ws:/eval in dev); upgrade-insecure-requests in production. Verified live in dev via curl (CSP + XFO present); payment is a mobile-money prompt (server-to-server) so no external host exemptions were needed.
+  - ESLint 0; tsc --noEmit 0.
+- PHASE B3 — LEGAL & PRIVACY:
+  - /terms and /privacy shipped, grounded in the ACTUAL schema/code: data inventory table (account, identity submissions — NIN never stored, only a truncated hash as providerRef; property/photography provenance; viewing linkage as anti-circumvention evidence; money records; audit log), "what we do NOT collect" (no payslips/bank statements, no e-mail at self-registration, no trackers, landlords never get tenant phones), the people-vs-property verification honesty section (identity provider is a SANDBOX MOCK — stated plainly), role access matrix, retention (append-only evidence vs revocable sessions), security measures, rights.
+  - Every unsettled question is printed as a visible "Open legal question — not yet settled with counsel" callout (4 privacy, 8 terms): erasure-vs-append-only reconciliation, SAR identity-proofing, escrow release terms, liability cap, dispute forum, minimum age. NOT represented as legal approval.
+  - Footer Company column + sitemap static routes wired; mobile table overflow found via agent-browser (640px table in 412px viewport) and FIXED (.table-scroll wrapper + responsive CSS); re-verified no overflow on /, /properties, /login, /how-it-works, /terms, /privacy at 412px; desktop 1280 clean.
+- PHASE C — DATABASE RESILIENCE (tooling shipped; execution BLOCKED on paused DB — no claims made):
+  - Verified via official docs (web search): Supabase FREE = NO automated backups, NO PITR; Pro $25/mo = daily backups, 7-day retention. Recorded in docs/DISASTER_RECOVERY.md with the plan trade-off table and the explicit statement that NO backup claim is made until a restore is tested.
+  - scripts/db-export.mjs: dependency-free consistent logical export over the POOLER (no pg_dump needed) — single READ ONLY REPEATABLE READ transaction, NDJSON+gzip+SHA-256 sidecar, manifest with per-table counts, chunked keyset reads, secrets never written to output/logs.
+  - scripts/db-restore.mjs: recovery-DB-ONLY (refuses RESTORE_DATABASE_URL==DATABASE_URL, requires ALLOW_DB_RESTORE=yes + --yes, refuses non-empty target), schema-must-exist precondition, parents-first order from the target's own FK catalogue, count verification vs manifest, and a LEDGER BALANCE gate (Σdebits==Σcredits) before the restore can be called verified.
+  - backups/ gitignored (real personal data must never be committed). docs/ dir created (was lost in the sandbox reset).
+- PHASE D — NYLONPAY READINESS:
+  - Code audit (evidence in docs/NYLONPAY_GOLIVE.md §1): live mode impossible without ALL THREE credentials; custody/settlement/refund ONLY via signature-verified webhook (browser success never books money); raw-body HMAC gate (unsigned→401, unconfigured→503 so provider retries); duplicate delivery → idempotent ack (current==target); out-of-order → terminal-state lock with anomaly log; amount/currency mismatch → NOT booked + psp_amount_mismatch audit; postings atomic inside one transaction with the amount RE-DERIVED from the deal's snapshotted terms (AmountNotAuthoritativeError); append-only psp_instruction_event design; /ops/reconciliation exists.
+  - LIVE production probes (safe, no state possible without valid signature): unsigned POST → 401; bogus-signature POST → 401 INVALID_SIGNATURE. Signature gate verified on production.
+  - Merchant KYC requirements extracted from OFFICIAL NylonPay docs (docs.nylonpay.nilesquad.com/docs/guides/merchant-onboarding): Level 1 = product/service name, use case, business description, National ID via hosted capture session, phone in registrant's name; free, 1–2 business days; live keys npk_live_/nps_live_; settlement account config. BUSINESS FLAG recorded: Level-1 live mode has a 10M UGX MONTHLY LIMIT — one rent deal can be 4–5M UGX, so >2 deals/month needs higher-tier verification BEFORE launch week.
+  - Controlled go-live ladder documented (sandbox E2E → production-with-sandbox-keys → one small real deal → announce); production payment mode stays disabled by default and half-configured creds fail safe to sandbox mock.
+
+Stage Summary:
+- Committed 5d10b58, pushed to main AND sandbox/webapp (dual-push convention restored — the two stranded commits e73953c/509a4cf shipped with it). Vercel builds from origin/main.
+- Phases B/C/D: all code-side and documentation-side work that can proceed WITHOUT external credentials or the production database is DONE and verified to the depth the environment allows (strict build PASS, lint/tsc 0, browser-verified pages at two viewports, live signature-guard probes, official-docs-verified KYC/backup facts).
+
+Unresolved issues or risks, and priority recommendations for the next phase:
+- BLOCKED on owner: resume the Supabase project (Phase E business-flow verification, first real db-export, restore test, storage bucket provisioning for the media adapter, webhook sandbox E2E).
+- BLOCKED on owner/business: NylonPay Level-1 KYC submission (exact checklist in docs/NYLONPAY_GOLIVE.md), domain purchase (Baasa Cloud) + DNS, Vercel dashboard confirmation of deployed SHA + Supabase project ref, counsel review of the printed open legal questions.
+- Next round: production post-deploy verification (CSP + legal pages live), Phase F gate table assembly.
+
+---
+Task ID: 43 (final) — Phase E/F: full-flow verification status and launch gate table
+Agent: web takeover agent (production gate verification complete)
+
+Work Log:
+- PHASE E — BUSINESS-FLOW VERIFICATION:
+  - VERIFIED LIVE (production, no DB writes required): public website journey — home with honest empty state, /properties degraded-but-honest copy, /how-it-works, /terms, /privacy, sitemap with legal URLs; CSP present, no console violations, no horizontal overflow at 412px and 1280px (agent-browser).
+  - BLOCKED (documented dependency — production Supabase project is PAUSED; per operating rule no failing integration tests were hammered): account creation/sign-in, landlord onboarding + property creation, photo upload E2E, viewing request/dispatch/records, introduction + deal creation, agreement + deal-state transitions, sandbox funding + webhook ledger paths, unauthorized/role-escalation/cross-account attempts. These were verified in earlier rounds (Tasks 39–41, pre-pause E2E evidence in the worklog) but are NOT re-verified against the current paused state and are not claimed.
+  - No core public workflow silently depends on deferred e-mail (no e-mail is collected at self-registration), a mock identity provider (identity is NOT required for public browsing; the mock is disclosed on every surface), or an unconfigured external service. The PLATFORM workflows (viewing→deal→escrow) require the database and are blocked with it.
+- PHASE F — LAUNCH GATE TABLE (evidence-based; no readiness percentage):
+  See the owner report in this conversation for the full table. Summary of statuses: 9 PASS (all code-side gates), 8 BLOCKED on named external dependencies (DB resumption, KYC, domain, counsel), 2 FAIL-until-done (backup restore test, storage E2E — tooling shipped but unexecuted), 1 NOT IMPLEMENTED by decision (uptime monitoring, P1).
+- STANDING CONVENTIONS RESTORED: dual-push (main + sandbox/webapp) per Task 37; the 15-minute webDevReview cron was recreated after the sandbox reset lost job 430075 (new job id 472052, Africa/Nairobi).
+
+Stage Summary:
+- Gate round 1 complete: everything that could be done without external credentials/approval was done, verified, committed (5d10b58) and shipped to production. The remaining distance to each launch stage is precisely documented as owner/business actions.
+
+Unresolved issues or risks, and priority recommendations for the next phase:
+- Owner actions in order: (1) resume Supabase + paste pooler URL to the agent → unlocks Phase E full-flow verification, first real export + restore test, storage bucket provisioning; (2) NylonPay Level-1 KYC (checklist in docs/NYLONPAY_GOLIVE.md; ask about the 10M UGX monthly limit and higher tiers); (3) domain purchase + DNS + Search Console; (4) counsel review of the printed open legal questions; (5) set SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY (+ bucket) on Vercel for the media adapter, after bucket creation.
+- Engineering next: post-DB-resume verification round (Phase E full ladder + first backup + restore test), then the payout-dispatch standing item.
