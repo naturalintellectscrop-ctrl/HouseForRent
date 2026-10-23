@@ -120,9 +120,15 @@ async function main() {
     }
 
     // 3. Parents before children, from the target's own FK catalogue.
+    // Self-references (e.g. neighbourhood.parent_id → neighbourhood) are NOT
+    // cycles: they load in dependency passes (found by the recovery drill -
+    // real production neighbourhoods carry a district parent).
     const edges = await db.$queryRawUnsafe(
       `select conrelid::regclass::text as child, confrelid::regclass::text as parent
        from pg_constraint where contype='f' and connamespace='public'::regnamespace`
+    );
+    const selfRefTables = new Set(
+      edges.filter((e) => e.child === e.parent && tables.has(e.child)).map((e) => e.child),
     );
     const order = [];
     const state = new Map(); // 0=unvisited 1=visiting 2=done
@@ -133,7 +139,7 @@ async function main() {
       stack.add(t);
       state.set(t, 1);
       for (const e of edges) {
-        if (e.child === t && tables.has(e.parent)) visit(e.parent, stack);
+        if (e.child === t && e.parent !== t && tables.has(e.parent)) visit(e.parent, stack);
       }
       stack.delete(t);
       state.set(t, 2);
@@ -144,12 +150,49 @@ async function main() {
     // 4. Load.
     const CHUNK = 500;
     let loaded = 0;
+    /** Loads a self-referencing table in dependency passes: each pass inserts
+     * every row whose (already-loaded) parents are all present; a failed
+     * chunk falls back to row-by-row so one unordered row cannot strand its
+     * neighbours. Aborts only when a full pass loads nothing. */
+    const loadSelfRef = async (t, rows) => {
+      let pending = [...rows];
+      let done = 0;
+      for (let pass = 0; pending.length > 0; pass++) {
+        const remaining = [];
+        for (let i = 0; i < pending.length; i += CHUNK) {
+          const chunk = pending.slice(i, i + CHUNK);
+          try {
+            await db.$executeRawUnsafe(buildInsert(t, chunk));
+            done += chunk.length;
+          } catch {
+            for (const row of chunk) {
+              try {
+                await db.$executeRawUnsafe(buildInsert(t, [row]));
+                done += 1;
+              } catch {
+                remaining.push(row);
+              }
+            }
+          }
+        }
+        if (pending.length === remaining.length) {
+          throw new Error(`cannot order self-referencing rows in ${t} (circular parents?) — restore aborted`);
+        }
+        pending = remaining;
+        if (pass > rows.length) throw new Error(`self-reference passes diverged in ${t} — restore aborted`);
+      }
+      return done;
+    };
     for (const t of order) {
       const rows = tables.get(t);
-      for (let i = 0; i < rows.length; i += CHUNK) {
-        await db.$executeRawUnsafe(buildInsert(t, rows.slice(i, i + CHUNK)));
+      if (selfRefTables.has(t)) {
+        loaded += await loadSelfRef(t, rows);
+      } else {
+        for (let i = 0; i < rows.length; i += CHUNK) {
+          await db.$executeRawUnsafe(buildInsert(t, rows.slice(i, i + CHUNK)));
+        }
+        loaded += rows.length;
       }
-      loaded += rows.length;
       console.log(`  ${t}: ${rows.length}`);
     }
 

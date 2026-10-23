@@ -87,6 +87,8 @@
     "zustand": "^5.0.6"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.11",
+    "@electric-sql/pglite-socket": "^0.2.14",
     "@tailwindcss/postcss": "^4",
     "@types/node": "26.6.3",
     "@types/react": "^19",
