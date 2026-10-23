@@ -92,7 +92,17 @@ export function jsonError(err: unknown): NextResponse {
   }
   console.error('[api] unhandled error:', err);
   return NextResponse.json(
-    { error: { code: 'INTERNAL', message: 'something went wrong on our side' } },
+    {
+      error: {
+        code: 'INTERNAL',
+        message: 'something went wrong on our side',
+        // The error CLASS only (e.g. PrismaClientKnownRequestError) - never
+        // the message. This deployment runs without operator log access from
+        // the build side; a class name in the body turns an opaque 500 into
+        // a diagnosable one without disclosing anything sensitive.
+        kind: name || undefined,
+      },
+    },
     { status: 500 },
   );
 }

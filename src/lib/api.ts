@@ -43,26 +43,22 @@ import {
 } from '@/server/ops';
 import { everyPostingBalances } from '@/server/ledger';
 import { resolveSession } from '@/server/auth';
+import { ApiError } from '@/server/http';
 import type { SearchResponse } from './contract';
 
 export * from './contract';
 export * from './portal';
 
 /**
- * A backend rejection, carrying the code the error filter assigned it. The
- * console shows the backend's own message rather than inventing one, so an
- * officer sees the actual reason (`FIELD_REPORT_REQUIRED`) and not a guess.
+ * THE ApiError, re-exported from the HTTP edge (src/server/http) so there is
+ * exactly ONE class in the system. This module used to define its own
+ * structurally-identical duplicate - and every rejection raised inside the
+ * in-process resolvers then fell through jsonError's instanceof/name checks
+ * and surfaced as a 500 INTERNAL instead of its real status (a missing
+ * listing 404'd as a 500; a non-owner's photo request 500'd instead of 404).
+ * Found by the first integrated production E2E (launch-gate round 2).
  */
-export class ApiError extends Error {
-  constructor(
-    readonly status: number,
-    readonly code: string,
-    message: string,
-  ) {
-    super(message);
-    this.name = 'ApiError';
-  }
-}
+export { ApiError };
 
 function unauthenticated(): ApiError {
   return new ApiError(401, 'UNAUTHENTICATED', 'not signed in');
