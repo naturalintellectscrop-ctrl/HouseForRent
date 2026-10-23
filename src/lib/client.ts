@@ -50,14 +50,30 @@ export async function postJson<T = Record<string, unknown>>(
 }
 
 /** Uploads a file as multipart/form-data (photography upload). */
-export async function postFile<T = Record<string, unknown>>(path: string, file: File): Promise<T> {
+export async function postFile<T = Record<string, unknown>>(
+  path: string,
+  file: File,
+  extra?: Record<string, string>,
+): Promise<T> {
   const form = new FormData();
   form.append('file', file);
+  for (const [k, v] of Object.entries(extra ?? {})) form.append(k, v);
   const res = await fetch(`/api/v1${path}`, { method: 'POST', body: form });
   const parsed = await parse(res);
   if (!res.ok) {
     const err = parsed.error as { code?: string; message?: string } | undefined;
     throw new ClientApiError(res.status, err?.code ?? 'UNKNOWN', err?.message ?? `upload failed (${res.status})`);
+  }
+  return parsed as T;
+}
+
+/** GET JSON from /api/v1, with the API's error shape. */
+export async function getJson<T = Record<string, unknown>>(path: string): Promise<T> {
+  const res = await fetch(`/api/v1${path}`, { cache: 'no-store' });
+  const parsed = await parse(res);
+  if (!res.ok) {
+    const err = parsed.error as { code?: string; message?: string } | undefined;
+    throw new ClientApiError(res.status, err?.code ?? 'UNKNOWN', err?.message ?? `request failed (${res.status})`);
   }
   return parsed as T;
 }

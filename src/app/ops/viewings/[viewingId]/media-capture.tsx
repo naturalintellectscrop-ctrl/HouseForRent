@@ -1,33 +1,155 @@
+'use client';
+
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { getJson, postFile, ClientApiError } from '@/lib/client';
+import { ApiAlert } from '@/app/ui';
+
+interface PhotoRow {
+  id: string;
+  mediaAssetId: string;
+  url: string;
+  caption: string | null;
+  source: string;
+  isFieldVerified: boolean;
+  isDevelopmentFixture: boolean;
+}
+
+const MAX_BYTES = 4_000_000;
+const ACCEPTED = 'image/jpeg,image/png';
+
+const SOURCE_LABEL: Record<string, string> = {
+  field_officer: 'verified — taken on our visit',
+  lister: 'supplied by the lister',
+  development_fixture: 'demonstration imagery',
+};
+
 /**
  * FR-5.5 - professional media captured during the field visit.
  *
- * ── SANDBOX ADAPTATION: photography upload is not implemented in this port ──
- * The reference posted the file's METADATA to `/v1/viewings/:id/media` so the
- * compression ladder and its ceilings were genuinely exercised; the real
- * object store stayed procurement-gated behind `MediaStorageProvider`. This
- * port has no media ingest route and no store, so there is no capture
- * control to offer - pretending otherwise with a disabled button or a fake
- * progress bar would sell a capability the system does not have.
+ * This is the real ingest now: the officer's photographs ride the
+ * MediaStorageProvider seam (Supabase Storage in production, disk in the
+ * sandbox), land on the listing as `field_officer` provenance, and are
+ * served only through the authorized media proxy. The client stays thin on
+ * purpose - presence and size checks here just avoid a pointless round
+ * trip on a field connection; the backend re-validates content (magic
+ * bytes), ownership and the open-visit window regardless.
  *
- * In this port photography rides with the field verification fixtures: the
- * demo listing imagery is labelled `development_fixture` and was never
- * presented as an officer's photograph. The structured field report remains
- * the evidence of the visit. Re-introducing capture later is a transport
- * change at the API edge, not a redesign of this page.
- *
- * This stays a server component on purpose: there is nothing to interact
- * with, so nothing ships to the browser.
+ * Uploads are transactional server-side: a failed upload leaves no row and
+ * no bytes, so it can never leave a published listing pointing at nothing.
  */
-export function MediaCapture({ viewingId: _viewingId }: { viewingId: string }) {
+export function MediaCapture({ viewingId, listingId }: { viewingId: string; listingId: string }) {
+  const router = useRouter();
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<{ message: string; code?: string | null } | null>(null);
+  const [ok, setOk] = useState<string | null>(null);
+  const [photos, setPhotos] = useState<PhotoRow[]>([]);
+  const [loaded, setLoaded] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const loadPhotos = useCallback(async () => {
+    try {
+      const data = await getJson<{ photos: PhotoRow[] }>(`/landlord/listings/${listingId}/photos`);
+      setPhotos(data.photos);
+      setLoaded(true);
+    } catch {
+      // Non-fatal: the strip is a convenience; the upload path validates
+      // server-side regardless.
+      setLoaded(true);
+    }
+  }, [listingId]);
+
+  useEffect(() => {
+    void loadPhotos();
+  }, [loadPhotos]);
+
+  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setError(null);
+    setOk(null);
+    const file = inputRef.current?.files?.[0];
+    if (!file) {
+      setError({ message: 'Choose a photograph first.' });
+      return;
+    }
+    if (file.size > MAX_BYTES) {
+      setError({ message: 'That file is over 4 MB - compress it before uploading on a field connection.' });
+      return;
+    }
+    setPending(true);
+    try {
+      const captionEl = e.currentTarget.elements.namedItem('caption') as HTMLInputElement | null;
+      const caption = captionEl?.value.trim();
+      await postFile(`/viewings/${viewingId}/media`, file, caption ? { caption } : undefined);
+      setOk('Photograph attached to the listing as verified (field_officer) imagery.');
+      if (inputRef.current) inputRef.current.value = '';
+      if (captionEl) captionEl.value = '';
+      await loadPhotos();
+      router.refresh();
+    } catch (err) {
+      if (err instanceof ClientApiError) {
+        setError({ message: err.message, code: err.code });
+      } else {
+        setError({
+          message:
+            'Could not reach the House For Rent API. The photograph was not saved - try again when you have signal.',
+        });
+      }
+    } finally {
+      setPending(false);
+    }
+  }
+
   return (
-    <div className="card">
-      <p className="alert alert-note">
-        Photography is not part of this port. The three-rung compression
-        ladder and the media store it feeds are procurement-gated (SSOT §8),
-        so no capture control is offered here - and none is faked. The
-        structured field report above is the evidence this visit leaves;
-        listing imagery comes from field verification fixtures.
-      </p>
+    <div className="stack-sm">
+      {error && <ApiAlert message={error.message} code={error.code} />}
+      {ok && <p className="alert alert-ok">{ok}</p>}
+
+      {loaded && photos.length > 0 && (
+        <div className="photo-strip" role="list" aria-label="Photographs on this listing">
+          {photos.map((p) => (
+            <figure key={p.id} role="listitem" className="photo-strip-item">
+              <img src={p.url} alt={p.caption ?? 'Listing photograph'} loading="lazy" />
+              <figcaption>
+                <span className="pill">{SOURCE_LABEL[p.source] ?? p.source}</span>
+              </figcaption>
+            </figure>
+          ))}
+        </div>
+      )}
+
+      <form onSubmit={onSubmit} className="stack-sm">
+        <div className="field">
+          <label htmlFor="media-file">Photograph (JPEG or PNG, up to 4 MB)</label>
+          <input
+            ref={inputRef}
+            id="media-file"
+            type="file"
+            accept={ACCEPTED}
+            required
+            disabled={pending}
+          />
+        </div>
+        <div className="field">
+          <label htmlFor="media-caption">Caption (optional)</label>
+          <input
+            id="media-caption"
+            name="caption"
+            type="text"
+            maxLength={140}
+            placeholder="Front entrance, north-facing sitting room…"
+            disabled={pending}
+          />
+        </div>
+        <button type="submit" className="btn" disabled={pending}>
+          {pending ? 'Uploading…' : 'Attach photograph'}
+        </button>
+        <p className="hint">
+          Photographs taken on this visit are labelled as verified imagery taken
+          by our field officer - that label is the product, so capture the
+          property honestly.
+        </p>
+      </form>
     </div>
   );
 }

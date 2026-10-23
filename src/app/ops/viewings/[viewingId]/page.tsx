@@ -232,7 +232,7 @@ export default async function ViewingPage(props: {
       {scheduled && !fieldReport && (
         <>
           <h2>Photos &amp; video</h2>
-          <MediaCapture viewingId={viewing.id} />
+          <MediaCapture viewingId={viewing.id} listingId={listing.id} />
         </>
       )}
 
