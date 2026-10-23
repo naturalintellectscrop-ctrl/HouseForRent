@@ -1084,3 +1084,20 @@ Unresolved issues or risks, and priority recommendations for the next phase:
 - Supabase Storage adapter is now the top standing item: real listing photos need a real object store (media_asset is empty; the old mock:// refs are gone with the fixtures).
 - Payout dispatch and the production-safe QA harness remain open; Search Console submission is still an owner action.
 - The 15-minute webDevReview cycle continues (job 430075).
+---
+Task ID: 42
+Agent: web takeover agent (production-readiness audit)
+Task: Owner asked "How far are we from production? Gauge from repo code results and a number of other factors."
+
+Work Log:
+- AUDITED WITH EVIDENCE, NOT OPINION: tsc --noEmit = 0 errors (ignoreBuildErrors is dormant); ESLint 0; production (houseforrentug.vercel.app) verified serving the post-purge truth state with HSTS + X-Frame-Options DENY + nosniff + Referrer-Policy + Permissions-Policy; 40+ API routes covering auth/deals/ledger/identity/listings/admin/ops/PSP-webhook; NylonPay integration is fail-safe (sandbox default, live mode requires all three credentials, webhook signature gates every custody booking); DB clean with 10 append-only triggers verified enforcing; owner auth E2E intact.
+- VERDICT DELIVERED: ~80% production-ready, "beta-live" now, real-money launch gated on 4 P0s (Storage adapter, PSP live credentials, legal pages, custom domain) + P1s (notifications, monitoring, shared rate limiting, backup confirmation) + P2s (CSP, ignoreBuildErrors flip, runbook).
+- Full scorecard and gap list recorded in the owner report (this conversation) and visible in the standing-items list below.
+
+Stage Summary:
+- The engineering floor is genuinely production-grade; the remaining distance is mostly business plumbing (object storage, PSP merchant credentials, legal text, domain) rather than code.
+
+Unresolved issues or risks, and priority recommendations for the next phase:
+- P0: Supabase Storage adapter; NYLONPAY live credentials (owner account with PSP); Privacy Policy + Terms pages; custom domain + Search Console.
+- P1: email/SMS channel (forgot-password self-service, deal notifications); Sentry/uptime monitoring; rate limiter to shared store if multi-instance; Supabase backup/PITR confirmation.
+- P2: CSP header; flip typescript.ignoreBuildErrors to false (code is clean); ops runbook (freshness window); production-safe QA harness.
