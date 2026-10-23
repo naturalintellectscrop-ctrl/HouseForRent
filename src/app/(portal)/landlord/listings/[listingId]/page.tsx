@@ -138,9 +138,11 @@ export default async function LandlordListingPage({
                           ? 'We schedule this - you do not need to do anything. The officer will contact you to arrange a time.'
                           : b === 'listing_agreement'
                             ? 'The commission terms are below. Read them and accept when you are ready.'
-                            : b === 'outside_service_area'
-                              ? 'We are not yet operating in this neighbourhood, so no officer can verify it.'
-                              : 'We need a verified mandate for this property before it can be published.'}
+                            : b === 'photography'
+                              ? 'Add at least one photograph in the Photography section - a listing without pictures cannot go live.'
+                              : b === 'outside_service_area'
+                                ? 'We are not yet operating in this neighbourhood, so no officer can verify it.'
+                                : 'We need a verified mandate for this property before it can be published.'}
                       </span>
                     </span>
                   </li>
@@ -178,7 +180,16 @@ export default async function LandlordListingPage({
               </div>
             ) : null}
 
-            <PhotoManager />
+            <PhotoManager
+              listingId={listingId}
+              publicationState={listing.publicationState}
+              photos={photos.map((p) => ({
+                id: p.id,
+                mediaAssetId: p.mediaAssetId,
+                source: p.source,
+                caption: p.caption,
+              }))}
+            />
             <p className="hint">
               Your photographs help, and our officer takes their own on the
               verification visit. Only the officer&rsquo;s are shown to tenants

@@ -10,6 +10,7 @@ const BLOCKER_COPY: Record<string, string> = {
   outside_service_area: 'This neighbourhood is outside the area we currently cover',
   listing_agreement: 'You have not yet accepted the listing agreement',
   mandate: 'We need a verified mandate for this specific property',
+  photography: 'The listing needs at least one photograph',
 };
 
 /**

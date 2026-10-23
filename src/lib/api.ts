@@ -627,6 +627,18 @@ async function resolveListingPhotos(listingId: string) {
   if (caller.role !== 'lister' && caller.role !== 'admin' && caller.role !== 'foo') {
     throw new ApiError(403, 'FORBIDDEN', 'staff or lister surface');
   }
+  // Role membership is not ownership (F-016): a lister reads only their
+  // own listing's photography metadata. 404, not 403 - someone else's
+  // listing is not disclosed to exist.
+  if (caller.role === 'lister') {
+    const listing = await db.listing.findUnique({
+      where: { id: listingId },
+      select: { property: { select: { ownerPartyId: true } } },
+    });
+    if (!listing || listing.property.ownerPartyId !== caller.partyId) {
+      throw new ApiError(404, 'LISTING_NOT_FOUND', 'listing not found');
+    }
+  }
   const photos = await db.listingPhoto.findMany({
     where: { listingId },
     orderBy: { sortOrder: 'asc' },
