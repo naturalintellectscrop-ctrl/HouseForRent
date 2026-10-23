@@ -70,7 +70,16 @@ The script refuses to run against the source URL, refuses a non-empty target, or
 
 ### Recovery-test status
 
-> **NOT YET TESTED.** The production database is paused (owner decision) and the sandbox has no PostgreSQL server, so no restore has been executed yet. Per the launch rule: **no backup claim is made until a restore into a recovery database has been run and verified.** First test is queued as the first action after the database is resumed.
+> **MACHINERY VERIFIED (October 2026, launch-gate round 2) — PRODUCTION EXPORT STILL PENDING.**
+> `scripts/recovery-drill.mjs` executes the full pipeline end to end against a real, separate PostgreSQL instance (PGlite — Postgres 16 WASM — served over the wire protocol, exercised with the application's own Prisma client) using a **synthetic, clearly-labelled** export:
+> - safety rails refuse (`ALLOW_DB_RESTORE` missing → exit 2; `RESTORE_DATABASE_URL == DATABASE_URL` → exit 2);
+> - schema applied to a fresh target (34 tables); empty-target precondition holds;
+> - parents-first load **including self-referencing tables** (`neighbourhood.parent_id` — the drill caught and fixed a real defect: the original topo-sort aborted on self-FKs, which real production data uses for districts);
+> - manifest counts match exactly; ledger Σdebits = Σcredits; FK chains (listing→property→party→neighbourhood, agreement→rate version) join;
+> - the application's own client reads the restored rows.
+>
+> **What this does NOT claim:** no production export has been taken yet — the export requires the production `DATABASE_URL`, which is held only in Vercel/Supabase (never in the sandbox; the credentials payload referenced by the owner was not received). The first real export + restore drill must be recorded here before any backup claim is made.
+> **Drill note:** the PGlite socket target needs `?pgbouncer=true` on the connection string (simple query protocol — PGlite does not carry Prisma's named prepared statements across session reuse, `42P05`). Real PostgreSQL recovery targets do not need this flag.
 
 ## 5. Media (photos) — separate problem, stated honestly
 
@@ -93,4 +102,4 @@ The database export does NOT contain photograph bytes. Listing photos live in ob
 ## 7. Limitations of this document
 
 - Written from verified sources in October 2026; Supabase plan terms change — re-verify pricing before any purchase.
-- The export/restore scripts are code-reviewed but **not yet executed against the real database** (blocked on resumption). Their first real run and the first restore test must be recorded in the worklog before any backup claim is made.
+- The export script is code-reviewed and its restore counterpart is **machinery-verified** (recovery drill, October 2026); neither has touched the real production database yet — the first real run and the first production restore test must be recorded in the worklog before any backup claim is made.

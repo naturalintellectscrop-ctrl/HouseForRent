@@ -89,6 +89,7 @@ export function PhotoManager({
           PHOTO_LIMIT_REACHED: 'A listing carries at most 12 photographs.',
           MEDIA_WINDOW_CLOSED: 'This listing is live - withdraw it before changing your photographs.',
           MEDIA_STORE_UNAVAILABLE: 'The photo store is not reachable right now. Nothing was added - try again shortly.',
+          MEDIA_STORE_FAILED: 'The photo store refused the upload and nothing was added. Storage is still being configured - try again shortly.',
           NOT_YOUR_LISTING: 'This listing is not yours to photograph.',
         };
         setError({

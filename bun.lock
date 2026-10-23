@@ -75,6 +75,8 @@
         "zustand": "^5.0.6",
       },
       "devDependencies": {
+        "@electric-sql/pglite": "^0.5.11",
+        "@electric-sql/pglite-socket": "^0.2.14",
         "@tailwindcss/postcss": "^4",
         "@types/node": "26.6.3",
         "@types/react": "^19",
@@ -206,6 +208,24 @@
     "@dnd-kit/sortable": ["@dnd-kit/sortable@10.0.0", "https://registry.npmjs.com/@dnd-kit/sortable/-/sortable-10.0.0.tgz", { "dependencies": { "@dnd-kit/utilities": "^3.2.2", "tslib": "^2.0.0" }, "peerDependencies": { "@dnd-kit/core": "^6.3.0", "react": ">=16.8.0" } }, "sha512-+xqhmIIzvAYMGfBYYnbKuNicfSsk4RksY2XdmJhT+HAC01nix6fHCztU68jooFiMUB01Ky3F0FyOvhG/BZrWkg=="],
 
     "@dnd-kit/utilities": ["@dnd-kit/utilities@3.2.2", "https://registry.npmjs.com/@dnd-kit/utilities/-/utilities-3.2.2.tgz", { "dependencies": { "tslib": "^2.0.0" }, "peerDependencies": { "react": ">=16.8.0" } }, "sha512-+MKAJEOfaBe5SmV6t34p80MMKhjvUz0vRrvVJbPT0WElzaOJ/1xs+D+KDv+tD/NE5ujfrChEcshd4fLn0wpiqg=="],
+
+    "@electric-sql/pglite": ["@electric-sql/pglite@0.5.11", "", {}, "sha512-SWuqsTjA4DDWqgZ05PC1RJaq8e00p5KACxbqaikDFQ8dIGA0SLRzuPniky7IW+q/c5RDNMdEXwv7mFBWIx9Hxw=="],
+
+    "@electric-sql/pglite-age": ["@electric-sql/pglite-age@0.0.12", "", { "peerDependencies": { "@electric-sql/pglite": "0.5.11" } }, "sha512-h3w0ZbR/thNxbRiHrakK5XOJE5bbyIGT0mknREwiE2ELCLAEVv10x3jhnIkXTU5YJ5WzTZj2NbrFcAl/iHj3XQ=="],
+
+    "@electric-sql/pglite-pg_hashids": ["@electric-sql/pglite-pg_hashids@0.0.12", "", { "peerDependencies": { "@electric-sql/pglite": "0.5.11" } }, "sha512-2vXH899hpmiKMhI1NvR9wxfyyW2SyvAMlBOwm8t02BRMpHIkXtl++fsBUTibL0TzTMAVLRFts53czelLPN0rDw=="],
+
+    "@electric-sql/pglite-pg_ivm": ["@electric-sql/pglite-pg_ivm@0.0.12", "", { "peerDependencies": { "@electric-sql/pglite": "0.5.11" } }, "sha512-I+WQ0Hb7u7ZxMmznazZ15C0T6c4OKRuKVc5LaKkPNU+Cv7/aZmqRfPOHVu4MY65HC65dU3YmxT0A+tdWHcUF8w=="],
+
+    "@electric-sql/pglite-pg_textsearch": ["@electric-sql/pglite-pg_textsearch@0.0.13", "", { "peerDependencies": { "@electric-sql/pglite": "0.5.11" } }, "sha512-TQX6Opop6fRkfgbZcuUDZ4UYm7x07uQ5JznVJWG9QL3H3hx3qQ1CbqG6eSHzVEjGxxFqoH+2UJs0l/XR/Y3esA=="],
+
+    "@electric-sql/pglite-pg_uuidv7": ["@electric-sql/pglite-pg_uuidv7@0.0.12", "", { "peerDependencies": { "@electric-sql/pglite": "0.5.11" } }, "sha512-Q+JvI5fSE0bws+qNa9hzoZEqhGFql/LjTZ5Fq1ojKx2hd99RNkLRcpDUNjqeyluCpZS5Aq/PsLjb5JBUevkXGw=="],
+
+    "@electric-sql/pglite-pgtap": ["@electric-sql/pglite-pgtap@0.0.12", "", { "peerDependencies": { "@electric-sql/pglite": "0.5.11" } }, "sha512-qp8jE4sx+fNoCkcyd/cL8od+Nir4hFVphSh4/vH7P3cFCH6/sayWjQas9OyzPL0JHe7XQRFquyOvgwtUzbJgXQ=="],
+
+    "@electric-sql/pglite-pgvector": ["@electric-sql/pglite-pgvector@0.0.12", "", { "peerDependencies": { "@electric-sql/pglite": "0.5.11" } }, "sha512-n3TJqjWI9FXwFrGhuTVMghef8SL3E6nb4lxZnxYFW3UTg/7/hMUWfz7v2y0+idWzEsQ/raRpMNCsw9zvSdC/SA=="],
+
+    "@electric-sql/pglite-socket": ["@electric-sql/pglite-socket@0.2.14", "", { "peerDependencies": { "@electric-sql/pglite": "0.5.11", "@electric-sql/pglite-age": "0.0.12", "@electric-sql/pglite-pg_hashids": "0.0.12", "@electric-sql/pglite-pg_ivm": "0.0.12", "@electric-sql/pglite-pg_textsearch": "0.0.13", "@electric-sql/pglite-pg_uuidv7": "0.0.12", "@electric-sql/pglite-pgtap": "0.0.12", "@electric-sql/pglite-pgvector": "0.0.12" }, "bin": { "pglite-server": "dist/scripts/server.js" } }, "sha512-n7JO9FzxQHdF5oBKzovf/LuRUrEUpOgGP/tmfxmOB5lqWPySTKkCb6FBkzj7kztWGJu9eB0FoilqxvOJ+9+0fQ=="],
 
     "@emnapi/core": ["@emnapi/core@1.8.1", "https://registry.npmjs.com/@emnapi/core/-/core-1.8.1.tgz", { "dependencies": { "@emnapi/wasi-threads": "1.1.0", "tslib": "^2.4.0" } }, "sha512-AvT9QFpxK0Zd8J0jopedNm+w/2fIzvtPKPjqyw9jwvBaReTTqPBk9Hixaz7KbjimP+QNz605/XnjFcDAL2pqBg=="],
 
