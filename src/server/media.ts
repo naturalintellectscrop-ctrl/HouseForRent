@@ -12,6 +12,10 @@
  *    open visit (status 'scheduled', before the field report closes it),
  *    or by an admin on the officer's behalf. A tenant, landlord, or
  *    unassigned officer can never attach media to someone else's visit.
+ *    A lister may photograph their OWN listing, but only BEFORE it is
+ *    published (draft / awaiting_verification / withdrawn) — a live
+ *    gallery is never quietly swapped behind a tenant's search result,
+ *    and officer photography stays in the officer's hands.
  * 4. Publication honesty: the DB rows and the stored bytes move together.
  *    Bytes are stored first; the rows are written in one transaction; if
  *    the transaction fails the bytes are compensated away. A failed upload
@@ -23,12 +27,18 @@
  */
 import { db } from '@/lib/db';
 import { ApiError } from './http';
+import { NotYourListingError } from './listings';
 import {
   assertSafeStorageRef,
   assertUploadableStorage,
   MediaNotFoundError,
   mediaStorage,
 } from './media-storage';
+
+/** A listing's gallery is a short list, not a dump: 12 photographs cover
+ * every room a tenant decides from, and the cap keeps one account from
+ * filling the bucket. */
+export const MAX_PHOTOS_PER_LISTING = 12;
 
 export class MediaWindowClosedError extends Error {
   constructor() {
@@ -180,6 +190,104 @@ export async function uploadViewingMedia(params: {
   }
 }
 
+// ── Upload (lister path — own listing, pre-publication only) ─────────────
+
+/**
+ * Attaches the lister's own photograph to their own listing while the
+ * listing is still unpublished. The same content rules as the officer path
+ * (magic bytes, size cap, declared-MIME cross-check), the same transactional
+ * row/bytes contract — but provenance is 'lister' and the window closes at
+ * publication: a live gallery cannot be swapped without withdrawing first.
+ */
+export async function uploadListerMedia(params: {
+  listingId: string;
+  actorPartyId: string;
+  bytes: Uint8Array;
+  declaredMime: string | null;
+  caption?: string;
+}): Promise<UploadedMediaResult> {
+  assertUploadableStorage();
+  assertMediaSize(params.bytes.length);
+  const sniffed = sniffImageType(params.bytes);
+  if (!sniffed) {
+    throw new ApiError(415, 'MEDIA_TYPE_NOT_ACCEPTED', 'only JPEG and PNG photographs are accepted');
+  }
+  assertDeclaredMimeMatches(params.declaredMime, sniffed.mime);
+
+  const listing = await db.listing.findUnique({
+    where: { id: params.listingId },
+    select: { id: true, publicationState: true, property: { select: { ownerPartyId: true } } },
+  });
+  if (!listing) throw new ApiError(404, 'LISTING_NOT_FOUND', 'listing not found');
+  // 403 with the domain's own words: role membership is not ownership.
+  if (listing.property.ownerPartyId !== params.actorPartyId) throw new NotYourListingError();
+  if (listing.publicationState === 'live' || listing.publicationState === 'rented') {
+    throw new ApiError(
+      409,
+      'MEDIA_WINDOW_CLOSED',
+      'photographs on a live listing are managed by staff - withdraw it first if you need to change yours',
+    );
+  }
+  const photoCount = await db.listingPhoto.count({ where: { listingId: listing.id } });
+  if (photoCount >= MAX_PHOTOS_PER_LISTING) {
+    throw new ApiError(409, 'PHOTO_LIMIT_REACHED', `a listing carries at most ${MAX_PHOTOS_PER_LISTING} photographs`);
+  }
+
+  const { provider } = mediaStorage();
+  const ref = `listings/${listing.id}/${crypto.randomUUID()}.${sniffed.ext}`;
+  assertSafeStorageRef(ref);
+  await provider.put(ref, params.bytes, sniffed.mime);
+
+  try {
+    return await db.$transaction(async (tx) => {
+      const asset = await tx.mediaAsset.create({
+        data: {
+          storageRef: ref,
+          kind: 'image',
+          uploadedByPartyId: params.actorPartyId,
+          mimeType: sniffed.mime,
+          byteSize: params.bytes.length,
+        },
+      });
+      const last = await tx.listingPhoto.findFirst({
+        where: { listingId: listing.id },
+        orderBy: { sortOrder: 'desc' },
+        select: { sortOrder: true },
+      });
+      const photo = await tx.listingPhoto.create({
+        data: {
+          listingId: listing.id,
+          mediaAssetId: asset.id,
+          sortOrder: (last?.sortOrder ?? 0) + 1,
+          caption: params.caption?.trim() || null,
+          source: 'lister',
+        },
+      });
+      await tx.auditEvent.create({
+        data: {
+          actorPartyId: params.actorPartyId,
+          eventType: 'media_uploaded',
+          subjectRef: asset.id,
+          payload: { listingId: listing.id, via: 'lister', byteSize: params.bytes.length, mimeType: sniffed.mime },
+          occurredAt: new Date(),
+        },
+      });
+      return {
+        mediaAssetId: asset.id,
+        listingPhotoId: photo.id,
+        sortOrder: photo.sortOrder,
+        mimeType: sniffed.mime,
+        byteSize: params.bytes.length,
+      };
+    });
+  } catch (err) {
+    // Same compensation contract as the officer path: rows failed to commit,
+    // so the bytes must not outlive them.
+    await provider.delete(ref);
+    throw err;
+  }
+}
+
 // ── Visibility ──────────────────────────────────────────────────────────────
 
 export type MediaAccess = { allowed: boolean; publiclyReadable: boolean };
@@ -257,6 +365,9 @@ export async function readMediaBytes(storageRef: string): Promise<{ bytes: Uint8
  * decorates itself with it (a live page must never show a broken image);
  * staff withdraw the listing first. Non-live references are removed with
  * the asset in one transaction; bytes are compensated last.
+ * The landlord delete route authorises lister-sourced photos on the
+ * caller's own unpublished listing BEFORE calling this; the live-refusal
+ * here is the second gate, not the only one.
  */
 export async function deleteMediaAsset(params: {
   mediaAssetId: string;

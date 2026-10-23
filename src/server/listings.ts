@@ -493,6 +493,7 @@ function publishBlockers(input: {
   hasAcceptedAgreement: boolean;
   listerTier: ListerTier | undefined;
   mandateVerified: boolean;
+  photoCount: number;
 }): string[] {
   const blockedBy: string[] = [];
   if (input.verificationState !== 'verified') blockedBy.push('field_verification');
@@ -501,12 +502,17 @@ function publishBlockers(input: {
     blockedBy.push('mandate');
   }
   if (!input.hasAcceptedAgreement) blockedBy.push('listing_agreement');
+  // A live page with an empty gallery would be a search result promising a
+  // home nobody can see (the gate-table finding from the media round, now
+  // the rule): at least one photograph must be on the listing.
+  if (input.photoCount < 1) blockedBy.push('photography');
   return blockedBy;
 }
 
 /**
- * THE publish gate - all four preconditions enforced server-side (FR-2.5,
- * FR-3.1, FR-3.2, FR-9.1). `dryRun` produces the same evaluation without
+ * THE publish gate - the preconditions enforced server-side (FR-2.5,
+ * FR-3.1, FR-3.2, FR-9.1, plus the photography rule from the launch-gate
+ * round). `dryRun` produces the same evaluation without
  * flipping state, so the landlord UI can show what is still missing.
  */
 export async function evaluatePublish(listingId: string, dryRun = true) {
@@ -515,6 +521,7 @@ export async function evaluatePublish(listingId: string, dryRun = true) {
     include: {
       property: { include: { neighbourhood: true, ownerParty: { include: { listerProfile: true } } } },
       listingAgreements: { where: { accepted: true }, take: 1 },
+      photos: { select: { id: true } },
     },
   });
   if (!listing) throw new Error('listing not found');
@@ -529,6 +536,7 @@ export async function evaluatePublish(listingId: string, dryRun = true) {
     hasAcceptedAgreement: listing.listingAgreements.length > 0,
     listerTier: tier,
     mandateVerified,
+    photoCount: listing.photos.length,
   });
 
   if (!dryRun && blockedBy.length === 0) {
@@ -606,6 +614,7 @@ export async function findForLister(listerPartyId: string) {
         hasAcceptedAgreement: listing.listingAgreements.some((a) => a.accepted),
         listerTier: tierCast,
         mandateVerified,
+        photoCount: listing.photos.length,
       });
       const accepted = listing.listingAgreements.find((a) => a.accepted);
 
@@ -661,6 +670,7 @@ export async function adminVerificationQueue() {
     include: {
       property: { include: { neighbourhood: true, ownerParty: { include: { listerProfile: true } } } },
       listingAgreements: { where: { accepted: true }, take: 1 },
+      photos: { select: { id: true } },
     },
     orderBy: { createdAt: 'asc' },
   });
@@ -677,6 +687,7 @@ export async function adminVerificationQueue() {
         hasAcceptedAgreement: listing.listingAgreements.length > 0,
         listerTier: tier,
         mandateVerified,
+        photoCount: listing.photos.length,
       });
       const mandate = tier && tier !== 'property_owner'
         ? await db.propertyMandate.findFirst({
