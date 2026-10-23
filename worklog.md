@@ -1101,3 +1101,31 @@ Unresolved issues or risks, and priority recommendations for the next phase:
 - P0: Supabase Storage adapter; NYLONPAY live credentials (owner account with PSP); Privacy Policy + Terms pages; custom domain + Search Console.
 - P1: email/SMS channel (forgot-password self-service, deal notifications); Sentry/uptime monitoring; rate limiter to shared store if multi-instance; Supabase backup/PITR confirmation.
 - P2: CSP header; flip typescript.ignoreBuildErrors to false (code is clean); ops runbook (freshness window); production-safe QA harness.
+
+---
+Task ID: 43
+Agent: web takeover agent (production gate verification — Phase A complete)
+Task: Owner commissioned "Production Gate Verification and Execution" (Phases A–F): establish actual production state, close launch blockers (media/storage, build safety, legal pages), database resilience, NylonPay readiness, full business-flow verification, and a final launch gate table. Operating rules: inspect before claiming, no secrets in logs, no DB modification without approval, no live payments without merchant approval, no fabricated checks.
+
+Work Log:
+- PHASE A — ACTUAL PRODUCTION STATE (all claims evidence-backed):
+  - Production URL https://houseforrentug.vercel.app is LIVE: HTTP 200, HSTS (2yr, preload), X-Frame-Options DENY, nosniff, Referrer-Policy, Permissions-Policy present (curl -I).
+  - Deployed commit: origin/main = 946e0ad (verified via git fetch). TWO local commits are UNPUSHED (e73953c worklog, 509a4cf file-mode resync) — production therefore serves 946e0ad's code; the dual-push convention was violated by an earlier round (restored this round).
+  - Exact deployment timestamp: NOT verifiable from sandbox (no Vercel API token) — owner can read it in the Vercel dashboard. Not claimed.
+  - PRODUCTION DATABASE IS UNREACHABLE — consistent with the owner's statement that Supabase Free tier is deliberately paused: /api/v1/listings → 500 INTERNAL; /properties SSR degrades gracefully to "The marketplace could not be reached just now" (the Task-34 degradation path working as designed). Per operating rule 4/5: NO failing integration tests were hammered against production; the dependency is documented and DB resumption requires owner action.
+  - Supabase project identity: CANNOT be reported from the sandbox. The pooler URL + credentials provided in Task 40 were applied to a local .env that was lost in a sandbox reset (.env is back to the SQLite template). Repo holds no secrets by design (correct). Safe identifiers (project ref/region) are visible to the owner in Vercel → Settings → Environment Variables (DATABASE_URL host) and in the Supabase dashboard. NOT guessed, NOT claimed.
+  - Schema/migration verification in production: BLOCKED while DB is paused. Task 41 verified 33 models + append-only triggers post-purge; production served post-purge truth state (Task 42); re-verification requires resumption.
+  - "80% readiness" reconciliation: WITHDRAWN as unexplained. Replaced by the Phase F gate table with per-gate evidence, status, owner and blocking scope. No percentage is retained.
+  - Environment traps fixed: the persistent shell exported a stale SQLite DATABASE_URL which overrides .env (documented in Task 40) — dev server restarted with `env -u DATABASE_URL`. Local .env has no Supabase pooler string → ALL DB-backed local integration testing is currently impossible (standing blocker, owner action).
+- KEY CODE FINDINGS feeding Phase B:
+  - prisma/schema.prisma verified INTACT (a suspected corruption on ListingPhoto.mediaAssetId was disproven by byte-level od comparison — display truncation only).
+  - Media architecture: MediaAsset.storageRef names a file under MEDIA_ROOT on LOCAL DISK; /api/v1/media/:id serves bytes from that disk with NO access control (any unauthenticated caller can read any asset — mandate evidence included) and breaks on Vercel (ephemeral read-only FS). Media ingest was deliberately absent ("procurement-gated behind MediaStorageProvider"; PhotoManager and MediaCapture render honest disabled states).
+  - Models available for the adapter: MediaKind(image|video), ListingPhoto(source: field_officer|lister|development_fixture, @@unique([listingId, mediaAssetId])), PropertyMandate.evidenceMediaId (private document path), PublicationState(draft|awaiting_verification|live|rented|withdrawn), Viewing(listingId, conductedByPartyId, status requested|scheduled|conducted|no_show|cancelled).
+
+Stage Summary:
+- Phase A complete: production URL + deployed commit verified; production DB paused (documented dependency, owner approval required to resume — no tests were hammered); Supabase identity not reportable from sandbox (owner action); 80% score withdrawn pending gate-table evidence; two unpushed commits discovered; media architecture fully mapped with the public/private access-control gap identified.
+
+Unresolved issues or risks, and priority recommendations for the next phase:
+- OWNER: resume the Supabase project (or supply the pooler URL) — blocks Phase C backup work, Phase D webhook E2E and Phase E business-flow verification.
+- OWNER: Vercel deployment SHA/timestamp confirmation (dashboard) and Supabase project ref confirmation.
+- Next: Phase B1 Supabase Storage adapter + media access control; B2 build safety (ignoreBuildErrors, CSP); B3 legal pages.

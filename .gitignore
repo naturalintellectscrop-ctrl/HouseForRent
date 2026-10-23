@@ -63,3 +63,6 @@ server.log
 *.db
 --full-page
 .zscripts/
+
+# disaster-recovery exports contain real personal + money data — NEVER commit
+/backups/

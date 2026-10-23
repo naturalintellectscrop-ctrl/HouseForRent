@@ -77,6 +77,10 @@ export function jsonError(err: unknown): NextResponse {
     InvalidAmountError: { status: 400, code: 'INVALID_AMOUNT' },
     EmptyPostingError: { status: 500, code: 'EMPTY_POSTING' },
     UnbalancedPostingError: { status: 500, code: 'UNBALANCED_POSTING' },
+    MediaWindowClosedError: { status: 409, code: 'MEDIA_WINDOW_CLOSED' },
+    MediaReferencedByLiveListingError: { status: 409, code: 'MEDIA_ON_LIVE_LISTING' },
+    MediaStoreUnavailableError: { status: 503, code: 'MEDIA_STORE_UNAVAILABLE' },
+    MediaStoreError: { status: 502, code: 'MEDIA_STORE_FAILED' },
   };
   const name = err instanceof Error ? err.name : '';
   const mapped = map[name];

@@ -3410,3 +3410,51 @@ a.card-link:hover .card-title {
   .plat-who { margin-left: 0; width: 100%; justify-content: space-between; }
   .plat-main { padding: 1.75rem 0 2.5rem; }
 }
+
+/* ── field-officer media capture (FR-5.5) ────────────────────────────── */
+/* The visit console's capture strip: thumbnails in the same thin-line
+   register as .gallery-thumb, with provenance labels rendered by the
+   client but decided by the server. */
+.photo-strip {
+  display: flex;
+  gap: 0.5rem;
+  overflow-x: auto;
+  padding: 0.25rem 0.25rem 0.5rem;
+  scrollbar-width: thin;
+}
+.photo-strip-item {
+  flex: 0 0 auto;
+  width: 8.5rem;
+  margin: 0;
+}
+.photo-strip-item img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+.photo-strip-item figcaption {
+  margin-top: 0.3rem;
+  font-size: 0.6875rem;
+  color: var(--ink-soft);
+  line-height: 1.35;
+}
+.photo-strip-item .pill {
+  font-size: 0.625rem;
+  padding: 0.1rem 0.4rem;
+}
+
+/* ── responsive data tables ──────────────────────────────────────────── */
+/* Wide tables keep the page free of horizontal overflow: the wrapper
+   scrolls, the page does not. */
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+@media (max-width: 47.99rem) {
+  .table-scroll .plat-table { min-width: 38rem; }
+}

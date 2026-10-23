@@ -173,6 +173,8 @@ export function SiteFooter() {
             <h3>Company</h3>
             <Link href="/about">About us</Link>
             <Link href="/contact">Contact</Link>
+            <Link href="/terms">Terms of Service</Link>
+            <Link href="/privacy">Privacy Policy</Link>
             <Link href="/ops">Staff console</Link>
           </div>
         </div>
