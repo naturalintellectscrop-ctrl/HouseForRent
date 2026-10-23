@@ -93,7 +93,11 @@ async function main() {
   });
 
   try {
-    // 1. The target schema must already exist and be complete.
+    // 1. The target schema must already exist and be complete — checked
+    // against the FULL manifest (including 0-row tables). A target missing a
+    // manifest table would otherwise pass the load and then crash later with
+    // a raw 42P01 in the count verification (found by the first real-data
+    // recovery drill: production's out-of-band tables are in the manifest).
     const existing = new Set(
       (
         await db.$queryRawUnsafe(
@@ -102,16 +106,17 @@ async function main() {
         )
       ).map((r) => r.table_name)
     );
-    const missing = [...tables.keys()].filter((t) => !existing.has(t));
+    const manifestTables = new Set(Object.keys(manifest.tables));
+    const missing = [...manifestTables].filter((t) => !existing.has(t));
     if (missing.length > 0) {
       console.error(
-        `db-restore: target is missing tables: ${missing.join(", ")}. Apply the schema first (prisma migrate deploy / db push).`
+        `db-restore: target is missing tables present in the export manifest: ${missing.join(", ")}. Apply the complete schema first (prisma schema + scripts/recovery-out-of-band-tables.sql for the out-of-band tables).`
       );
       process.exit(2);
     }
 
-    // 2. The target must be empty.
-    for (const t of tables.keys()) {
+    // 2. The target must be empty (checked over the full manifest set).
+    for (const t of manifestTables) {
       const [{ n }] = await db.$queryRawUnsafe(`select count(*)::int as n from ${q(t)}`);
       if (n > 0) {
         console.error(`db-restore: target table ${t} already has ${n} rows — refusing a non-empty recovery database.`);
