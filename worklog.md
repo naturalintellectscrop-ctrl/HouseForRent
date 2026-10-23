@@ -1218,3 +1218,37 @@ Unresolved issues or risks, and priority recommendations for the next phase:
 - OWNER (unblocks schema verification + first real export + staff provisioning + deal/escrow E2E): deliver the production database credentials via an approved mechanism (not chat/worklog/repo) — they will be applied to the git-ignored .env and never echoed; the message that ended at "here are the database credentials:" arrived without the payload.
 - BLOCKED on staff capability (needs either an admin session or DB creds for scripts/provision-platform-owner.mjs): officer dispatch → field verification → publish-to-live → public image delivery, viewing conduct, introduction → deal → sandbox funding/escrow E2E. These are the remaining UNVERIFIED-on-current-production flows (previously verified pre-pause in Tasks 39–41; not re-claimed).
 - NylonPay Level-1 KYC (10M UGX monthly limit question to ask), domain + DNS, counsel review — unchanged from round 1.
+
+---
+Task ID: 45
+Agent: web takeover agent (launch-gate round 3 — DB creds delivered, real export/restore drill, lockfile fix)
+Task: Owner delivered the production pooler URL in chat and reported the Vercel deploy failing (`npm ci` EUSAGE: lockfile missing pglite entries). Standing order: verify the intended production database / schema / migrations / data state; complete all locally-actionable gate steps; credentials never into worklog/repo/chat; do not alter production records.
+
+Work Log:
+- VERCEL BUILD FIXED (user's reported failure): package.json gained @electric-sql/pglite devDeps but package-lock.json was never regenerated -> npm ci EUSAGE. `npm install --package-lock-only` + `npm ci --dry-run` (770 pkgs OK) -> commit 1c9db37 dual-pushed to main + sandbox/webapp. Vercel auto-redeploy confirmed healthy afterwards (/, /properties 200; /api/v1/listings honest empty state).
+- CREDENTIAL HANDLING: URL written ONLY to gitignored .env.production-verify (chmod 600; verified via git check-ignore; not tracked). NEVER echoed into worklog/repo/chat output. OWNER ADVISED TO ROTATE the pooler password since it transited chat, and to move it into Vercel env vars only.
+- GATE 1 (production DB verified, all read-only):
+  - Reachable: PostgreSQL 17.6 (Supabase pooler), db postgres, 20 MB. Project resumed.
+  - 41 public tables; truth-state data: 4 user_account / 4 user_credential / 16 session / 4 party / 2 property / 2 listing / 3 listing_agreement / 12 neighbourhood / 18 audit_event / 5 config_parameter / 1 commission_rate_version / 3 consent_record / 2 lister_profile — consistent with the QA E2E records of Task 44. All deal/ledger/psp/photo tables at 0 rows.
+  - _prisma_migrations: 9 applied OK (init .. listing_photos); ANOMALY: 2 failed-attempt rows for 20260804180000_better_auth_tables (finished_at NULL, logs: "relation ba_user already exists" / "constraint ba_session_user_id_fkey already exists" — ba_* had been created out-of-band). Benign historically but these rows BLOCK any future `prisma migrate deploy` until `prisma migrate resolve` is run. NOT executed (prod write; owner decision).
+  - Schema parity re-verified INDEPENDENTLY with `prisma migrate diff` (read-only): 33 Prisma models identical to prod; only DB-side extras = out-of-band ba_*/_applied_migrations + one undeclared index (saved_listing.listing_id) — now declared in schema.prisma (commit 5649f9a, additive, no push).
+  - Immutability wall verified on prod via pg_trigger: 11 append-only tables carry BEFORE UPDATE/DELETE reject_mutation triggers (audit_event, commission_rate_version, config_version, consent_record, deal_transition, introduction_record, ledger_entry, listing_agreement, psp_instruction, psp_instruction_event) + viewing_conducted_requires_evidence gate; rls_auto_enable present; RLS enabled on all 40 public tables.
+- STEP 4 (export -> separate recovery DB -> verify) EXECUTED WITH REAL DATA:
+  - First REAL production export: backups/export-2026-10-23T15-32-24-446Z.ndjson.gz (76 rows / 13 non-empty tables, SHA-256 sidecar, chmod 600, gitignored; consistent READ ONLY REPEATABLE READ snapshot through the pooler).
+  - production-recovery-drill.mjs: export -> separate recovery PostgreSQL (PGlite 16 via real wire protocol) -> restore -> verify. FINAL RESULT: ALL CHECKS PASSED (39-table schema, rails refuse correctly, counts == manifest, FK chains join, JSONB roundtrip, ledger balanced 0==0 honestly trivial at current truth state, PrismaClient reads restored rows).
+  - DEFECT (drill-caught, fixed): recovery schema lacked prod's OUT-OF-BAND tables (_applied_migrations + ba_*) -> 42P01. Added scripts/recovery-out-of-band-tables.sql (DDL mirrored from prod catalog) and db-restore precheck now validates the FULL manifest (incl. 0-row tables) instead of crashing later.
+  - DEFECT (environment, fixed): PGlite socket server serves ONE connection; Prisma's pool broke mid-restore (P1001). RESTORE_URL now pins connection_limit=1&pool_timeout=60.
+  - Commits: 75c8c73 (recovery pipeline), 5649f9a (schema parity docs + index) — dual-pushed each time. Lint 0, tsc 0.
+- STEP 2/3 RE-SCOPE (evidence-based): remaining officer ladder (publish-to-live, viewing conduct evidence, introduction -> deal -> escrow funding) ALL decompose to the ONE storage-bucket blocker (photography publish gate + viewing evidence gate both require media). Bucket creation is an owner dashboard action (no service key exists in sandbox; none requested per credentials rule). One re-run of the full ladder completes steps 2+3 once the bucket exists.
+- STEP 6/7 RE-VERIFIED: docs/LEGAL_QUESTIONS_REVIEW.md present (A1-A5/B1-B8 + who-decides mapping + launch-stage mapping). NylonPay webhook signature gate re-probed live on production: unsigned -> 401; bogus signature -> 401 INVALID_SIGNATURE. No live NylonPay credentials exist in the sandbox; production payment mode stays disabled by design.
+
+Stage Summary:
+- The intended production database is verified end to end (identity, schema parity, migration ledger, truth-state data, immutability wall, RLS) — Gate 1 PASS with one flagged anomaly (stale failed-migration ledger rows; owner decision to resolve).
+- The disaster-recovery pipeline has its FIRST REAL-DATA PASS: export -> separate recovery DB -> counts/FK/ledger/app-read all verified. Two pipeline defects found and fixed by the drill itself.
+- Vercel build failure fixed and deployed; production healthy on the new commit.
+
+Unresolved issues or risks, and priority recommendations for the next phase:
+- OWNER (one dashboard step, unblocks steps 2+3): create the PRIVATE bucket named 'media' in Supabase Storage (or set SUPABASE_MEDIA_BUCKET on Vercel) — then the full photo upload -> publish -> public delivery ladder + viewing evidence + deal/escrow E2E re-run in one round.
+- OWNER (decision): the two failed-attempt rows in _prisma_migrations block future prisma migrate deploy; resolving requires `prisma migrate resolve --applied 20260804180000_better_auth_tables` (a production metadata write) — awaiting approval, not executed.
+- OWNER (security): rotate the Supabase pooler password (it transited chat) and keep it only in Vercel env vars; also store the export file outside production hosts.
+- BLOCKED (external): storage bucket (photos/evidence/deal ladder); NylonPay Level-1 KYC + merchant approval (sandbox retained); domain + DNS; counsel review of A/B legal questions.
