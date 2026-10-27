@@ -372,11 +372,16 @@ export function PropertyMedia({
   alt,
   priority = false,
   count,
+  /** Which rendition to pull: cards render `card`, the gallery main image
+   * renders `detail` (the default). The server falls back to the original
+   * when a rendition is not ready, so this can always be requested. */
+  rendition = 'detail',
 }: {
   photo?: ListingPhoto;
   alt: string;
   priority?: boolean;
   count?: number;
+  rendition?: 'thumb' | 'card' | 'detail';
 }) {
   if (!photo) {
     return (
@@ -389,11 +394,14 @@ export function PropertyMedia({
     );
   }
 
+  const renditionSrc =
+    rendition === 'card' ? photo.cardUrl : rendition === 'thumb' ? photo.thumbUrl : photo.url;
+
   return (
     <div className="media">
       { }
       <img
-        src={mediaUrl(photo.url)}
+        src={mediaUrl(renditionSrc)}
         alt={alt}
         loading={priority ? 'eager' : 'lazy'}
         decoding="async"
@@ -450,6 +458,7 @@ export function PropertyCard({
       <PropertyMedia
         photo={listing.photos[0]}
         alt={`${TYPE_LABEL[listing.propertyType] ?? 'Home'} in ${listing.neighbourhoodName}`}
+        rendition="card"
         priority={priority}
         count={listing.photos.length}
       />

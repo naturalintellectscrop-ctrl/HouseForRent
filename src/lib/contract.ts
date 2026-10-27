@@ -30,8 +30,12 @@ const MEDIA_BASE = '';
 export interface ListingPhoto {
   id: string;
   mediaAssetId: string;
-  /** A path on the media route. See `mediaUrl()`. */
+  /** Detail rendition path on the media route (falls back server-side). */
   url: string;
+  /** Small rendition for strips/dense lists (server falls back to `url`). */
+  thumbUrl: string;
+  /** Card rendition for search results and cards. */
+  cardUrl: string;
   caption: string | null;
   sortOrder: number;
   source: string;

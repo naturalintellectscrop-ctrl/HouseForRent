@@ -27,6 +27,7 @@
  */
 import { db } from '@/lib/db';
 import { ApiError } from './http';
+import { processImage } from './image-pipeline';
 import { NotYourListingError } from './listings';
 import {
   assertSafeStorageRef,
@@ -56,10 +57,15 @@ export class MediaReferencedByLiveListingError extends Error {
 
 // ── Validation ──────────────────────────────────────────────────────────────
 
-/** Bytes are the truth; declared MIME is a claim we verify. */
+/** Bytes are the truth; declared MIME is a claim we verify. WebP joins the
+ * accepted set (2026-10-27 pipeline round): Android camera rolls and web
+ * downloads increasingly arrive as WebP, and every accepted file is
+ * re-encoded to WebP derivatives anyway — the input format is just what the
+ * decoder accepts first. */
 const ACCEPTED_IMAGE_TYPES = [
   { mime: 'image/jpeg', ext: 'jpg', magic: [0xff, 0xd8, 0xff] },
   { mime: 'image/png', ext: 'png', magic: [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a] },
+  { mime: 'image/webp', ext: 'webp', magic: null }, // RIFF container + WEBP fourCC, checked in sniffImageType
 ] as const;
 
 /** 4 MB default: Vercel's serverless request body ceiling is 4.5 MB — a
@@ -68,7 +74,15 @@ const MAX_BYTES = Number(process.env.MEDIA_MAX_BYTES ?? 4_000_000);
 
 export function sniffImageType(bytes: Uint8Array): { mime: string; ext: string } | null {
   for (const t of ACCEPTED_IMAGE_TYPES) {
-    if (t.magic.every((b, i) => bytes[i] === b)) return { mime: t.mime, ext: t.ext };
+    if (t.magic) {
+      if (t.magic.every((b, i) => bytes[i] === b)) return { mime: t.mime, ext: t.ext };
+    } else if (
+      // WebP: bytes 0-3 = 'RIFF', bytes 8-11 = 'WEBP'
+      bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46 &&
+      bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50
+    ) {
+      return { mime: t.mime, ext: t.ext };
+    }
   }
   return null;
 }
@@ -99,13 +113,142 @@ export interface UploadedMediaResult {
   sortOrder: number;
   mimeType: string;
   byteSize: number;
+  /** Derived renditions written for this asset (thumb/card/detail).
+   * Additive since the image-pipeline round; older clients ignore it. */
+  variants: Array<{ variant: string; width: number; height: number; byteSize: number }>;
+  originalWidth: number;
+  originalHeight: number;
+  processingMs: number;
 }
 
 /**
- * Attaches a photograph to a viewing's listing during the visit.
- * Transactional: rows commit only after bytes are stored; a failed commit
- * compensates the bytes away, so no half-uploaded state can exist.
+ * The one transactional path both upload routes share. Order matters:
+ * 1. process (already done by the caller — corrupt/pixel-bomb bytes never
+ *    reach storage);
+ * 2. store the ORIGINAL (private, metadata intact, served to nobody) plus
+ *    the three WebP renditions;
+ * 3. commit asset + variant + photo + audit rows in ONE transaction;
+ * 4. any step-3 failure compensates EVERY stored object away, so the bucket
+ *    can never hold objects no row names, and a listing can never point at
+ *    bytes that are not there.
  */
+async function persistPhotoAsset(params: {
+  baseDir: string;
+  listingId: string;
+  actorPartyId: string;
+  sniffed: { mime: string; ext: string };
+  bytes: Uint8Array;
+  processed: Awaited<ReturnType<typeof processImage>>;
+  source: 'field_officer' | 'lister';
+  caption: string | null;
+  auditVia: 'officer' | 'lister';
+  auditExtras: Record<string, unknown>;
+}): Promise<UploadedMediaResult> {
+  const { provider } = mediaStorage();
+  const assetId = crypto.randomUUID();
+  const base = `${params.baseDir}/${assetId}`;
+  const originalRef = `${base}/original.${params.sniffed.ext}`;
+  for (const ref of [originalRef, ...params.processed.variants.map((v) => `${base}/${v.variant}.webp`)]) {
+    assertSafeStorageRef(ref);
+  }
+
+  const storedRefs: string[] = [];
+  try {
+    await provider.put(originalRef, params.bytes, params.sniffed.mime);
+    storedRefs.push(originalRef);
+    for (const v of params.processed.variants) {
+      const ref = `${base}/${v.variant}.webp`;
+      await provider.put(ref, v.bytes, v.mimeType);
+      storedRefs.push(ref);
+    }
+  } catch (err) {
+    await Promise.allSettled(storedRefs.map((ref) => provider.delete(ref)));
+    throw err;
+  }
+
+  try {
+    return await db.$transaction(async (tx) => {
+      const asset = await tx.mediaAsset.create({
+        data: {
+          id: assetId,
+          storageRef: originalRef,
+          kind: 'image',
+          uploadedByPartyId: params.actorPartyId,
+          mimeType: params.sniffed.mime,
+          byteSize: params.bytes.length,
+        },
+      });
+      for (const v of params.processed.variants) {
+        await tx.mediaVariant.create({
+          data: {
+            mediaAssetId: asset.id,
+            variant: v.variant,
+            storageRef: `${base}/${v.variant}.webp`,
+            mimeType: v.mimeType,
+            width: v.width,
+            height: v.height,
+            byteSize: v.byteSize,
+          },
+        });
+      }
+      const last = await tx.listingPhoto.findFirst({
+        where: { listingId: params.listingId },
+        orderBy: { sortOrder: 'desc' },
+        select: { sortOrder: true },
+      });
+      const photo = await tx.listingPhoto.create({
+        data: {
+          listingId: params.listingId,
+          mediaAssetId: asset.id,
+          sortOrder: (last?.sortOrder ?? 0) + 1,
+          caption: params.caption,
+          source: params.source,
+        },
+      });
+      await tx.auditEvent.create({
+        data: {
+          actorPartyId: params.actorPartyId,
+          eventType: 'media_uploaded',
+          subjectRef: asset.id,
+          payload: {
+            listingId: params.listingId,
+            via: params.auditVia,
+            byteSize: params.bytes.length,
+            mimeType: params.sniffed.mime,
+            originalDimensions: { width: params.processed.width, height: params.processed.height },
+            variants: params.processed.variants.map((v) => ({ variant: v.variant, byteSize: v.byteSize })),
+            processingMs: params.processed.processingMs,
+            ...params.auditExtras,
+          },
+          occurredAt: new Date(),
+        },
+      });
+      return {
+        mediaAssetId: asset.id,
+        listingPhotoId: photo.id,
+        sortOrder: photo.sortOrder,
+        mimeType: params.sniffed.mime,
+        byteSize: params.bytes.length,
+        variants: params.processed.variants.map((v) => ({
+          variant: v.variant,
+          width: v.width,
+          height: v.height,
+          byteSize: v.byteSize,
+        })),
+        originalWidth: params.processed.width,
+        originalHeight: params.processed.height,
+        processingMs: params.processed.processingMs,
+      };
+    });
+  } catch (err) {
+    // Compensation: the bytes exist but the rows do not. Remove them so
+    // storage cannot accumulate objects no row will ever name — and so the
+    // bucket cannot become an un-governed archive.
+    await Promise.allSettled(storedRefs.map((ref) => provider.delete(ref)));
+    throw err;
+  }
+}
+
 export async function uploadViewingMedia(params: {
   viewingId: string;
   actorPartyId: string;
@@ -118,9 +261,12 @@ export async function uploadViewingMedia(params: {
   assertMediaSize(params.bytes.length);
   const sniffed = sniffImageType(params.bytes);
   if (!sniffed) {
-    throw new ApiError(415, 'MEDIA_TYPE_NOT_ACCEPTED', 'only JPEG and PNG photographs are accepted');
+    throw new ApiError(415, 'MEDIA_TYPE_NOT_ACCEPTED', 'only JPEG, PNG and WebP photographs are accepted');
   }
   assertDeclaredMimeMatches(params.declaredMime, sniffed.mime);
+  // Decode-and-derive BEFORE any ownership/window check touches storage: a
+  // corrupt or pixel-bomb image is refused without side effects.
+  const processed = await processImage(params.bytes);
 
   const viewing = await db.viewing.findUnique({
     where: { id: params.viewingId },
@@ -134,60 +280,18 @@ export async function uploadViewingMedia(params: {
   // renders the capture control in (scheduled, before the field report).
   if (viewing.status !== 'scheduled') throw new MediaWindowClosedError();
 
-  const { provider } = mediaStorage();
-  const ref = `viewings/${viewing.id}/${crypto.randomUUID()}.${sniffed.ext}`;
-  assertSafeStorageRef(ref);
-  await provider.put(ref, params.bytes, sniffed.mime);
-
-  try {
-    return await db.$transaction(async (tx) => {
-      const asset = await tx.mediaAsset.create({
-        data: {
-          storageRef: ref,
-          kind: 'image',
-          uploadedByPartyId: params.actorPartyId,
-          mimeType: sniffed.mime,
-          byteSize: params.bytes.length,
-        },
-      });
-      const last = await tx.listingPhoto.findFirst({
-        where: { listingId: viewing.listingId },
-        orderBy: { sortOrder: 'desc' },
-        select: { sortOrder: true },
-      });
-      const photo = await tx.listingPhoto.create({
-        data: {
-          listingId: viewing.listingId,
-          mediaAssetId: asset.id,
-          sortOrder: (last?.sortOrder ?? 0) + 1,
-          caption: params.caption?.trim() || null,
-          source: 'field_officer',
-        },
-      });
-      await tx.auditEvent.create({
-        data: {
-          actorPartyId: params.actorPartyId,
-          eventType: 'media_uploaded',
-          subjectRef: asset.id,
-          payload: { viewingId: viewing.id, listingId: viewing.listingId, byteSize: params.bytes.length, mimeType: sniffed.mime },
-          occurredAt: new Date(),
-        },
-      });
-      return {
-        mediaAssetId: asset.id,
-        listingPhotoId: photo.id,
-        sortOrder: photo.sortOrder,
-        mimeType: sniffed.mime,
-        byteSize: params.bytes.length,
-      };
-    });
-  } catch (err) {
-    // Compensation: the bytes exist but the evidence row does not. Remove
-    // them so storage cannot accumulate objects no row will ever name —
-    // and so the bucket cannot become an un-governed archive.
-    await provider.delete(ref);
-    throw err;
-  }
+  return persistPhotoAsset({
+    baseDir: `viewings/${viewing.id}`,
+    listingId: viewing.listingId,
+    actorPartyId: params.actorPartyId,
+    sniffed,
+    bytes: params.bytes,
+    processed,
+    source: 'field_officer',
+    caption: params.caption?.trim() || null,
+    auditVia: 'officer',
+    auditExtras: { viewingId: viewing.id },
+  });
 }
 
 // ── Upload (lister path — own listing, pre-publication only) ─────────────
@@ -210,9 +314,10 @@ export async function uploadListerMedia(params: {
   assertMediaSize(params.bytes.length);
   const sniffed = sniffImageType(params.bytes);
   if (!sniffed) {
-    throw new ApiError(415, 'MEDIA_TYPE_NOT_ACCEPTED', 'only JPEG and PNG photographs are accepted');
+    throw new ApiError(415, 'MEDIA_TYPE_NOT_ACCEPTED', 'only JPEG, PNG and WebP photographs are accepted');
   }
   assertDeclaredMimeMatches(params.declaredMime, sniffed.mime);
+  const processed = await processImage(params.bytes);
 
   const listing = await db.listing.findUnique({
     where: { id: params.listingId },
@@ -233,59 +338,18 @@ export async function uploadListerMedia(params: {
     throw new ApiError(409, 'PHOTO_LIMIT_REACHED', `a listing carries at most ${MAX_PHOTOS_PER_LISTING} photographs`);
   }
 
-  const { provider } = mediaStorage();
-  const ref = `listings/${listing.id}/${crypto.randomUUID()}.${sniffed.ext}`;
-  assertSafeStorageRef(ref);
-  await provider.put(ref, params.bytes, sniffed.mime);
-
-  try {
-    return await db.$transaction(async (tx) => {
-      const asset = await tx.mediaAsset.create({
-        data: {
-          storageRef: ref,
-          kind: 'image',
-          uploadedByPartyId: params.actorPartyId,
-          mimeType: sniffed.mime,
-          byteSize: params.bytes.length,
-        },
-      });
-      const last = await tx.listingPhoto.findFirst({
-        where: { listingId: listing.id },
-        orderBy: { sortOrder: 'desc' },
-        select: { sortOrder: true },
-      });
-      const photo = await tx.listingPhoto.create({
-        data: {
-          listingId: listing.id,
-          mediaAssetId: asset.id,
-          sortOrder: (last?.sortOrder ?? 0) + 1,
-          caption: params.caption?.trim() || null,
-          source: 'lister',
-        },
-      });
-      await tx.auditEvent.create({
-        data: {
-          actorPartyId: params.actorPartyId,
-          eventType: 'media_uploaded',
-          subjectRef: asset.id,
-          payload: { listingId: listing.id, via: 'lister', byteSize: params.bytes.length, mimeType: sniffed.mime },
-          occurredAt: new Date(),
-        },
-      });
-      return {
-        mediaAssetId: asset.id,
-        listingPhotoId: photo.id,
-        sortOrder: photo.sortOrder,
-        mimeType: sniffed.mime,
-        byteSize: params.bytes.length,
-      };
-    });
-  } catch (err) {
-    // Same compensation contract as the officer path: rows failed to commit,
-    // so the bytes must not outlive them.
-    await provider.delete(ref);
-    throw err;
-  }
+  return persistPhotoAsset({
+    baseDir: `listings/${listing.id}`,
+    listingId: listing.id,
+    actorPartyId: params.actorPartyId,
+    sniffed,
+    bytes: params.bytes,
+    processed,
+    source: 'lister',
+    caption: params.caption?.trim() || null,
+    auditVia: 'lister',
+    auditExtras: {},
+  });
 }
 
 // ── Visibility ──────────────────────────────────────────────────────────────
@@ -375,7 +439,7 @@ export async function deleteMediaAsset(params: {
 }): Promise<{ removedPhotoCount: number }> {
   const asset = await db.mediaAsset.findUnique({
     where: { id: params.mediaAssetId },
-    select: { id: true, storageRef: true },
+    select: { id: true, storageRef: true, variants: { select: { storageRef: true } } },
   });
   if (!asset) throw new ApiError(404, 'MEDIA_NOT_FOUND', 'no such media');
 
@@ -387,7 +451,9 @@ export async function deleteMediaAsset(params: {
     throw new MediaReferencedByLiveListingError();
   }
 
-  assertSafeStorageRef(asset.storageRef);
+  for (const ref of [asset.storageRef, ...asset.variants.map((v) => v.storageRef)]) {
+    assertSafeStorageRef(ref);
+  }
   const { provider } = mediaStorage();
 
   const removedPhotoCount = references.length;
@@ -412,6 +478,12 @@ export async function deleteMediaAsset(params: {
     // the bytes on a failed row-delete would orphan the rows.
     throw err;
   }
-  await provider.delete(asset.storageRef);
+  // The variant rows CASCADE with the asset; the objects follow here. A
+  // rendition left behind would be inert (private bucket) but the sweep
+  // contract is "rows and bytes move together", so they go too.
+  await Promise.allSettled([
+    provider.delete(asset.storageRef),
+    ...asset.variants.map((v) => provider.delete(v.storageRef)),
+  ]);
   return { removedPhotoCount };
 }

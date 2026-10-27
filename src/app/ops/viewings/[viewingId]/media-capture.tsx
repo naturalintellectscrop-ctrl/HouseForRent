@@ -120,7 +120,7 @@ export function MediaCapture({ viewingId, listingId }: { viewingId: string; list
 
       <form onSubmit={onSubmit} className="stack-sm">
         <div className="field">
-          <label htmlFor="media-file">Photograph (JPEG or PNG, up to 4 MB)</label>
+          <label htmlFor="media-file">Photograph (JPEG, PNG or WebP, up to 4 MB)</label>
           <input
             ref={inputRef}
             id="media-file"

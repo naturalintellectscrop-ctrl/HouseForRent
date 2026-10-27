@@ -983,6 +983,15 @@ enum MediaKind {
   video
 }
 
+/// Derived renditions of a photograph. `original` is NOT a variant — the
+/// untouched upload keeps living at MediaAsset.storageRef (private, never
+/// served to a browser). Variants are re-encoded WebP derivatives.
+enum MediaVariantName {
+  thumb
+  card
+  detail
+}
+
 model MediaAsset {
   id                String    @id @default(uuid())
   storageRef        String    @map("storage_ref")
@@ -999,8 +1008,46 @@ model MediaAsset {
 
   propertyMandates PropertyMandate[]
   listingPhotos    ListingPhoto[]
+  variants         MediaVariant[]
 
   @@map("media_asset")
+}
+
+/// One derived rendition of a MediaAsset (2026-10-27 image pipeline).
+///
+/// ── What lives here and what deliberately does not ──
+/// Storage KEYS, variant name, pixel dimensions, byte size and content type —
+/// the metadata the serving route needs to pick and deliver the right bytes.
+/// Never image bytes themselves: those live in the private object store under
+/// storage_ref, exactly like the original.
+///
+/// ── processing_status ──
+/// 'ready' is the only state the serving route trusts; a 'failed' row is kept
+/// for diagnosis and the route falls back to the original bytes for that
+/// variant until reprocessing succeeds.
+///
+/// ── Lifecycle ──
+/// Rows are created in the SAME transaction as their asset (with the bytes
+/// stored first and compensated away if the transaction fails — the same
+/// contract as the original), and CASCADE on asset delete so a deleted
+/// photograph cannot leave orphan renditions behind.
+model MediaVariant {
+  id               String           @id @default(uuid())
+  mediaAssetId     String           @map("media_asset_id")
+  variant          MediaVariantName
+  storageRef       String           @map("storage_ref")
+  mimeType         String           @map("mime_type")
+  width            Int
+  height           Int
+  byteSize         Int              @map("byte_size")
+  processingStatus String           @default("ready") @map("processing_status")
+  createdAt        DateTime         @default(now()) @map("created_at")
+
+  mediaAsset MediaAsset @relation(fields: [mediaAssetId], references: [id])
+
+  @@unique([mediaAssetId, variant])
+  @@index([mediaAssetId])
+  @@map("media_variant")
 }
 
 /// A photograph shown on a listing (FR-4.2 — the property is the evidence).

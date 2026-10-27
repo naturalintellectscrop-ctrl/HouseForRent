@@ -50,10 +50,13 @@ export async function generateMetadata({
     // The share image is the listing's own photography - only frames our
     // system actually holds (never a development fixture), resolved
     // against the site URL. With none, the brand cover rides instead.
+    // The card rendition (≤760px WebP) is the right share weight: detail
+    // would be heavier than any crawler needs; the server falls back to the
+    // original for legacy assets, so the URL is always renderable.
     const ogImages = l.photos
-      .filter((p) => !p.isDevelopmentFixture && p.url.startsWith('/'))
+      .filter((p) => !p.isDevelopmentFixture && p.cardUrl.startsWith('/'))
       .slice(0, 5)
-      .map((p) => ({ url: absoluteUrl(p.url) }));
+      .map((p) => ({ url: absoluteUrl(p.cardUrl) }));
 
     return {
       title,

@@ -83,9 +83,12 @@ export function PhotoManager({
     } catch (err) {
       if (err instanceof ClientApiError) {
         const friendly: Record<string, string> = {
-          MEDIA_TYPE_NOT_ACCEPTED: 'Only JPEG and PNG photographs are accepted.',
+          MEDIA_TYPE_NOT_ACCEPTED: 'Only JPEG, PNG and WebP photographs are accepted.',
           MEDIA_TYPE_MISMATCH: 'The file is not the image type it claims to be.',
           MEDIA_TOO_LARGE: 'That file is over the 4 MB limit.',
+          MEDIA_CORRUPT: 'That file could not be read as an image - it may be corrupt. Nothing was added.',
+          MEDIA_DIMENSIONS: 'That image is too large in pixels to process. A smaller copy will upload fine.',
+          RATE_LIMITED: 'Too many uploads in a short window. Wait a minute and try again.',
           PHOTO_LIMIT_REACHED: 'A listing carries at most 12 photographs.',
           MEDIA_WINDOW_CLOSED: 'This listing is live - withdraw it before changing your photographs.',
           MEDIA_STORE_UNAVAILABLE: 'The photo store is not reachable right now. Nothing was added - try again shortly.',
@@ -132,15 +135,17 @@ export function PhotoManager({
       {editable ? (
         <form onSubmit={onUpload} className="stack-sm">
           <p className="muted" style={{ margin: 0 }}>
-            Add photographs of the property. JPEG or PNG, up to 4&nbsp;MB each,
-            at most 12 per listing. They are labelled as your own uploads -
-            the officer&rsquo;s verification photographs are the ones tenants
-            see as verified.
+            Add photographs of the property. JPEG, PNG or WebP, up to 4&nbsp;MB each,
+            at most 12 per listing. Each photo is automatically optimized into
+            fast sizes for search results and galleries (location metadata is
+            removed). They are labelled as your own uploads - the
+            officer&rsquo;s verification photographs are the ones tenants see
+            as verified.
           </p>
           <input
             ref={fileInput}
             type="file"
-            accept="image/jpeg,image/png"
+            accept="image/jpeg,image/png,image/webp"
             onChange={(e) => pick(e.target.files?.[0] ?? null)}
             className="input"
             aria-label="Choose a photograph (JPEG or PNG, up to 4 MB)"

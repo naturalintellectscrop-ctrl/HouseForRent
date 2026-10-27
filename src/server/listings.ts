@@ -107,7 +107,13 @@ export function withFreshness<T extends { availabilityConfirmedAt: Date | null }
 export interface PhotoView {
   id: string;
   mediaAssetId: string;
+  /** The detail rendition (or original fallback) — gallery main image. */
   url: string;
+  /** Small rendition for film strips / dense lists. Null for legacy assets
+   * whose renditions are not ready; callers fall back to `url`. */
+  thumbUrl: string;
+  /** Card-size rendition for search results and listing cards. */
+  cardUrl: string;
   caption: string | null;
   sortOrder: number;
   /** Server-asserted provenance. The client renders the label; it never decides it. */
@@ -116,12 +122,17 @@ export interface PhotoView {
   isDevelopmentFixture: boolean;
 }
 
-/** Same-origin media route (sandbox); the real deployment serves from the API host. */
+/** Same-origin media route (sandbox); the real deployment serves from the API host.
+ * The route falls back to the original bytes for any rendition that is not
+ * ready, so the frontend can ALWAYS ask for a variant. */
 export function photoToView(p: { id: string; mediaAssetId: string; sortOrder: number; caption: string | null; source: string }): PhotoView {
+  const base = `/api/v1/media/${p.mediaAssetId}`;
   return {
     id: p.id,
     mediaAssetId: p.mediaAssetId,
-    url: `/api/v1/media/${p.mediaAssetId}`,
+    url: `${base}?variant=detail`,
+    thumbUrl: `${base}?variant=thumb`,
+    cardUrl: `${base}?variant=card`,
     caption: p.caption,
     sortOrder: p.sortOrder,
     source: p.source,
@@ -356,7 +367,13 @@ export async function createPropertyWithListing(params: {
   const neighbourhood = await db.neighbourhood.findUnique({ where: { id: params.neighbourhoodId } });
   if (!neighbourhood) throw new NeighbourhoodNotFoundError(params.neighbourhoodId);
 
-  return db.$transaction(async (tx) => {
+  // timeout: this transaction drafts property + listing + agreement together
+  // (4+ round-trips). The 5s default expired even on a local socket during
+  // the image-pipeline rig; a slow network day on production would 500
+  // property creation the same way. 15s is still well under any request
+  // ceiling and stays atomic.
+  return db.$transaction(
+    async (tx) => {
     const property = await tx.property.create({
       data: {
         ownerPartyId: params.ownerPartyId,
@@ -381,7 +398,9 @@ export async function createPropertyWithListing(params: {
     // Drafting the listing also drafts its agreement for acceptance.
     await draftAgreement(tx, listing.id, params.ownerPartyId, params.monthlyRent);
     return { property, listing };
-  });
+    },
+    { timeout: 15_000, maxWait: 10_000 },
+  );
 }
 
 /** Drafts the listing agreement at the currently-effective commission rate. */

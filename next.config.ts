@@ -43,6 +43,10 @@ const csp = (() => {
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  // sharp is a native module: keep it external to the server bundle so the
+  // standalone output traces the real binary (bundling WASM/native fallbacks
+  // silently degrades image processing).
+  serverExternalPackages: ["sharp"],
   // Pin the workspace root explicitly: package.json declares npm workspaces
   // (build-command shim for a stale Vercel dashboard override), so Turbopack
   // must never guess the root from lockfiles.

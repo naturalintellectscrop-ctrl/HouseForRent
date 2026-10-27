@@ -649,10 +649,13 @@ function toContractPhoto(p: {
   caption: string | null;
   source: string;
 }): PhotoView {
+  const base = `/api/v1/media/${p.mediaAssetId}`;
   return {
     id: p.id,
     mediaAssetId: p.mediaAssetId,
-    url: `/api/v1/media/${p.mediaAssetId}`,
+    url: `${base}?variant=detail`,
+    thumbUrl: `${base}?variant=thumb`,
+    cardUrl: `${base}?variant=card`,
     caption: p.caption,
     sortOrder: p.sortOrder,
     source: p.source,

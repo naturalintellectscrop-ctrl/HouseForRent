@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { ApiError, readJson, requireRole, requireSession, route } from '@/server/http';
 import { deleteMediaAsset, uploadListerMedia } from '@/server/media';
+import { clientIp, uploadRateLimit } from '@/server/rate-limit';
 
 /**
  * GET /api/v1/landlord/listings/:id/photos - the listing's photography with
@@ -59,6 +60,17 @@ export const POST = route(async (req: NextRequest, ctx: { params: Promise<{ id: 
   const session = await requireRole(['lister']);
   const { id } = await ctx.params;
 
+  // Rate limit BEFORE the body is read: processing (sharp decode + three
+  // re-encodes) is the expensive part, and a byte-bomb loop should hit the
+  // window before it costs anything.
+  const verdict = uploadRateLimit({ ip: clientIp(req), identifier: session.partyId });
+  if (!verdict.ok) {
+    return NextResponse.json(
+      { error: { code: 'RATE_LIMITED', message: 'too many uploads in a short window - try again shortly' } },
+      { status: 429, headers: { 'Retry-After': String(verdict.retryAfterSeconds) } },
+    );
+  }
+
   let form: FormData;
   try {
     form = await req.formData();
@@ -92,6 +104,10 @@ export const POST = route(async (req: NextRequest, ctx: { params: Promise<{ id: 
       mediaAssetId: result.mediaAssetId,
       listingPhotoId: result.listingPhotoId,
       url: `/api/v1/media/${result.mediaAssetId}`,
+      variants: result.variants,
+      originalWidth: result.originalWidth,
+      originalHeight: result.originalHeight,
+      processingMs: result.processingMs,
       sortOrder: result.sortOrder,
       mimeType: result.mimeType,
       byteSize: result.byteSize,
