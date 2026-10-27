@@ -4,7 +4,8 @@ Launch readiness is stated per feature, per the evidence standard: a build,
 a route's existence, an HTTP 200 or a mocked test is NOT proof of a journey.
 Every status below names its evidence. Re-verified after the 2026-10-23
 Supabase resumption; commit lineage e501b97 → 1c9db37 → 75c8c73 → 5649f9a →
-c65344e (deployed).
+c65344e → f48c4b7 → fd1b032 → ca5010b → 28b808d (dual-pushed main +
+sandbox/webapp; Vercel deploys from the tracked branch).
 
 Statuses: VERIFIED (end-to-end on the named surface) · FAILED (reproducible
 defect, linked in defect log) · BLOCKED (external dependency, named) ·
@@ -42,12 +43,12 @@ journey) · DB = direct read-only database evidence.
 | # | Journey | Status | Evidence |
 |---|---------|--------|----------|
 | 3.1 | Landlord creates property → listing (awaiting_verification) | VERIFIED | S+P (Task 44) |
-| 3.2 | Listing edit (own, pre-publication) | VERIFIED | S (pre-pause) + R (ownership checks unchanged) |
+| 3.2 | Listing edit (own, pre-publication) | VERIFIED (local browser) / UNVERIFIED (current prod) | D (2026-10-27: the edit capability did NOT exist — old VERIFIED claim was stale. New POST /amend + AmendPanel: terms-only keeps verdict, physical change re-opens verification, 409 live, 403 cross-account — all browser/API-verified on the local stack) |
 | 3.3 | Publish dry-run blocker list (field_verification, listing_agreement, photography) | VERIFIED | S+P (Task 44: photography gate armed/disarmed on add/delete) |
-| 3.4 | Publish-to-live | BLOCKED → IN REPAIR | Was blocked on missing storage bucket; bucket `media` created 2026-10-27 (private, 5 MiB, image-only); full ladder re-run this round |
-| 3.5 | Unpublish/withdraw | UNVERIFIED (current prod) | R (state machine reviewed); exercised in pre-pause rounds |
+| 3.4 | Publish-to-live | VERIFIED (local full ladder) / UNVERIFIED (current prod) | D (2026-10-27 local stack: officer verify-listing → publish enables → LIVE → public card+detail; bucket `media` exists on prod; migration applied + ledger OK, RLS parity checked) |
+| 3.5 | Unpublish/withdraw | VERIFIED (local browser) / UNVERIFIED (current prod) | D (2026-10-27: withdraw from search → state Withdrawn, photo upload re-enables, amend unlocks; republish works) |
 | 3.6 | Agreement acceptance (append-only wall) | VERIFIED | P (Task 44 defect #2 fix verified live) |
-| 3.7 | Landlord photo upload/replace/delete (own listing, pre-publication) | VERIFIED (auth matrix) / IN REPAIR (optimization pipeline) | S+P (Task 44: 403/404/415 matrix); this round adds processing pipeline |
+| 3.7 | Landlord photo upload/replace/delete (own listing, pre-publication) | VERIFIED (local, end-to-end browser) / UNVERIFIED (current prod) | D+S (2026-10-27 local: 3 uploads render as variants; delete removes 4 objects + rows; replace via withdraw→add; live-state upload honestly disabled; 415/413 visible errors; Task 44 prod auth matrix unchanged) |
 
 ## 4. Photography & media pipeline
 
@@ -57,13 +58,13 @@ journey) · DB = direct read-only database evidence.
 | 4.2 | Size cap (4 MB) & count cap (12) | VERIFIED | S+P (Task 44) |
 | 4.3 | Transactional rows+bytes with compensation | VERIFIED | R (code contract) + P (upload failures compensated; Task 44 honest-error flow) |
 | 4.4 | Visibility: public ⇔ decorates LIVE listing; else uploader/staff/owner | VERIFIED | S+P (Task 44 authorization matrix) |
-| 4.5 | EXIF orientation fix + metadata/GPS stripping | NOT IMPLEMENTED → IN REPAIR | This round (sharp pipeline) |
-| 4.6 | Optimized variants (thumbnail/card/detail, WebP) + DB metadata | NOT IMPLEMENTED → IN REPAIR | This round |
-| 4.7 | Pixel-count / dimension bomb guard | NOT IMPLEMENTED → IN REPAIR | This round |
-| 4.8 | Upload request-rate limiting | NOT IMPLEMENTED → IN REPAIR | This round (reuse rate-limit.ts) |
-| 4.9 | Orphan cleanup sweep (bucket objects without rows) | NOT IMPLEMENTED → IN REPAIR | This round (ops script) |
-| 4.10 | Storage bucket provisioned (private `media`) | BLOCKED → DONE | 2026-10-27: created via storage catalog — private, file_size_limit 5 MiB, allowed MIME image/jpeg,png,webp |
-| 4.11 | Public delivery of live-listing photos through /api/v1/media/:id | BLOCKED → IN REPAIR | Unblocked by 4.10; re-verify with variants |
+| 4.5 | EXIF orientation fix + metadata/GPS stripping | VERIFIED (rig, end-to-end) | S (2026-10-27: served thumb re-decoded → no EXIF; original keeps EXIF privately; portrait right-top bakes to 1013×1520) |
+| 4.6 | Optimized variants (thumbnail/card/detail, WebP) + DB metadata | VERIFIED (rig + local browser) | S+D (2026-10-27: 38/38 rig checks; browser renders card on search, detail+thumb on public detail; DB rows == stored objects 12/12) |
+| 4.7 | Pixel-count / dimension bomb guard | VERIFIED (rig) | S (2026-10-27: 81 MP bomb → 413 MEDIA_DIMENSIONS; decoder-derived limits 8000 px / 50 MP) |
+| 4.8 | Upload request-rate limiting | VERIFIED (rig) | S (2026-10-27: 429 trips inside the window; rate-limit.ts shared) |
+| 4.9 | Orphan cleanup sweep (bucket objects without rows) | VERIFIED (rig) | S (2026-10-27: planted stray flagged, orphans=1, zero false positives; two-key delete rail; T18 root-caused: socket holder maxConnections) |
+| 4.10 | Storage bucket provisioned (private `media`) | VERIFIED (catalog + prod DB conventions) | 2026-10-27: created via storage catalog — private, file_size_limit 5 MiB, allowed MIME image/jpeg,png,webp; 2026-10-27 read-only probe: media_variant live on prod, ledger OK, RLS enabled, owner postgres, 0 policies == media_asset convention |
+| 4.11 | Public delivery of live-listing photos through /api/v1/media/:id | VERIFIED (local browser) / UNVERIFIED (current prod) | D (2026-10-27 local: anon card/detail/thumb render decoded; 200 with public immutable cache; prod bucket + table exist, awaiting deploy verification — sandbox egress to production DNS is blocked) |
 
 ## 5. Viewings, FOO (field operations officer), verification
 
