@@ -299,7 +299,7 @@ check('T17 upload rate limit trips with 429 inside the window', got429, `lastSta
 const strayRef = 'listings/stray-listing/stray-object.webp';
 mkdirSync(path.dirname(`${MEDIA_ROOT}/${strayRef}`), { recursive: true }); // the sweep fixture needs its directory
 writeFileSync(`${MEDIA_ROOT}/${strayRef}`, Buffer.from('orphan bytes'));
-const sweep = spawn('bun', ['scripts/media-orphan-sweep.mjs'], {
+const sweep = spawn('node', ['scripts/media-orphan-sweep.mjs'], {
   cwd: REPO,
   env: { ...process.env, DATABASE_URL: RESTORE_URL, MEDIA_STORAGE: 'local', MEDIA_ROOT, SWEEP_DRY_RUN: 'yes' },
 });
@@ -307,8 +307,10 @@ let sweepOut = '';
 let sweepErr = '';
 sweep.stdout.on('data', (d) => (sweepOut += d));
 sweep.stderr.on('data', (d) => (sweepErr += d));
-await new Promise((res2) => sweep.on('exit', res2));
-check('T18 orphan sweep flags the stray object', sweepOut.includes(strayRef), (sweepOut + sweepErr).slice(0, 300));
+let sweepExit = null;
+sweep.on('exit', (code) => (sweepExit = code));
+await new Promise((res2) => sweep.on('close', res2));
+check('T18 orphan sweep flags the stray object', sweepOut.includes(strayRef), `exit=${sweepExit} OUT=${sweepOut.slice(0, 400).replace(/\n/g, ' ⏎ ')} ERR=${sweepErr.slice(0, 200).replace(/\n/g, ' ⏎ ')}`);
 
 // ── measurements ────────────────────────────────────────────────────────────
 console.log('\n== MEASUREMENTS (T1 fixture: 3000x2000 JPEG with EXIF+GPS) ==');
@@ -332,6 +334,8 @@ function listMediaFiles(root) {
 }
 
 // ── teardown ──────────────────────────────────────────────────────────────
+// Full server log for post-mortem (delete-failure root cause etc.).
+try { writeFileSync('/tmp/rig-applog.txt', appLog); } catch {}
 // Kill the WHOLE process group (next dev spawns its own server child).
 try { process.kill(-app.pid, 'SIGKILL'); } catch {}
 await sleep(800);

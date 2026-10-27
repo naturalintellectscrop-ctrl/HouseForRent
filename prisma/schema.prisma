@@ -1041,9 +1041,16 @@ model MediaVariant {
   height           Int
   byteSize         Int              @map("byte_size")
   processingStatus String           @default("ready") @map("processing_status")
-  createdAt        DateTime         @default(now()) @map("created_at")
+  createdAt        DateTime         @default(now())  @map("created_at")
 
-  mediaAsset MediaAsset @relation(fields: [mediaAssetId], references: [id])
+  /// CASCADE is the contract the delete path relies on: removing an asset
+  /// removes its rendition metadata in the same statement (the stored
+  /// objects are compensated separately in code). Without this attribute
+  /// Prisma's default for a required relation is RESTRICT — which would
+  /// contradict prisma/migrations/20261027120000_media_variants
+  /// (ON DELETE CASCADE) and make every schema-generated DDL disagree
+  /// with the migration actually applied to production.
+  mediaAsset MediaAsset @relation(fields: [mediaAssetId], references: [id], onDelete: Cascade)
 
   @@unique([mediaAssetId, variant])
   @@index([mediaAssetId])
