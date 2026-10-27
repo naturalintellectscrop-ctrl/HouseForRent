@@ -62,7 +62,9 @@ export const POST = route(async (req: NextRequest, ctx: { params: Promise<{ id: 
     {
       mediaAssetId: result.mediaAssetId,
       listingPhotoId: result.listingPhotoId,
-      url: `/api/v1/media/${result.mediaAssetId}`,
+      url: `/api/v1/media/${result.mediaAssetId}?variant=detail`,
+      thumbUrl: `/api/v1/media/${result.mediaAssetId}?variant=thumb`,
+      cardUrl: `/api/v1/media/${result.mediaAssetId}?variant=card`,
       variants: result.variants,
       originalWidth: result.originalWidth,
       originalHeight: result.originalHeight,

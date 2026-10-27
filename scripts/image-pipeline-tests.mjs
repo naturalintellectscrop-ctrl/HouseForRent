@@ -85,7 +85,7 @@ for (let i = 0; i < 90 && !appReady; i++) {
   } catch {}
   if (!appReady) await sleep(1000);
 }
-check('next dev ready on :3111', appReady);
+check('next dev ready', appReady, `on :${PORT_APP}`);
 if (!appReady) {
   console.log(appLog.slice(-2000));
   process.exit(1);
@@ -93,12 +93,12 @@ if (!appReady) {
 
 // ── 3. HTTP helpers (cookie-jar client) ─────────────────────────────────────
 function client() {
-  let cookie = null;
-  return async function call(method, urlPath, body, headers = {}) {
+  const state = { cookie: null };
+  const call = async function (method, urlPath, body, headers = {}) {
     const res = await fetch(`${API}${urlPath}`, {
       method,
       headers: {
-        ...(cookie ? { cookie } : {}),
+        ...(state.cookie ? { cookie: state.cookie } : {}),
         ...(body instanceof FormData ? {} : body !== undefined ? { 'content-type': 'application/json' } : {}),
         ...headers,
       },
@@ -106,11 +106,15 @@ function client() {
       redirect: 'manual',
     });
     const setCookie = res.headers.get('set-cookie');
-    if (setCookie) cookie = setCookie.split(';')[0];
+    if (setCookie) state.cookie = setCookie.split(';')[0];
     let json = null;
     try { json = await res.json(); } catch {}
-    return { status: res.status, json, headers: res.headers, cookie };
+    return { status: res.status, json, headers: res.headers, cookie: state.cookie };
   };
+  // The jar is readable: owner-read tests must send the SAME cookie the
+  // client itself uses (a bare `fn.cookie` would read undefined).
+  call.cookie = () => state.cookie;
+  return call;
 }
 
 // ── 4. fixtures (sharp, in-process) ─────────────────────────────────────────
@@ -237,7 +241,7 @@ r = await anon('GET', `/media/${assetId1}?variant=card`);
 check('T10 unauthenticated variant GET → 404', r.status === 404, `status=${r.status}`);
 
 // T11: owner variant reads (raw fetch to inspect bytes)
-const listerCookie = lister.cookie ?? '';
+const listerCookie = lister.cookie() ?? '';
 async function rawGet(pathWithQuery) {
   return fetch(`${API}${pathWithQuery}`, { headers: { cookie: listerCookie } });
 }
@@ -293,15 +297,18 @@ check('T17 upload rate limit trips with 429 inside the window', got429, `lastSta
 
 // T18: orphan sweep (local mode) — plant a stray object, sweep must flag it
 const strayRef = 'listings/stray-listing/stray-object.webp';
+mkdirSync(path.dirname(`${MEDIA_ROOT}/${strayRef}`), { recursive: true }); // the sweep fixture needs its directory
 writeFileSync(`${MEDIA_ROOT}/${strayRef}`, Buffer.from('orphan bytes'));
 const sweep = spawn('bun', ['scripts/media-orphan-sweep.mjs'], {
   cwd: REPO,
   env: { ...process.env, DATABASE_URL: RESTORE_URL, MEDIA_STORAGE: 'local', MEDIA_ROOT, SWEEP_DRY_RUN: 'yes' },
 });
 let sweepOut = '';
+let sweepErr = '';
 sweep.stdout.on('data', (d) => (sweepOut += d));
+sweep.stderr.on('data', (d) => (sweepErr += d));
 await new Promise((res2) => sweep.on('exit', res2));
-check('T18 orphan sweep flags the stray object', sweepOut.includes(strayRef), sweepOut.split('\n').filter((l) => l.includes('orphan') || l.includes('stray')).slice(0, 3).join(' | '));
+check('T18 orphan sweep flags the stray object', sweepOut.includes(strayRef), (sweepOut + sweepErr).slice(0, 300));
 
 // ── measurements ────────────────────────────────────────────────────────────
 console.log('\n== MEASUREMENTS (T1 fixture: 3000x2000 JPEG with EXIF+GPS) ==');
@@ -334,5 +341,9 @@ await server.stop().catch(() => {});
 await db.close().catch(() => {});
 try { rmSync(SCHEMA_SQL, { force: true }); } catch {}
 
+if (failures > 0) {
+  console.log('\n-- app log tail (diagnostics) --');
+  console.log(appLog.slice(-3000));
+}
 console.log(failures === 0 ? '\n== IMAGE PIPELINE TESTS: ALL CHECKS PASSED' : `\n== IMAGE PIPELINE TESTS: ${failures} CHECK(S) FAILED`);
 process.exit(failures === 0 ? 0 : 1);

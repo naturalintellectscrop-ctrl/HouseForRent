@@ -410,7 +410,12 @@ async function draftAgreement(
   listerPartyId: string,
   monthlyRent: bigint,
 ) {
-  const rate = await effectiveCommissionRate(new Date(), listerPartyId);
+  // The client is THREADED: this runs inside the property-creation
+  // transaction, and effectiveCommissionRate must query on THAT transaction
+  // client — a global-`db` query here would demand a second pool connection
+  // while this transaction holds one (deadlock under a size-1 pool: 15s
+  // hang, then P2028; same class of stall under any exhausted pool).
+  const rate = await effectiveCommissionRate(new Date(), listerPartyId, tx);
   return tx.listingAgreement.create({
     data: {
       listingId,
@@ -422,8 +427,15 @@ async function draftAgreement(
   });
 }
 
-export async function effectiveCommissionRate(asOf: Date = new Date(), bootstrapByPartyId?: string) {
-  const versions = await db.commissionRateVersion.findMany({
+export async function effectiveCommissionRate(
+  asOf: Date = new Date(),
+  bootstrapByPartyId?: string,
+  /** The transaction client to read/write through. Defaults to the global
+   * pool for standalone callers (public rate reads); callers inside an
+   * interactive transaction MUST pass their `tx` — see draftAgreement. */
+  client: typeof db | Parameters<Parameters<typeof db.$transaction>[0]>[0] = db,
+) {
+  const versions = await client.commissionRateVersion.findMany({
     orderBy: { effectiveFrom: 'desc' },
   });
   // A later version supersedes an earlier one outright - there is no
@@ -437,7 +449,7 @@ export async function effectiveCommissionRate(asOf: Date = new Date(), bootstrap
     if (!bootstrapByPartyId) {
       throw new Error('no commission rate version exists and no actor was provided to record the default');
     }
-    return db.commissionRateVersion.create({
+    return client.commissionRateVersion.create({
       data: { rateBpOfMonth: 10000, effectiveFrom: new Date('2026-01-01'), createdByPartyId: bootstrapByPartyId },
     });
   }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { ApiError, readJson, requireRole, requireSession, route } from '@/server/http';
 import { deleteMediaAsset, uploadListerMedia } from '@/server/media';
+import { photoToView } from '@/server/listings';
 import { clientIp, uploadRateLimit } from '@/server/rate-limit';
 
 /**
@@ -41,18 +42,12 @@ export const GET = route(async (_req: NextRequest, ctx: { params: Promise<{ id: 
     orderBy: { sortOrder: 'asc' },
   });
 
+  // The shared serializer (same shape the public detail page serves):
+  // url = detail rendition, plus thumbUrl/cardUrl — the contract the
+  // gallery and card surfaces render. The media route falls back to the
+  // original server-side when a rendition is not ready.
   return NextResponse.json({
-    photos: photos.map((p) => ({
-      id: p.id,
-      mediaAssetId: p.mediaAssetId,
-      url: `/api/v1/media/${p.mediaAssetId}`,
-      caption: p.caption,
-      sortOrder: p.sortOrder,
-      // Provenance is on the photo row itself (PhotoSource) - no media join.
-      source: p.source,
-      isFieldVerified: p.source === 'field_officer',
-      isDevelopmentFixture: p.source === 'development_fixture',
-    })),
+    photos: photos.map((p) => photoToView(p)),
   });
 });
 
@@ -103,7 +98,9 @@ export const POST = route(async (req: NextRequest, ctx: { params: Promise<{ id: 
     {
       mediaAssetId: result.mediaAssetId,
       listingPhotoId: result.listingPhotoId,
-      url: `/api/v1/media/${result.mediaAssetId}`,
+      url: `/api/v1/media/${result.mediaAssetId}?variant=detail`,
+      thumbUrl: `/api/v1/media/${result.mediaAssetId}?variant=thumb`,
+      cardUrl: `/api/v1/media/${result.mediaAssetId}?variant=card`,
       variants: result.variants,
       originalWidth: result.originalWidth,
       originalHeight: result.originalHeight,
