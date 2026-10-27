@@ -634,6 +634,166 @@ export async function withdrawListing(params: { listingId: string; listerPartyId
   return db.listing.update({ where: { id: params.listingId }, data: { publicationState: 'withdrawn' } });
 }
 
+// ── amendment (the landlord corrects their own unpublished listing) ───────
+
+export interface AmendListingInput {
+  listingId: string;
+  listerPartyId: string;
+  propertyType?: string;
+  bedrooms?: number;
+  bathrooms?: number;
+  furnished?: string;
+  neighbourhoodId?: string;
+  landmarkText?: string;
+  streetAddress?: string | null;
+  monthlyRent?: bigint;
+  depositAmount?: bigint;
+  requiredMonthsUpfront?: number;
+  descriptionText?: string | null;
+}
+
+/**
+ * Amends a listing the caller owns, BEFORE it is live. Two honesty rules:
+ *
+ * 1. A live (or rented) listing is not amendable here — tenants are looking
+ *    at those terms and the officer's photography decorates them. The route
+ *    is withdraw-first, same as photograph management.
+ * 2. A change to a PHYSICAL field (rooms, type, furnishing, location)
+ *    re-opens field verification: the verdict was about a specific home and
+ *    no longer describes this one. Terms-only changes (rent, deposit,
+ *    upfront months, copy) keep the verdict — the officer visited the rooms,
+ *    not the price.
+ *
+ * Everything lands in one transaction with an audit event naming exactly
+ * which fields moved.
+ */
+export async function amendListing(params: AmendListingInput) {
+  const listing = await db.listing.findUnique({
+    where: { id: params.listingId },
+    include: { property: true },
+  });
+  if (!listing) throw new ApiError(404, 'LISTING_NOT_FOUND', 'listing not found');
+  if (listing.property.ownerPartyId !== params.listerPartyId) throw new NotYourListingError();
+  if (listing.publicationState === 'live' || listing.publicationState === 'rented') {
+    throw new ApiError(409, 'LISTING_LIVE', 'withdraw the listing before amending it');
+  }
+
+  const property = listing.property;
+  // Normalise: absent fields mean "no change" (the form submits the full
+  // set, but the contract tolerates partial patches).
+  const nextPropertyType = (params.propertyType ?? property.propertyType) as PropertyType;
+  const nextBedrooms = params.bedrooms ?? property.bedrooms;
+  const nextBathrooms = params.bathrooms ?? property.bathrooms;
+  const nextFurnished = (params.furnished ?? property.furnished) as FurnishedState;
+  const nextNeighbourhoodId = params.neighbourhoodId ?? property.neighbourhoodId;
+  const nextLandmark = params.landmarkText !== undefined ? params.landmarkText : property.landmarkText;
+  const nextStreet = params.streetAddress !== undefined ? params.streetAddress : property.streetAddress;
+
+  const nextRent = params.monthlyRent ?? listing.monthlyRent;
+  const nextDeposit = params.depositAmount ?? listing.depositAmount;
+  const nextMonths = params.requiredMonthsUpfront ?? listing.requiredMonthsUpfront;
+  const nextDescription = params.descriptionText !== undefined ? params.descriptionText : listing.descriptionText;
+
+  if (!Number.isInteger(nextBedrooms) || nextBedrooms < 0 || nextBedrooms > 20) {
+    throw new ApiError(400, 'VALIDATION', 'bedrooms must be a whole number between 0 and 20');
+  }
+  if (!Number.isInteger(nextBathrooms) || nextBathrooms < 0 || nextBathrooms > 20) {
+    throw new ApiError(400, 'VALIDATION', 'bathrooms must be a whole number between 0 and 20');
+  }
+  if (!Number.isInteger(nextMonths) || nextMonths < 1 || nextMonths > 24) {
+    throw new ApiError(400, 'VALIDATION', 'requiredMonthsUpfront must be between 1 and 24');
+  }
+  if (nextLandmark.trim().length < 4) {
+    throw new ApiError(400, 'VALIDATION', 'landmark text is required');
+  }
+  if (nextRent <= 0n) throw new ApiError(400, 'VALIDATION', 'monthlyRent must be a positive amount');
+
+  // Neighbourhood moves must land inside the corridor we actually serve.
+  const neighbourhood = await db.neighbourhood.findUnique({ where: { id: nextNeighbourhoodId } });
+  if (!neighbourhood) throw new NeighbourhoodNotFoundError(nextNeighbourhoodId);
+
+  const physicalChanged =
+    nextPropertyType !== property.propertyType ||
+    nextBedrooms !== property.bedrooms ||
+    nextBathrooms !== property.bathrooms ||
+    nextFurnished !== property.furnished ||
+    nextNeighbourhoodId !== property.neighbourhoodId;
+
+  const changedFields: string[] = [];
+  if (nextPropertyType !== property.propertyType) changedFields.push('propertyType');
+  if (nextBedrooms !== property.bedrooms) changedFields.push('bedrooms');
+  if (nextBathrooms !== property.bathrooms) changedFields.push('bathrooms');
+  if (nextFurnished !== property.furnished) changedFields.push('furnished');
+  if (nextNeighbourhoodId !== property.neighbourhoodId) changedFields.push('neighbourhoodId');
+  if (nextLandmark !== property.landmarkText) changedFields.push('landmarkText');
+  if (nextStreet !== property.streetAddress) changedFields.push('streetAddress');
+  if (nextRent !== listing.monthlyRent) changedFields.push('monthlyRent');
+  if (nextDeposit !== listing.depositAmount) changedFields.push('depositAmount');
+  if (nextMonths !== listing.requiredMonthsUpfront) changedFields.push('requiredMonthsUpfront');
+  if (nextDescription !== listing.descriptionText) changedFields.push('descriptionText');
+
+  // Nothing moved: still audited (an amendment submission IS an event), but
+  // no write and no verification re-arm.
+  if (changedFields.length === 0) {
+    return { reVerificationRequired: false, changedFields, verificationState: listing.verificationState };
+  }
+
+  const updated = await db.$transaction(
+    async (tx) => {
+      await tx.property.update({
+        where: { id: property.id },
+        data: {
+          propertyType: nextPropertyType,
+          bedrooms: nextBedrooms,
+          bathrooms: nextBathrooms,
+          furnished: nextFurnished,
+          neighbourhoodId: nextNeighbourhoodId,
+          landmarkText: nextLandmark,
+          streetAddress: nextStreet,
+        },
+      });
+      // A physical change re-opens verification IN THE SAME STATEMENT SET:
+      // an amended home must never stay "verified" even for one request.
+      const listerUpdate = physicalChanged
+        ? { verificationState: 'unverified' as const }
+        : {};
+      return tx.listing.update({
+        where: { id: listing.id },
+        data: {
+          monthlyRent: nextRent,
+          depositAmount: nextDeposit,
+          requiredMonthsUpfront: nextMonths,
+          descriptionText: nextDescription,
+          ...listerUpdate,
+        },
+      });
+    },
+    { timeout: 15_000, maxWait: 10_000 },
+  );
+
+  await db.auditEvent.create({
+    data: {
+      actorPartyId: params.listerPartyId,
+      eventType: 'listing_amended',
+      subjectRef: listing.id,
+      payload: {
+        changedFields,
+        physicalChanged,
+        reVerificationRequired: physicalChanged,
+        monthlyRent: nextRent.toString(),
+      },
+      occurredAt: new Date(),
+    },
+  });
+
+  return {
+    reVerificationRequired: physicalChanged,
+    changedFields,
+    verificationState: updated.verificationState,
+  };
+}
+
+
 /**
  * A lister's own inventory, with what each listing is waiting on.
  * `blockedBy` is computed HERE (see module header).
@@ -685,6 +845,13 @@ export async function findForLister(listerPartyId: string) {
         bathrooms: listing.property.bathrooms,
         neighbourhoodName: listing.property.neighbourhood.name,
         landmarkText: listing.property.landmarkText,
+        // Amendment-form prefills: the full physical + copy state behind the
+        // listing, so the amend panel submits the complete set.
+        propertyType: listing.property.propertyType,
+        furnished: listing.property.furnished,
+        streetAddress: listing.property.streetAddress,
+        descriptionText: listing.descriptionText,
+        neighbourhoodId: listing.property.neighbourhoodId,
         verificationState: listing.verificationState,
         publicationState: listing.publicationState,
         availabilityStatus: listing.availabilityStatus,

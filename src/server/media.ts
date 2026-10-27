@@ -93,7 +93,15 @@ export function assertMediaSize(byteLength: number): void {
   }
   if (byteLength === 0) throw new ApiError(400, 'MEDIA_EMPTY', 'the file is empty');
   if (byteLength > MAX_BYTES) {
-    throw new ApiError(413, 'MEDIA_TOO_LARGE', `files over ${Math.floor(MAX_BYTES / 1024 / 1024)} MB are not accepted`);
+    // The limit is defined in DECIMAL bytes (4_000_000 = 4 MB), so the
+    // message must divide by 1_000_000 — the previous binary division
+    // (÷1024÷1024, floored) told users "over 3 MB" while 3.5 MB uploads
+    // actually succeed. Sub-MB limits are stated in KB.
+    const limit =
+      MAX_BYTES >= 1_000_000
+        ? `${Math.floor(MAX_BYTES / 1_000_000)} MB`
+        : `${Math.floor(MAX_BYTES / 1_000)} KB`;
+    throw new ApiError(413, 'MEDIA_TOO_LARGE', `files over ${limit} are not accepted`);
   }
 }
 

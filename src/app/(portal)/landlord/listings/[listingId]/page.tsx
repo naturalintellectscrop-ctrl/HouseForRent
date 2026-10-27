@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import {
   api,
+  apiGet,
   ApiError,
   type ListingPhoto,
   type MyListing,
@@ -15,6 +16,7 @@ import {
   shillings,
 } from '@/app/ui';
 import { AgreementPanel } from './agreement-panel';
+import { AmendPanel } from './amend-panel';
 import { MandatePanel } from './mandate-panel';
 import { PublishPanel } from './publish-panel';
 import { PhotoManager } from './photo-manager';
@@ -48,7 +50,7 @@ export default async function LandlordListingPage({
   const listing = mine.find((l) => l.id === listingId);
   if (!listing) notFound();
 
-  const [terms, photoResult] = await Promise.all([
+  const [terms, photoResult, neighbourhoodResult] = await Promise.all([
     api<PresentedTerms>(`/v1/listings/${listingId}/agreement`).catch(
       (e: unknown) => {
         // 422 NO_RATE_IN_FORCE is a real operational state, not a page
@@ -60,6 +62,12 @@ export default async function LandlordListingPage({
     api<{ photos: ListingPhoto[] }>(`/v1/listings/${listingId}/photos`).catch(
       () => ({ photos: [] as ListingPhoto[] }),
     ),
+    // The amend panel's neighbourhood picker: the same in-service-area
+    // directory the creation form offers.
+    apiGet<{ neighbourhoods: Parameters<typeof AmendPanel>[0]['neighbourhoods'] }>(
+      '/v1/neighbourhoods',
+      { revalidate: 300 },
+    ).catch(() => ({ neighbourhoods: [] })),
   ]);
 
   const photos = photoResult.photos;
@@ -150,6 +158,27 @@ export default async function LandlordListingPage({
               </ul>
             )}
           </section>
+
+          {/* ── amend (pre-publication only) ─────────────────────── */}
+          {listing.publicationState !== 'live' && listing.publicationState !== 'rented' ? (
+            <AmendPanel
+              listingId={listingId}
+              prefill={{
+                propertyType: listing.propertyType,
+                furnished: listing.furnished,
+                neighbourhoodId: listing.neighbourhoodId,
+                landmarkText: listing.landmarkText,
+                streetAddress: listing.streetAddress,
+                descriptionText: listing.descriptionText,
+                monthlyRent: listing.monthlyRent,
+                depositAmount: listing.depositAmount,
+                requiredMonthsUpfront: listing.requiredMonthsUpfront,
+                bedrooms: listing.bedrooms,
+                bathrooms: listing.bathrooms,
+              }}
+              neighbourhoods={neighbourhoodResult.neighbourhoods.filter((n) => n.inServiceArea)}
+            />
+          ) : null}
 
           {/* ── photographs ─────────────────────────────────────── */}
           <section className="stack">

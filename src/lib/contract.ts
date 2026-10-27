@@ -127,6 +127,12 @@ export interface MyListing {
   bathrooms: number;
   neighbourhoodName: string;
   landmarkText: string;
+  /** Amendment-form prefills: the full physical + copy state behind the listing. */
+  propertyType: string;
+  furnished: string;
+  streetAddress: string | null;
+  descriptionText: string | null;
+  neighbourhoodId: string;
   verificationState: 'unverified' | 'verified';
   publicationState:
     | 'draft'

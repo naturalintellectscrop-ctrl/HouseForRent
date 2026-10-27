@@ -53,7 +53,18 @@ const seed = await db.query(
 );
 check('rig DB ready (schema + seed neighbourhood)', seed.rows.length === 1);
 
-const server = new PGLiteSocketServer({ db, port: PORT_DB, host: '127.0.0.1' });
+// maxConnections: the PGLiteSocketServer DEFAULTS TO 1 and its rejection
+// path writes a raw "Too many connections" string then closes the socket —
+// not a valid PostgreSQL ErrorResponse — so Prisma misreports it as
+// P1001 "Can't reach database server" (isolated repro: backups/t18-repro.mjs
+// pattern). T18 runs the orphan sweep as a SECOND concurrent client while
+// the app's pool (connection_limit=1) holds the default slot, so the sweep
+// could never connect. The server's QueryQueueManager exists precisely to
+// multiplex several wire clients over the one PGlite (runExclusive
+// serialization, transaction-affinity queueing), so the honest fix is to
+// size the holder for its real client count — app (1) + sweep (1), with
+// headroom — not to weaken or mock the sweep's assertion.
+const server = new PGLiteSocketServer({ db, port: PORT_DB, host: '127.0.0.1', maxConnections: 4 });
 await server.start();
 
 // ── 2. the real application server ──────────────────────────────────────────
@@ -310,7 +321,10 @@ sweep.stderr.on('data', (d) => (sweepErr += d));
 let sweepExit = null;
 sweep.on('exit', (code) => (sweepExit = code));
 await new Promise((res2) => sweep.on('close', res2));
-check('T18 orphan sweep flags the stray object', sweepOut.includes(strayRef), `exit=${sweepExit} OUT=${sweepOut.slice(0, 400).replace(/\n/g, ' ⏎ ')} ERR=${sweepErr.slice(0, 200).replace(/\n/g, ' ⏎ ')}`);
+check('T18 orphan sweep runs clean (exit 0)', sweepExit === 0, `exit=${sweepExit} OUT=${sweepOut.slice(0, 400).replace(/\n/g, ' ⏎ ')} ERR=${sweepErr.slice(0, 200).replace(/\n/g, ' ⏎ ')}`);
+// Exactly ONE orphan: the planted stray. The sweep must NOT flag any
+// legitimate object (every on-disk rendition/original is row-named here).
+check('T18 orphan sweep flags the stray object and ONLY it', sweepOut.includes(strayRef) && /orphans=1\b/.test(sweepOut), `OUT=${sweepOut.slice(0, 400).replace(/\n/g, ' ⏎ ')}`);
 
 // ── measurements ────────────────────────────────────────────────────────────
 console.log('\n== MEASUREMENTS (T1 fixture: 3000x2000 JPEG with EXIF+GPS) ==');
