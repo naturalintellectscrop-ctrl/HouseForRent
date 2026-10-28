@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { Icon } from '@/app/ui';
 
 /**
  * The root fallback 404 (ops, portal and any segment without its own
@@ -9,18 +10,12 @@ import Link from 'next/link';
  */
 export default function RootNotFound() {
   return (
-    <div
-      style={{
-        minHeight: '70vh',
-        display: 'grid',
-        placeContent: 'center',
-        justifyItems: 'start',
-        gap: '1rem',
-        padding: '2rem 1.25rem',
-      }}
-    >
+    <div className="notfound-wrap">
+      <span className="notfound-mark" aria-hidden="true">
+        <Icon.pin size={22} />
+      </span>
       <h1 className="h1">This page does not exist.</h1>
-      <p className="lede" style={{ maxWidth: '36rem' }}>
+      <p className="lede notfound-lede">
         The address may be mistyped, or the page may have moved.
       </p>
       <div className="row">

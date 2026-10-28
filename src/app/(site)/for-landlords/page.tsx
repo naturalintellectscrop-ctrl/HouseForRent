@@ -170,8 +170,9 @@ export default async function ForLandlordsPage() {
               <Icon.lock size={24} />
               <h3 className="h3">The money is collected before move-in</h3>
               <p className="muted">
-                Rent and deposit are held in escrow by us and released to you on
-                move-in. You are not chasing a first payment.
+                Rent and deposit are held by us, recorded against the deal, and
+                released to you once the tenant confirms move-in. You are not
+                chasing a first payment.
               </p>
             </div>
           </div>

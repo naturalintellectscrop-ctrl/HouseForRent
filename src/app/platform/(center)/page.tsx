@@ -188,6 +188,41 @@ export default async function PlatformOverviewPage() {
         </SectionCard>
 
         <SectionCard title="Inventory and deal flow">
+          {(() => {
+            const totalListings = data.listingStates.reduce(
+              (sum, s) => sum + s._count._all,
+              0,
+            );
+            const livePct =
+              totalListings === 0
+                ? 0
+                : Math.round((liveListings / totalListings) * 100);
+            return (
+              <div className="stack" style={{ marginBottom: '1.25rem' }}>
+                <div
+                  className="gauge"
+                  role="img"
+                  aria-label={`${livePct}% of authored listings are live in search`}
+                  style={{ ['--gauge' as string]: `${livePct}%` }}
+                >
+                  <span className="gauge-label">
+                    <span className="gauge-value">{livePct}%</span>
+                    <span className="gauge-caption">live in search</span>
+                  </span>
+                </div>
+                <div className="gauge-legend">
+                  <span>
+                    <span className="dot dot-good" aria-hidden="true" />
+                    Live: {liveListings}
+                  </span>
+                  <span>
+                    <span className="dot" aria-hidden="true" />
+                    Authored: {totalListings}
+                  </span>
+                </div>
+              </div>
+            );
+          })()}
           <ul className="plat-kv">
             <li>
               <span>Homes live in search</span>

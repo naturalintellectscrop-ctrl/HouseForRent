@@ -1,6 +1,6 @@
-import Link from 'next/link';
 import type { Metadata } from 'next';
-import { Brand, Icon } from '@/app/ui';
+import { AppShell } from '@/app/app-shell';
+import type { ShellNavGroup } from '@/app/app-shell-nav';
 import { SiteFooter } from '@/app/site-chrome';
 import { currentRole, homeFor, requireRole } from '@/lib/session';
 
@@ -13,34 +13,66 @@ export const metadata: Metadata = {
 };
 
 /*
- * The portal's link set lives here once. It used to exist twice (desktop
- * nav + mobile menu panel), which is how the two copies drift - a link
- * added to one and not the other is a bug the second role notices. The
- * admin variant is the tenant list minus the tenant-only pages.
+ * The portal's link set lives here once, in the sidebar's groups. It used
+ * to exist twice (desktop nav + mobile menu panel), which is how the two
+ * copies drift - a link added to one and not the other is a bug the second
+ * role notices. The admin variant is the tenant list minus the tenant-only
+ * pages. Icons are drawn from the one in-house set (src/app/ui.tsx).
  */
-const LANDLORD_NAV = [
-  { href: '/landlord', label: 'Portfolio' },
-  { href: '/landlord/properties/new', label: 'Add a property' },
-  { href: '/landlord/deals', label: 'Lettings' },
-  { href: '/landlord/earnings', label: 'Earnings' },
-  { href: '/landlord/security', label: 'Security' },
+const LANDLORD_NAV: ShellNavGroup[] = [
+  {
+    label: 'Manage',
+    items: [
+      { href: '/landlord', label: 'Portfolio', icon: 'home' },
+      { href: '/landlord/properties/new', label: 'Add a property', icon: 'plus' },
+      { href: '/landlord/deals', label: 'Lettings', icon: 'swap' },
+      { href: '/landlord/earnings', label: 'Earnings', icon: 'coins' },
+    ],
+  },
+  {
+    label: 'Account',
+    items: [
+      { href: '/landlord/security', label: 'Security', icon: 'lock' },
+      { href: '/properties', label: 'Browse homes', icon: 'search' },
+    ],
+  },
 ];
 
-const TENANT_NAV = [
-  { href: '/account', label: 'Overview' },
-  { href: '/account/saved', label: 'Saved homes' },
-  { href: '/account/viewings', label: 'Viewings' },
-  { href: '/account/deals', label: 'My tenancy' },
-  { href: '/account/security', label: 'Security' },
-  { href: '/properties', label: 'Browse homes' },
+const TENANT_NAV: ShellNavGroup[] = [
+  {
+    label: 'Renting',
+    items: [
+      { href: '/account', label: 'Overview', icon: 'home' },
+      { href: '/account/saved', label: 'Saved homes', icon: 'bookmark' },
+      { href: '/account/viewings', label: 'Viewings', icon: 'calendar' },
+      { href: '/account/deals', label: 'My tenancy', icon: 'key' },
+    ],
+  },
+  {
+    label: 'Account',
+    items: [
+      { href: '/account/security', label: 'Security', icon: 'lock' },
+      { href: '/properties', label: 'Browse homes', icon: 'search' },
+    ],
+  },
 ];
 
-const ADMIN_NAV = [
-  { href: '/account', label: 'Overview' },
-  { href: '/account/viewings', label: 'Viewings' },
-  { href: '/account/deals', label: 'My tenancy' },
-  { href: '/account/security', label: 'Security' },
-  { href: '/properties', label: 'Browse homes' },
+const ADMIN_NAV: ShellNavGroup[] = [
+  {
+    label: 'Renting',
+    items: [
+      { href: '/account', label: 'Overview', icon: 'home' },
+      { href: '/account/viewings', label: 'Viewings', icon: 'calendar' },
+      { href: '/account/deals', label: 'My tenancy', icon: 'key' },
+    ],
+  },
+  {
+    label: 'Account',
+    items: [
+      { href: '/account/security', label: 'Security', icon: 'lock' },
+      { href: '/properties', label: 'Browse homes', icon: 'search' },
+    ],
+  },
 ];
 
 /**
@@ -62,67 +94,26 @@ export default async function PortalLayout({
 }: {
   children: React.ReactNode;
 }) {
-  await requireRole(['tenant', 'lister', 'admin']);
+  const session = await requireRole(['tenant', 'lister', 'admin']);
   const role = await currentRole();
   const nav =
-    role === 'lister' ? LANDLORD_NAV : role === 'admin' ? ADMIN_NAV : TENANT_NAV;
+    role === 'lister' ? LANDLORD_NAV : role === 'admin' ? ADMIN_NAV : role === 'tenant' ? TENANT_NAV : ADMIN_NAV;
+
+  const roleLabel =
+    role === 'lister' ? 'Landlord' : role === 'admin' ? 'Admin' : 'Tenant';
 
   return (
-    <>
-      <header className="site-head">
-        <div className="page site-head-inner">
-          <Brand
-            sub={role === 'lister' ? 'Landlord' : 'My account'}
-            href={role ? homeFor(role) : '/'}
-          />
-          <nav className="site-nav" aria-label="Account">
-            {nav.map((item) => (
-              <Link key={item.href} href={item.href}>
-                {item.label}
-              </Link>
-            ))}
-          </nav>
-          <div className="site-actions-desktop">
-            {/* Sign-out is a plain HTML form to the API, which revokes the
-                session server-side and clears the cookie - no JavaScript
-                involved, and the token cannot be replayed. */}
-            <form action="/api/v1/auth/logout" method="post">
-              <button type="submit" className="btn btn-secondary btn-sm">
-                Sign out
-              </button>
-            </form>
-          </div>
-
-          <details className="menu">
-            <summary aria-label="Menu">
-              <Icon.menu />
-            </summary>
-            <div className="menu-panel page">
-              {nav.map((item) => (
-                <Link key={item.href} href={item.href}>
-                  {item.label}
-                </Link>
-              ))}
-              <hr />
-              <form action="/api/v1/auth/logout" method="post">
-                <button type="submit" className="btn btn-secondary btn-block">
-                  Sign out
-                </button>
-              </form>
-            </div>
-          </details>
-        </div>
-      </header>
-
-      <main id="main" className="page section">
-        {children}
-      </main>
-
-      {/* The portals end on the same ink the public site ends on. They are
-          parts of one product; the footer is where that is cheapest and
-          most visible to prove. Its links are public routes, so it is safe
-          to render for any signed-in role. */}
-      <SiteFooter />
-    </>
+    <AppShell
+      brandSub={roleLabel === 'Landlord' ? 'Landlord' : 'My account'}
+      brandHref={homeFor(session.role)}
+      nav={nav}
+      who={{
+        name: session.displayName,
+        role: roleLabel,
+      }}
+      footer={<SiteFooter />}
+    >
+      {children}
+    </AppShell>
   );
 }

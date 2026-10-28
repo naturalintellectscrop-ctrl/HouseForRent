@@ -47,20 +47,24 @@ export default async function LandlordPage() {
   const activeDeals = deals.filter(
     (d) => d.status !== 'closed' && d.status !== 'cancelled',
   );
+  const liveRent = live.reduce((sum, l) => sum + Number(l.monthlyRent), 0);
 
   return (
     <div className="stack-lg">
-      <div className="row-between">
-        <div>
-          <h1 className="h1">Your properties</h1>
-          <p className="lede">
+      <div className="page-head">
+        <div className="page-head-titles">
+          <h1>Your properties</h1>
+          <p className="page-sub">
             What is live, what we are still working on, and what each one is
             waiting for.
           </p>
         </div>
-        <Link href="/landlord/properties/new" className="btn btn-primary">
-          Add a property
-        </Link>
+        <div className="page-head-actions">
+          <Link href="/landlord/properties/new" className="btn btn-primary">
+            <Icon.plus size={16} />
+            Add a property
+          </Link>
+        </div>
       </div>
 
       {listings.length === 0 ? (
@@ -78,18 +82,46 @@ export default async function LandlordPage() {
         </Empty>
       ) : (
         <>
+          {/* ── The stat row: one accent tile, the rest quiet ──
+              The rent figure is the sum across LIVE homes only - a draft
+              listing has never earned anything, and a tile that pretended
+              otherwise would be a lie with a number in it. */}
           <div className="metrics">
-            <div className="metric">
-              <p className="metric-label">Live</p>
-              <p className="metric-value">{live.length}</p>
+            <div className="stat stat--accent">
+              <span className="stat-icon" aria-hidden="true">
+                <Icon.home />
+              </span>
+              <p className="stat-label">Live in search</p>
+              <p className="stat-value">{live.length}</p>
+              <p className="stat-note">
+                {live.length === 1
+                  ? 'Home visible to every tenant'
+                  : 'Homes visible to every tenant'}
+              </p>
             </div>
-            <div className="metric">
-              <p className="metric-label">In progress</p>
-              <p className="metric-value">{waiting.length}</p>
+            <div className="stat">
+              <span className="stat-icon" aria-hidden="true">
+                <Icon.clock />
+              </span>
+              <p className="stat-label">In progress</p>
+              <p className="stat-value">{waiting.length}</p>
+              <p className="stat-note">Verification or publication pending</p>
             </div>
-            <div className="metric">
-              <p className="metric-label">Lettings under way</p>
-              <p className="metric-value">{activeDeals.length}</p>
+            <div className="stat">
+              <span className="stat-icon" aria-hidden="true">
+                <Icon.swap />
+              </span>
+              <p className="stat-label">Lettings under way</p>
+              <p className="stat-value">{activeDeals.length}</p>
+              <p className="stat-note">From agreement to move-in</p>
+            </div>
+            <div className="stat">
+              <span className="stat-icon" aria-hidden="true">
+                <Icon.coins />
+              </span>
+              <p className="stat-label">Rent across live homes</p>
+              <p className="stat-value">{shillings(String(liveRent))}</p>
+              <p className="stat-note">Per month, before commission</p>
             </div>
           </div>
 
@@ -103,11 +135,8 @@ export default async function LandlordPage() {
                       href={`/landlord/listings/${l.id}`}
                       className="list-item"
                     >
-                      <span
-                        className="stack-sm"
-                        style={{ minWidth: '18rem', flex: 1 }}
-                      >
-                        <span className="row" style={{ gap: '0.5rem' }}>
+                      <span className="list-item-body stack-sm">
+                        <span className="row gap-tight">
                           <span className="badge">
                             {PUBLICATION_LABEL[l.publicationState]}
                           </span>
@@ -121,12 +150,7 @@ export default async function LandlordPage() {
                         <span className="card-title">
                           {l.bedrooms}-bed in {l.neighbourhoodName}
                         </span>
-                        <span
-                          className="muted"
-                          style={{ fontSize: '0.9375rem' }}
-                        >
-                          {l.landmarkText}
-                        </span>
+                        <span className="muted fine">{l.landmarkText}</span>
                         {/*
                           Reasons computed by the API. Rendered in the
                           landlord's words, never re-derived here.
@@ -134,11 +158,7 @@ export default async function LandlordPage() {
                         {l.blockedBy.length > 0 ? (
                           <span className="stack-sm">
                             {l.blockedBy.map((b) => (
-                              <span
-                                key={b}
-                                className="faint"
-                                style={{ fontSize: '0.875rem' }}
-                              >
+                              <span key={b} className="fine-faint">
                                 • {BLOCKER_LABEL[b] ?? b.replace(/_/g, ' ')}
                               </span>
                             ))}
@@ -149,7 +169,7 @@ export default async function LandlordPage() {
                           </span>
                         )}
                       </span>
-                      <span className="num" style={{ fontWeight: 600 }}>
+                      <span className="num list-item-amount">
                         {shillings(l.monthlyRent)}
                       </span>
                     </Link>
@@ -179,20 +199,14 @@ export default async function LandlordPage() {
                         href={`/landlord/listings/${l.id}`}
                         className="list-item"
                       >
-                        <span
-                          className="stack-sm"
-                          style={{ minWidth: '18rem', flex: 1 }}
-                        >
-                          <span className="row" style={{ gap: '0.5rem' }}>
+                        <span className="list-item-body stack-sm">
+                          <span className="row gap-tight">
                             <span className="badge badge-ok">
                               <Icon.check size={12} />
                               Live
                             </span>
                             {confirmed ? (
-                              <span
-                                className="faint"
-                                style={{ fontSize: '0.875rem' }}
-                              >
+                              <span className="fine-faint">
                                 Availability confirmed {confirmed}
                               </span>
                             ) : null}
@@ -200,14 +214,9 @@ export default async function LandlordPage() {
                           <span className="card-title">
                             {l.bedrooms}-bed in {l.neighbourhoodName}
                           </span>
-                          <span
-                            className="muted"
-                            style={{ fontSize: '0.9375rem' }}
-                          >
-                            {l.landmarkText}
-                          </span>
+                          <span className="muted fine">{l.landmarkText}</span>
                         </span>
-                        <span className="num" style={{ fontWeight: 600 }}>
+                        <span className="num list-item-amount">
                           {shillings(l.monthlyRent)}
                         </span>
                       </Link>
@@ -232,14 +241,11 @@ export default async function LandlordPage() {
             {activeDeals.map((deal) => (
               <li key={deal.id}>
                 <Link href={`/landlord/deals/${deal.id}`} className="list-item">
-                  <span
-                    className="stack-sm"
-                    style={{ minWidth: '18rem', flex: 1 }}
-                  >
+                  <span className="list-item-body stack-sm">
                     <span className="card-title">
                       {deal.listing.neighbourhoodName} · {deal.counterpartyName}
                     </span>
-                    <span className="muted" style={{ fontSize: '0.9375rem' }}>
+                    <span className="muted fine">
                       {dealHeadline(deal.status, 'landlord')}
                     </span>
                   </span>

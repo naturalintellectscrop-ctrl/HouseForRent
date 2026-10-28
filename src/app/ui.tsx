@@ -56,6 +56,110 @@ export const Icon = {
       <path d="M20 6 9 17l-5-5" />
     </Svg>
   ),
+  /* ── Shell & dashboard icons (forest refresh) ──
+     Drawn in the same thin-line register as the originals: 24 grid, 1.6
+     stroke, currentColor. The sidebar and the stat tiles need a handful of
+     nouns the set did not carry yet; adding them HERE keeps one visual
+     voice instead of importing a second icon system. */
+  home: (p: { size?: number }) => (
+    <Svg {...p}>
+      <path d="M3 11.5 12 4l9 7.5" />
+      <path d="M5.5 9.5V20h13V9.5" />
+      <path d="M10 20v-5.5h4V20" />
+    </Svg>
+  ),
+  plus: (p: { size?: number }) => (
+    <Svg {...p}>
+      <path d="M12 5v14M5 12h14" />
+    </Svg>
+  ),
+  calendar: (p: { size?: number }) => (
+    <Svg {...p}>
+      <rect x="3" y="5" width="18" height="16" rx="2" />
+      <path d="M3 10h18M8 3v4M16 3v4" />
+    </Svg>
+  ),
+  coins: (p: { size?: number }) => (
+    <Svg {...p}>
+      <circle cx="9" cy="9" r="5.5" />
+      <path d="M14.2 7a5.5 5.5 0 1 1-6.6 8.4" />
+    </Svg>
+  ),
+  list: (p: { size?: number }) => (
+    <Svg {...p}>
+      <path d="M9 6h12M9 12h12M9 18h12" />
+      <path d="M3.5 6h.01M3.5 12h.01M3.5 18h.01" />
+    </Svg>
+  ),
+  users: (p: { size?: number }) => (
+    <Svg {...p}>
+      <circle cx="9" cy="8.5" r="3.5" />
+      <path d="M3.5 19a5.5 5.5 0 0 1 11 0" />
+      <path d="M15.5 5.7a3.5 3.5 0 0 1 0 5.6M20.5 19a5.5 5.5 0 0 0-3.5-4.8" />
+    </Svg>
+  ),
+  gear: (p: { size?: number }) => (
+    <Svg {...p}>
+      <circle cx="12" cy="12" r="3.2" />
+      <path d="M12 2.8v2.4M12 18.8v2.4M2.8 12h2.4M18.8 12h2.4M5.5 5.5l1.7 1.7M16.8 16.8l1.7 1.7M18.5 5.5l-1.7 1.7M7.2 16.8l-1.7 1.7" />
+    </Svg>
+  ),
+  eye: (p: { size?: number }) => (
+    <Svg {...p}>
+      <path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z" />
+      <circle cx="12" cy="12" r="3" />
+    </Svg>
+  ),
+  chart: (p: { size?: number }) => (
+    <Svg {...p}>
+      <path d="M5 20v-6M11 20V5M17 20v-9" />
+      <path d="M3 20h18" />
+    </Svg>
+  ),
+  doc: (p: { size?: number }) => (
+    <Svg {...p}>
+      <path d="M6 3h8l4 4v14H6z" />
+      <path d="M14 3v4h4M9.5 12h5M9.5 16h5" />
+    </Svg>
+  ),
+  swap: (p: { size?: number }) => (
+    <Svg {...p}>
+      <path d="M7 3 3 7l4 4" />
+      <path d="M3 7h14" />
+      <path d="m17 21 4-4-4-4" />
+      <path d="M21 17H7" />
+    </Svg>
+  ),
+  alert: (p: { size?: number }) => (
+    <Svg {...p}>
+      <path d="M12 3 2.5 20h19z" />
+      <path d="M12 9.5V14M12 17h.01" />
+    </Svg>
+  ),
+  arrowUpRight: (p: { size?: number }) => (
+    <Svg {...p}>
+      <path d="M7 17 17 7" />
+      <path d="M8.5 7H17v8.5" />
+    </Svg>
+  ),
+  signout: (p: { size?: number }) => (
+    <Svg {...p}>
+      <path d="M10 3H5a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h5" />
+      <path d="m15 8 4 4-4 4" />
+      <path d="M19 12H9" />
+    </Svg>
+  ),
+  pulse: (p: { size?: number }) => (
+    <Svg {...p}>
+      <path d="M3 12h4l2.5-7 4 14L16 12h5" />
+    </Svg>
+  ),
+  search: (p: { size?: number }) => (
+    <Svg {...p}>
+      <circle cx="11" cy="11" r="7" />
+      <path d="m21 21-4.3-4.3" />
+    </Svg>
+  ),
   shield: (p: { size?: number }) => (
     <Svg {...p}>
       <path d="M12 3l7 3v5c0 4.5-3 8.3-7 10-4-1.7-7-5.5-7-10V6z" />
@@ -220,7 +324,6 @@ export const CONTACT = {
 export function Brand({ sub, href = '/' }: { sub?: string; href?: string }) {
   return (
     <Link href={href} className="brand">
-      { }
       <img src="/logo.png" alt="" width={28} height={28} className="brand-mark" />
       House For Rent
       {sub ? <span className="brand-sub">· {sub}</span> : null}

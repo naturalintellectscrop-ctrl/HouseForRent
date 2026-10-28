@@ -1,8 +1,9 @@
-import Link from 'next/link';
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { db } from '@/lib/db';
 import { resolveSession, homeFor } from '@/server/auth';
+import { AppShell } from '@/app/app-shell';
+import type { ShellNavGroup } from '@/app/app-shell-nav';
 
 export const metadata: Metadata = {
   // The control center is internal tooling on live platform data: out of
@@ -33,9 +34,9 @@ export const metadata: Metadata = {
  * with platform credentials on the ordinary sign-in page IS the entry.
  *
  * ── A different register, the same product ──
- * Dark chrome and a control-center nav, sharing every token with the rest of
- * the app. Normal user navigation is not polluted with platform links, and
- * this nav does not render tenant/landlord surfaces except an explicit exit.
+ * The forest sidebar variant of the shared app shell: same geometry as the
+ * portal, deep-forest fill, every token still from the one palette.
+ * Normal user navigation is not polluted with platform links.
  */
 export default async function PlatformLayout({
   children,
@@ -63,75 +64,44 @@ export default async function PlatformLayout({
     pendingApplications = null;
   }
 
-  const nav: Array<{ href: string; label: string; count: number | null }> = [
-    { href: '/platform', label: 'Overview', count: null },
-    {
-      href: '/platform/approvals',
-      label: 'Approvals',
-      count: pendingApplications,
-    },
-    { href: '/platform/users', label: 'Users', count: null },
-    { href: '/platform/listings', label: 'Listings', count: null },
-    { href: '/platform/transactions', label: 'Transactions', count: null },
-    { href: '/platform/system', label: 'System', count: null },
-  ];
+  const platform: ShellNavGroup = {
+    label: 'Platform',
+    items: [
+      { href: '/platform', label: 'Overview', icon: 'chart' },
+      { href: '/platform/approvals', label: 'Approvals', icon: 'users', count: pendingApplications },
+      { href: '/platform/users', label: 'Users', icon: 'user' },
+      { href: '/platform/listings', label: 'Listings', icon: 'home' },
+      { href: '/platform/transactions', label: 'Transactions', icon: 'coins' },
+      { href: '/platform/system', label: 'System', icon: 'gear' },
+    ],
+  };
+
+  const staffing: ShellNavGroup = {
+    label: 'Staffing',
+    items: [
+      { href: '/ops', label: 'Staff console', icon: 'eye' },
+      { href: '/ops/audit', label: 'Audit trail', icon: 'pulse' },
+    ],
+  };
 
   return (
-    <div className="plat-shell">
-      <header className="plat-head">
-        <div className="page plat-head-inner">
-          <Link href="/platform" className="plat-brand">
-            <img src="/logo.png" alt="" width={34} height={34} className="plat-brand-mark" />
-            <span>
-              <span className="plat-brand-name">Platform Control</span>
-              <span className="plat-brand-sub">House For Rent · Natural Intellects Ltd</span>
-            </span>
-          </Link>
-
-          <nav className="plat-nav" aria-label="Platform control">
-            {nav.map((item) => (
-              <Link key={item.href} href={item.href}>
-                {item.label}
-                {item.count !== null && item.count > 0 ? (
-                  <span className="plat-nav-count" aria-label={`${item.count} pending`}>
-                    {item.count > 99 ? '99+' : item.count}
-                  </span>
-                ) : null}
-              </Link>
-            ))}
-            <span className="plat-nav-sep" aria-hidden="true" />
-            <a href="/ops">Staff console</a>
-            <a href="/ops/audit">Audit trail</a>
-          </nav>
-
-          <div className="plat-who">
-            <span className="plat-who-id">
-              <span className="plat-who-name">{session.displayName}</span>
-              <span className="plat-who-role">Platform owner</span>
-            </span>
-            <form action="/api/v1/auth/logout" method="post">
-              <button type="submit" className="plat-signout">
-                Sign out
-              </button>
-            </form>
-          </div>
-        </div>
-      </header>
-
-      <main id="main" className="plat-main">
-        {children}
-      </main>
-
-      <footer className="plat-foot">
-        <div className="page plat-foot-inner">
+    <AppShell
+      variant="forest"
+      brandSub="Platform Control"
+      brandHref="/platform"
+      nav={[platform, staffing]}
+      who={{ name: session.displayName, role: 'Platform owner' }}
+      footer={
+        <div className="shell-foot-note page">
           <p>
-            Platform Control Center · operated by Natural Intellects Ltd, Kampala.
-            Every action taken here is attributable to your account in the audit
-            trail.
+            Platform Control Center · operated by Natural Intellects Ltd,
+            Kampala. Every action taken here is attributable to your account in
+            the audit trail.
           </p>
-          <a href="/">Public site ↗</a>
         </div>
-      </footer>
-    </div>
+      }
+    >
+      {children}
+    </AppShell>
   );
 }

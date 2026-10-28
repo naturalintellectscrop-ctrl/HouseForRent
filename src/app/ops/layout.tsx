@@ -1,8 +1,8 @@
-import Link from 'next/link';
 import type { Metadata } from 'next';
-import { requireStaff } from '@/lib/session';
-import { Brand } from '@/app/ui';
+import { AppShell } from '@/app/app-shell';
+import type { ShellNavGroup } from '@/app/app-shell-nav';
 import { SiteFooter } from '@/app/site-chrome';
+import { requireStaff } from '@/lib/session';
 
 /*
  * The staff console is internal tooling on live operational data - the
@@ -20,16 +20,17 @@ export const metadata: Metadata = {
  * generosity: an officer standing in a stairwell wants rows and fields, not
  * whitespace (Technical Architecture §7). It shares every design token with
  * the public site - the tighter measure and smaller type are the only
- * divergence.
+ * divergence, and the frame is the same app shell the portal uses.
+ *
+ * ── The queue links are IN the nav now ──
+ * The verification queue and the reconciliation report used to be reachable
+ * only through buttons buried inside other pages (route inventory finding,
+ * 2026-10 design round). Hiding a screen an admin needs daily behind another
+ * screen is how work gets missed; both now sit in the console group.
  *
  * `requireStaff()` here is a convenience gate, not the security boundary -
  * the backend refuses a non-staff caller regardless (NFR-1, API Spec §4.3).
  * It only spares someone a confusing 403 page.
- *
- * SANDBOX ADAPTATION: the reference signed out through a server action. Here
- * the sign-out is a plain HTML form POST to /api/v1/auth/logout, which
- * revokes the session server-side and redirects - the same no-JavaScript
- * pattern the public site chrome uses.
  */
 export default async function OpsLayout({
   children,
@@ -39,40 +40,52 @@ export default async function OpsLayout({
   const session = await requireStaff();
   const role = session.role;
 
+  const fieldWork: ShellNavGroup = {
+    label: 'Field work',
+    items: [
+      { href: '/ops/today', label: 'Today', icon: 'calendar' },
+      { href: '/ops', label: 'Launch gate', icon: 'shield' },
+      { href: '/ops/queue', label: 'Verification queue', icon: 'list' },
+      { href: '/ops/introductions', label: 'Evidence', icon: 'doc' },
+    ],
+  };
+
+  const adminConsole: ShellNavGroup = {
+    label: 'Console',
+    items: [
+      { href: '/ops/dispatch', label: 'Dispatch', icon: 'pin' },
+      { href: '/ops/deals', label: 'Deals', icon: 'swap' },
+      { href: '/ops/mandates', label: 'Mandates', icon: 'doc' },
+      { href: '/ops/areas', label: 'Areas', icon: 'eye' },
+      { href: '/ops/users', label: 'Users', icon: 'users' },
+      { href: '/ops/config', label: 'Config', icon: 'gear' },
+      { href: '/ops/audit', label: 'Audit', icon: 'pulse' },
+      { href: '/ops/reconciliation', label: 'Reconciliation', icon: 'coins' },
+    ],
+  };
+
+  const exit: ShellNavGroup = {
+    label: 'Elsewhere',
+    items: [
+      { href: '/', label: 'Public site', icon: 'home' },
+      ...(role === 'admin'
+        ? [{ href: '/platform', label: 'Platform center', icon: 'shield' as const }]
+        : []),
+    ],
+  };
+
   return (
-    <div className="ops">
-      <header className="ops-head">
-        <div className="ops-head-inner">
-          <Brand sub="Operations" href="/ops" />
-          <nav className="ops-nav" aria-label="Operations">
-            <Link href="/ops/today">Today</Link>
-            <Link href="/ops/introductions">Evidence</Link>
-            {/* Ops is FOO-reachable for the launch gate and the queue; the
-                page itself only fetches the admin-only figures when the
-                caller is an admin. Hiding a link is presentation, never
-                access control - the backend refuses regardless. */}
-            <Link href="/ops">Ops</Link>
-            {role === 'admin' && <Link href="/ops/dispatch">Dispatch</Link>}
-            {role === 'admin' && <Link href="/ops/deals">Deals</Link>}
-            {role === 'admin' && <Link href="/ops/mandates">Mandates</Link>}
-            {role === 'admin' && <Link href="/ops/areas">Areas</Link>}
-            {role === 'admin' && <Link href="/ops/users">Users</Link>}
-            {role === 'admin' && <Link href="/ops/config">Config</Link>}
-            {role === 'admin' && <Link href="/ops/audit">Audit</Link>}
-            <Link href="/">Site</Link>
-            <form action="/api/v1/auth/logout" method="post">
-              <button type="submit">Sign out</button>
-            </form>
-          </nav>
-        </div>
-      </header>
-      <main id="main" className="ops-shell">
-        {children}
-      </main>
-      {/* The console is a different register, not a different product: it
-          ends the way every other surface ends (Task 17 did this for the
-          portals). The density divergence above the footer is unchanged. */}
-      <SiteFooter />
-    </div>
+    <AppShell
+      brandSub="Operations"
+      brandHref="/ops"
+      nav={[fieldWork, ...(role === 'admin' ? [adminConsole] : []), exit]}
+      who={{
+        name: session.displayName,
+        role: role === 'admin' ? 'Administrator' : 'Field officer',
+      }}
+      footer={<SiteFooter />}
+    >
+      {children}
+    </AppShell>
   );
 }

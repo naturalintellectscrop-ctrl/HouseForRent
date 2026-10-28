@@ -41,8 +41,6 @@ export async function SiteHeader() {
           ))}
         </nav>
 
-        <div className="site-actions" style={{ display: 'none' }} />
-
         {/* Desktop actions */}
         <div className="site-actions site-actions-desktop">
           {signedIn ? (

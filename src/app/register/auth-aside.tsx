@@ -49,8 +49,8 @@ export function AuthAside() {
         <li>
           <Icon.lock size={18} />
           <span>
-            Rent and deposit are held in escrow and released to the landlord
-            only after move-in.
+            Rent and deposit are held by us — recorded against the deal — and
+            released to the landlord only after move-in is confirmed.
           </span>
         </li>
         <li>
