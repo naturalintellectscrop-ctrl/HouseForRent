@@ -622,7 +622,14 @@ export async function publishListing(params: { listingId: string; listerPartyId:
 
   const result = await evaluatePublish(params.listingId, false);
   if (!result.canPublish) {
-    throw new Error(`listing cannot be published: blocked by ${result.blockedBy.join(', ')}`);
+    // A typed answer carrying the same blocker codes the dry-run reports -
+    // an API consumer gets the truth (422), not an opaque 500
+    // (ROLE_PERMISSION_MATRIX.md R-2).
+    throw new ApiError(
+      422,
+      'PUBLISH_BLOCKED',
+      `listing cannot be published yet: ${result.blockedBy.join(', ')}`,
+    );
   }
   return db.listing.findUnique({ where: { id: params.listingId } });
 }

@@ -49,6 +49,7 @@ journey) · DB = direct read-only database evidence.
 | 3.5 | Unpublish/withdraw | VERIFIED (local browser) / UNVERIFIED (current prod) | D (2026-10-27: withdraw from search → state Withdrawn, photo upload re-enables, amend unlocks; republish works) |
 | 3.6 | Agreement acceptance (append-only wall) | VERIFIED | P (Task 44 defect #2 fix verified live) |
 | 3.7 | Landlord photo upload/replace/delete (own listing, pre-publication) | VERIFIED (local, end-to-end browser) / UNVERIFIED (current prod) | D+S (2026-10-27 local: 3 uploads render as variants; delete removes 4 objects + rows; replace via withdraw→add; live-state upload honestly disabled; 415/413 visible errors; Task 44 prod auth matrix unchanged) |
+| 3.8 | Role-permission matrix from the actual implementation (all five surfaces × five roles, direct API) | VERIFIED (isolated rig, round 51) | A+E (docs/ROLE_PERMISSION_MATRIX.md: register/approval/provisioning provenance, account-status policy, surface×role matrix with observed 401/403/409s, publish-gate single-implementation, findings R-1 duplicate-staff-phone 500→409 fix, R-2 gated-publish 500→422 fix, R-3 verify-without-visit policy note) |
 
 ## 4. Photography & media pipeline
 
@@ -105,6 +106,8 @@ journey) · DB = direct read-only database evidence.
 | 7.8 | Approval = operations identity check → activation | VERIFIED (isolated rig) | D (browser: valid NIN + name match → status Active, trail records acting admin; mock provider labelled on-surface) |
 | 7.9 | Application rejection with recorded reason | VERIFIED (isolated rig) | D (reason required; decision card + trail show actor/time/reason; status suspended; sign-in refused with generic ACCOUNT_BLOCKED - no reason leak) |
 | 7.10 | Decision authorization + stale-state safety | VERIFIED (rig, direct API) | S (anonymous 401, lister session 403, staff target 422, empty reason 400, repeat-decision 409 APPLICATION_NOT_PENDING after fix; concurrent-safe conditional update) |
+| 7.11 | Full role E2E journey: register → admin-UI approval → listing lifecycle (photo→agreement→verify→live) → withdraw → physical-amend re-arm → re-verify → republish | VERIFIED (isolated rig, round 51) | D+E (agent-browser approvals ×3 with screenshots; 32-assert API run: gate codes, publish refusal while unverified, 409 live-amend, ownership 403s ×4, honest public empty state → "1 verified home" with Verified-in-person badge; landlord portal shows both states) |
+| 7.12 | Honest public search (empty until verified+live; trust copy on home) | VERIFIED (rig) | D (search returned 0 with the "publishes only homes our officers have visited" empty-state message BEFORE publish; after publish: "1 verified home available right now") |
 
 ## 8. Data protection & resilience
 
@@ -125,3 +128,4 @@ journey) · DB = direct read-only database evidence.
 4. Counsel review of the 12 open legal questions (docs/LEGAL_QUESTIONS_REVIEW.md).
 5. ~~Migration-ledger resolve (owner-approved production metadata write)~~ — RESOLVED as benign 2026-10-28 (see 8.6): the two failed rows are rolled-back history and demonstrably block nothing.
 6. ~~GitHub deploy token invalid~~ — RESOLVED 2026-10-28: owner supplied a fresh token; the repository now lives at github.com/naturalintellectscrop-ctrl/HouseForRent (remote URL updated). Commits c3ede79 + afb0642 pushed to main (dc2aa07..afb0642); Vercel deployment succeeded (commit status "Deployment has completed"); production checks passed: /platform/approvals 307→/login (route now exists where dc2aa07 served 404), /platform 307→/login, /login 200.
+7. Sandbox .env reset (2026-10-28, RECURRING — same as Task 40/48 precedent): the workspace rolled back mid-session; gitignored .env is back to the SQLite template, so the local dev server cannot reach the dev Supabase (PrismaClientInitializationError) and ALL DB-backed LOCAL verification against the dev database is blocked until the owner re-supplies the pooler URL in .env (or restarts the sandbox with it). Production/Vercel is UNAFFECTED (server-side env). Isolated-rig verification (PGlite) is unaffected and remains the local evidence path.

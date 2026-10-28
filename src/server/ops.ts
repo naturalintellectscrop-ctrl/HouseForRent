@@ -189,6 +189,15 @@ export async function provisionStaff(params: {
   if (params.role !== 'foo' && params.role !== 'admin') throw new StaffRoleError();
   const { hashPassword } = await import('./auth');
 
+  // Same courtesy the self-service register gives: a duplicate phone is a
+  // 409 the admin can read, not a Prisma unique-violation leaking as 500
+  // (ROLE_PERMISSION_MATRIX.md R-1). The unique index remains the hard
+  // backstop for the race this check cannot close.
+  const clash = await db.party.findUnique({ where: { primaryPhone: params.primaryPhone }, select: { id: true } });
+  if (clash) {
+    throw new ApiError(409, 'PHONE_TAKEN', 'An account already exists for that number.');
+  }
+
   return db.$transaction(async (tx) => {
     const party = await tx.party.create({
       data: { displayName: params.displayName, primaryPhone: params.primaryPhone, status: 'active' },
