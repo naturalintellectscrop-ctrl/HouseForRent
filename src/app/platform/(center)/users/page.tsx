@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { db } from '@/lib/db';
 import { DegradedPanel, SectionCard, loadPlatformData, humanize } from '../data';
 
@@ -89,7 +90,15 @@ export default async function PlatformUsersPage() {
                   <td>{a.party.primaryPhone}</td>
                   <td>{a.party.email ?? '—'}</td>
                   <td>{humanize(a.authRole)}</td>
-                  <td>{humanize(a.party.status)}</td>
+                  <td>
+                    {a.party.status === 'pending_verification' ? (
+                      <Link href={`/platform/approvals/${a.partyId}`} className="plat-action">
+                        {humanize(a.party.status)} →
+                      </Link>
+                    ) : (
+                      humanize(a.party.status)
+                    )}
+                  </td>
                   <td>
                     {a.lastLoginAt
                       ? a.lastLoginAt.toISOString().replace('T', ' ').slice(0, 16) + ' UTC'

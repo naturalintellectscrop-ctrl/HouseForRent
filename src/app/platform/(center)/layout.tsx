@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
+import { db } from '@/lib/db';
 import { resolveSession, homeFor } from '@/server/auth';
 
 export const metadata: Metadata = {
@@ -51,12 +52,28 @@ export default async function PlatformLayout({
     redirect(homeFor(session.role));
   }
 
-  const nav = [
-    { href: '/platform', label: 'Overview' },
-    { href: '/platform/users', label: 'Users' },
-    { href: '/platform/listings', label: 'Listings' },
-    { href: '/platform/transactions', label: 'Transactions' },
-    { href: '/platform/system', label: 'System' },
+  // The approvals nav entry carries the live pending count - the one
+  // figure on the chrome that is a workload, not a decoration. A dead
+  // database degrades to a plain label (the page itself handles its own
+  // degraded state; the chrome must not break because of it).
+  let pendingApplications: number | null = null;
+  try {
+    pendingApplications = await db.party.count({ where: { status: 'pending_verification' } });
+  } catch {
+    pendingApplications = null;
+  }
+
+  const nav: Array<{ href: string; label: string; count: number | null }> = [
+    { href: '/platform', label: 'Overview', count: null },
+    {
+      href: '/platform/approvals',
+      label: 'Approvals',
+      count: pendingApplications,
+    },
+    { href: '/platform/users', label: 'Users', count: null },
+    { href: '/platform/listings', label: 'Listings', count: null },
+    { href: '/platform/transactions', label: 'Transactions', count: null },
+    { href: '/platform/system', label: 'System', count: null },
   ];
 
   return (
@@ -75,6 +92,11 @@ export default async function PlatformLayout({
             {nav.map((item) => (
               <Link key={item.href} href={item.href}>
                 {item.label}
+                {item.count !== null && item.count > 0 ? (
+                  <span className="plat-nav-count" aria-label={`${item.count} pending`}>
+                    {item.count > 99 ? '99+' : item.count}
+                  </span>
+                ) : null}
               </Link>
             ))}
             <span className="plat-nav-sep" aria-hidden="true" />

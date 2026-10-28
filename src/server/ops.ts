@@ -434,6 +434,8 @@ export interface AdminPartyDetail {
   role: string;
   accountStatus: string;
   listerTier: string | null;
+  /** The account's own last sign-in, or null - honest queue signal. */
+  lastLoginAt: Date | null;
   identity: {
     state: string | null;
     method: string | null;
@@ -620,6 +622,7 @@ export async function adminPartyDetail(partyId: string): Promise<AdminPartyDetai
     role: account.authRole,
     accountStatus: party.status,
     listerTier: party.listerProfile?.tier ?? null,
+    lastLoginAt: account.lastLoginAt,
     identity: {
       state: latestVerified?.state ?? identity[0]?.state ?? null,
       method: (latestVerified ?? identity[0])?.method ?? null,
@@ -878,4 +881,170 @@ export async function setListerTier(params: {
   ]);
 
   return { partyId: params.partyId, tier: profile.tier, previous: from, changed: true };
+}
+
+// ── account applications (the approval queue) ────────────────────────────
+//
+// Every self-service account is born `pending_verification` (registration
+// is the application). Activation in this domain has exactly ONE server
+// path - an identity check that passes flips the party active (the code
+// above, unchanged) - so the queue's job is to make that path findable:
+// who is waiting, how long, what has been tried, and what a decision will
+// and will not grant. Rejection is the second decision the platform could
+// always express in its status vocabulary but could never RECORD - nothing
+// anywhere wrote `suspended` before this section.
+
+export interface ApplicationQueueRow {
+  partyId: string;
+  displayName: string;
+  primaryPhone: string;
+  role: AuthRole;
+  listerTier: string | null;
+  /** Latest identity-check state, if any attempt was made. */
+  identityState: string | null;
+  identityAttempts: number;
+  /** When the application was created - "waiting since". */
+  waitingSince: Date;
+  lastLoginAt: Date | null;
+}
+
+/**
+ * Accounts waiting on activation, landlords first (the role whose
+ * application blocks a business relationship), oldest first inside each
+ * group. Read-only; the review page does the deciding.
+ */
+export async function pendingApplicationQueue(take = 100): Promise<ApplicationQueueRow[]> {
+  const rows = await db.party.findMany({
+    where: { status: 'pending_verification' },
+    include: {
+      userAccounts: { take: 1, select: { authRole: true, lastLoginAt: true } },
+      identityVerifications: { orderBy: { createdAt: 'desc' }, take: 1 },
+      listerProfile: { select: { tier: true } },
+    },
+    orderBy: { createdAt: 'asc' },
+    take,
+  });
+
+  const mapped = rows.map((p) => ({
+    partyId: p.id,
+    displayName: p.displayName,
+    primaryPhone: p.primaryPhone,
+    role: p.userAccounts[0]?.authRole,
+    listerTier: p.listerProfile?.tier ?? null,
+    identityState: p.identityVerifications[0]?.state ?? null,
+    identityAttempts: p.identityVerifications.length,
+    waitingSince: p.createdAt,
+    lastLoginAt: p.userAccounts[0]?.lastLoginAt ?? null,
+  }));
+
+  // Landlords first, then tenants; oldest-waiting first inside each group.
+  return mapped
+    .filter((r): r is typeof r & { role: AuthRole } => r.role !== undefined)
+    .sort((a, b) => {
+      const roleOrder = (r: AuthRole) => (r === 'lister' ? 0 : 1);
+      return roleOrder(a.role) - roleOrder(b.role) ||
+        a.waitingSince.getTime() - b.waitingSince.getTime();
+    });
+}
+
+export class ApplicationNotPendingError extends ApiError {
+  constructor(currentStatus: string) {
+    // 409 Conflict: the caller's decision is stale - the account moved on
+    // (activated, or already decided). The HTTP edge maps ApiError to the
+    // status + code the client sees, so a repeated decision is a clean,
+    // actionable response - never a 500 and never a second audit row.
+    super(
+      409,
+      'APPLICATION_NOT_PENDING',
+      `This application is no longer pending - the account is ${currentStatus}. ` +
+        'Refresh and review the current state before deciding.',
+    );
+    this.name = 'ApplicationNotPendingError';
+  }
+}
+
+/**
+ * REJECT an account application - the platform declines to activate.
+ *
+ * ── Why rejection is a status + an audit row, and nothing else ──
+ * The existing status vocabulary already contains the right state
+ * (`suspended`: the platform has stopped this account; the sign-in policy
+ * refuses it on every request) - inventing a new status would fork the
+ * policy every consumer already trusts. What was genuinely missing is the
+ * DECISION RECORD: the reason, the decider, and the moment. This function
+ * writes exactly that, and nothing beyond it.
+ *
+ * ── What rejection does NOT do ──
+ * It does not touch identity records (a failed check stays a true
+ * record of what was tried), does not delete anything, and grants no
+ * permission change beyond what the status policy already enforces.
+ *
+ * ── Concurrency ──
+ * The status move is a conditional update (`where status =
+ * pending_verification`), so two admins deciding at once produce exactly
+ * one rejection; the loser re-reads the true state via 409 instead of
+ * double-writing history.
+ */
+export async function rejectAccountApplication(params: {
+  actorPartyId: string;
+  partyId: string;
+  reason: string;
+}): Promise<void> {
+  const reason = params.reason.trim().replace(/\s+/g, ' ');
+  if (reason.length < 4) {
+    throw new ApiError(422, 'VALIDATION', 'Give a short reason - it is recorded on the account trail.');
+  }
+  if (reason.length > 500) {
+    throw new ApiError(422, 'VALIDATION', 'Keep the reason under 500 characters.');
+  }
+
+  const party = await db.party.findUnique({
+    where: { id: params.partyId },
+    include: { userAccounts: { take: 1 } },
+  });
+  if (!party || !party.userAccounts[0]) throw new PartyNotFoundError(params.partyId);
+  const account = party.userAccounts[0];
+  // Staff accounts are provisioned, never applied for - the application
+  // vocabulary does not apply to them (same line the identity check draws).
+  if (account.authRole !== 'tenant' && account.authRole !== 'lister') {
+    throw new IdentityCheckNotApplicableError(account.authRole);
+  }
+  if (party.status !== 'pending_verification') {
+    throw new ApplicationNotPendingError(party.status);
+  }
+
+  const moved = await db.party.updateMany({
+    where: { id: party.id, status: 'pending_verification' },
+    data: { status: 'suspended' },
+  });
+  if (moved.count === 0) {
+    // A concurrent decision moved the account first. Re-read so the error
+    // reflects what the caller will see on refresh, not a guess.
+    const now = await db.party.findUnique({
+      where: { id: party.id },
+      select: { status: true },
+    });
+    throw new ApplicationNotPendingError(now?.status ?? 'unknown');
+  }
+
+  // End any live session. resolveSession would already refuse the account
+  // on its next request (suspended fails the sign-in policy); revoking the
+  // rows keeps the platform's active-session count honest immediately.
+  await db.session.updateMany({
+    where: { userAccountId: account.id, revokedAt: null },
+    data: { revokedAt: new Date() },
+  });
+
+  await db.auditEvent.create({
+    data: {
+      actorPartyId: params.actorPartyId,
+      eventType: 'account_application_rejected',
+      // Subject = the PARTY, same scope account-level decisions use
+      // (lister_tier_changed): admin-acted events on an account must be
+      // visible on the party trail, which matches on subjectRef=partyId.
+      subjectRef: party.id,
+      payload: { reason, role: account.authRole, priorStatus: 'pending_verification' },
+      occurredAt: new Date(),
+    },
+  });
 }
