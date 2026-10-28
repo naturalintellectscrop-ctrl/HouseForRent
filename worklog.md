@@ -1284,3 +1284,26 @@ Unresolved issues or risks, and priority recommendations for the next phase:
 - OWNER (one browser session): after Vercel finishes deploying 28b808d, spot-check production: home 200, landlord login, amend panel visible on an unpublished listing, photo upload through the private `media` bucket, public gallery on a live listing. The sandbox cannot reach production DNS, so this link is UNVERIFIED-on-prod by necessity.
 - OWNER (decision, unchanged): the two historical failed-attempt rows for better_auth_tables remain in the ledger beside a completed row; if a future `prisma migrate deploy` is ever planned, run `prisma migrate resolve --applied 20260804180000_better_auth_tables` first (a production metadata write awaiting approval).
 - Engineering next: tenant-side journeys (viewing request → schedule → conduct) are the next unverified-on-current-code ladder; the saved-listings (bookmarks) surface re-check; and the ops officer capture flow against the variant pipeline (viewing evidence through the same media door).
+
+---
+Task ID: 47
+Agent: web takeover agent (security hardening)
+Task: Owner directive — the public sign-in page advertised the platform control surface ("Platform operator? Sign in to the control center" → /platform/login). Users must never learn a platform-level surface exists. New framework: platform admins sign in as ordinary individuals on the normal sign-in page; the system resolves their credentials server-side and routes them to the control center automatically. No manual /platform/* typing, no discoverable operator door.
+
+Work Log:
+- AUDIT FIRST: read the auth stack end-to-end before touching anything. Confirmed the single-identity design already in place: one endpoint (/api/v1/auth/login) for every role, phone OR email identifier, server-resolved role, `homeFor(role)` returned to the client as the redirect target, `homeFor('admin') === '/platform'` (Task 39). The auto-redirect the owner asked for therefore ALREADY existed — the only real defects were the two exposed surfaces.
+- Grep sweep for every reference: only ONE public link existed (the marked one on /login); the ops console has zero links into /platform; sitemap carries no /platform (verified in Task 42, re-confirmed by grep).
+- REMOVED the "Platform operator?" paragraph from src/app/login/page.tsx (with its outdated justification comment).
+- DELETED src/app/platform/login/ entirely (page.tsx + operator-login-form.tsx): the branded "Platform Control Center" sign-in can no longer be discovered OR typed — the URL now 404s. Deleted the now-dead .plat-login*/.plat-eyebrow CSS block in globals.css (~70 lines) and replaced the section header comment with the stealth directive.
+- RE-POINTED the (center) layout guard: unauthenticated visitors now redirect to the ORDINARY /login (was /platform/login — which would have 404-looped after the deletion). Documented the guard + stealth policy in the layout comment (anonymous → ordinary sign-in; non-admin session → homeFor(role); admin lands back via homeFor after sign-in). Convenience gate only — every service re-authorises (NFR-1).
+- Updated scripts/provision-platform-owner.mjs final output to describe the single-door flow (no operator URL exists).
+- Updated homeFor('admin') comment to record it is now the ONLY entry (stealth directive).
+- Checked for middleware (none exists — layout guard is the door) and SSOT docs in sandbox (no docs/ dir here; worklog is the record).
+- VERIFICATION (local, evidence): bun run lint → 0; tsc --noEmit → 0. Routes: /login 200 AND rendered page contains zero "Platform operator" occurrences (curl + agent-browser snapshot); /platform/login → 404; /platform unauthenticated → 307 → /login (curl) and browser-verified (agent-browser lands on /login, URL bar shows ordinary sign-in). Screenshots: desktop 1280 + mobile 412 — layout intact, link gone, no console errors.
+- Golden-path note (honest scope): the admin sign-in → auto-redirect flow itself was E2E-verified against live production in Task 42 and its logic (login API, homeFor, LoginForm redirect) is UNTOUCHED by this commit; this commit only removes surfaces and re-points a redirect target (verified above).
+- SHIPPED: commit 060947a (after rebasing onto origin/main — remote had a twin docs commit cb87077 differing only in file-mode; no content overlap). Dual-push: origin/main AND origin/sandbox/webapp both at 060947a per the standing instant-publish convention. 7 files changed, +31/−252.
+
+Stage Summary:
+- The platform control surface is now UNADVERTISED: no link on any public page, no dedicated operator sign-in URL (404), no /platform reference in user-visible URLs. Owner entry = ordinary sign-in on /login with the provisioned email/phone + password; the server-resolved platform role routes to /platform automatically. Authorization unchanged and still server-side at every layer.
+- Non-admin behavior preserved: every non-admin role continues to land on its own home; a tenant who somehow reaches /platform is silently bounced to their own surface (no error, no hint).
+- Residual (accepted, by design): the /platform/* paths themselves remain reachable by URL for an authenticated admin (necessary for it to work); nothing about them is discoverable from any public surface, and every page/API behind the gate enforces the admin role server-side.
