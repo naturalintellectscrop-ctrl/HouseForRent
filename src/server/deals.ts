@@ -1074,45 +1074,92 @@ export async function applyPspWebhookOutcome(payload: {
         return { matched: true as const, action: 'amount_mismatch' as const };
       }
 
-      await ledger.transitionPspInstruction({
+      const accepted = await ledger.transitionPspInstruction({
         instructionId: instruction.id,
         toState: 'succeeded',
         detail: `Nylon Pay confirmed the ${instruction.kind}${providerBits ? ` (${providerBits})` : ''}.`,
       });
 
-      const deal = await db.deal.findUniqueOrThrow({ where: { id: instruction.dealId } });
-      if (instruction.kind === 'collect') {
-        if (deal.status !== 'escrow_funded') {
-          await applyEscrowFunding({
-            dealId: deal.id,
-            actorRole: 'psp_webhook',
-            reason: 'Nylon Pay webhook confirmed the tenant’s payment.',
-          });
-          return { matched: true as const, action: 'escrow_funded' as const };
-        }
-        return { matched: true as const, action: 'already_applied' as const };
-      }
-      if (instruction.kind === 'release') {
-        if (deal.status === 'commission_earned') {
-          await applySettlement({
-            dealId: deal.id,
-            actorRole: 'psp_webhook',
-            reason: 'Nylon Pay webhook confirmed the landlord payout.',
-          });
-          return { matched: true as const, action: 'settled' as const };
-        }
-        return { matched: true as const, action: 'already_applied' as const };
-      }
-      // kind === 'refund'
-      if (deal.status === 'escrow_funded' || deal.status === 'dispute_hold') {
-        await applyRefundCompletion({
-          dealId: deal.id,
-          actorRole: 'psp_webhook',
-          reason: 'Nylon Pay webhook confirmed the refund.',
+      // The transition can be REFUSED when this instruction is already
+      // terminal in another state - a late "successful" after a "failed"
+      // (real providers do timeout-then-confirm). The first terminal outcome
+      // stands: booking money effects anyway would let instruction state and
+      // booked custody diverge, which is exactly what the terminal-state rule
+      // exists to prevent (FINANCIAL_AUDIT.md F-1).
+      if (!accepted || ledger.derivedPspState(accepted) !== 'succeeded') {
+        await db.auditEvent.create({
+          data: {
+            actorPartyId: await systemPartyId(),
+            eventType: 'psp_terminal_refused',
+            subjectRef: instruction.id,
+            payload: {
+              event: payload.event,
+              note: 'A "successful" delivery arrived for an instruction already terminal in another state. The first terminal outcome stands - nothing was booked.',
+            },
+            occurredAt: new Date(),
+          },
         });
-        return { matched: true as const, action: 'refunded' as const };
+        return { matched: true as const, action: 'instruction_terminal_refused' as const };
       }
-      return { matched: true as const, action: 'already_applied' as const };
+
+      const deal = await db.deal.findUniqueOrThrow({ where: { id: instruction.dealId } });
+      // Booking guard: if the money effect cannot be applied (e.g. the
+      // terms-changed tripwire firing between payment and booking), the
+      // anomaly must be ops-visible IN THE DATABASE, not just a server log -
+      // the provider will retry and keep failing, so this row is what
+      // reconciliation looks for (FINANCIAL_AUDIT.md F-3). The rethrow keeps
+      // the provider-retry contract (non-2xx means retry) intact.
+      try {
+        if (instruction.kind === 'collect') {
+          if (deal.status !== 'escrow_funded') {
+            await applyEscrowFunding({
+              dealId: deal.id,
+              actorRole: 'psp_webhook',
+              reason: 'Nylon Pay webhook confirmed the tenant’s payment.',
+            });
+            return { matched: true as const, action: 'escrow_funded' as const };
+          }
+          return { matched: true as const, action: 'already_applied' as const };
+        }
+        if (instruction.kind === 'release') {
+          if (deal.status === 'commission_earned') {
+            await applySettlement({
+              dealId: deal.id,
+              actorRole: 'psp_webhook',
+              reason: 'Nylon Pay webhook confirmed the landlord payout.',
+            });
+            return { matched: true as const, action: 'settled' as const };
+          }
+          return { matched: true as const, action: 'already_applied' as const };
+        }
+        // kind === 'refund'
+        if (deal.status === 'escrow_funded' || deal.status === 'dispute_hold') {
+          await applyRefundCompletion({
+            dealId: deal.id,
+            actorRole: 'psp_webhook',
+            reason: 'Nylon Pay webhook confirmed the refund.',
+          });
+          return { matched: true as const, action: 'refunded' as const };
+        }
+        return { matched: true as const, action: 'already_applied' as const };
+      } catch (err) {
+        await db.auditEvent.create({
+          data: {
+            actorPartyId: await systemPartyId(),
+            eventType: 'psp_booking_failed',
+            subjectRef: instruction.id,
+            payload: {
+              dealId: deal.id,
+              kind: instruction.kind,
+              errorClass: err instanceof Error ? err.name : 'unknown',
+              errorDetail: err instanceof Error ? err.message.slice(0, 300) : 'unknown error',
+              note: 'The provider confirmed the money but the ledger booking did not complete. The provider will retry; ops must reconcile before this deal advances.',
+            },
+            occurredAt: new Date(),
+          },
+        });
+        throw err;
+      }
     }
 
     default:

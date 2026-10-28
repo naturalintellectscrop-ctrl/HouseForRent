@@ -86,6 +86,10 @@ journey) · DB = direct read-only database evidence.
 | 6.4 | Signed webhook, duplicate idempotency, out-of-order lock, amount mismatch refusal | VERIFIED (live probes) | P (unsigned→401, bogus→401 INVALID_SIGNATURE, 2026-10-27 re-probe); state-path tests pre-pause |
 | 6.5 | Escrow ledger double-entry + reconciliation | VERIFIED (schema/triggers) / UNVERIFIED (E2E current prod) | DB (ledger triggers) + S (pre-pause); ledger currently 0 rows (truth state) |
 | 6.6 | Live NylonPay | NOT IMPLEMENTED (by rule) | Sandbox only until merchant KYC/approval (external) |
+| 6.7 | Full financial-lifecycle audit (threat model + invariants + findings register) | VERIFIED (audit round 50) | A (docs/FINANCIAL_AUDIT.md: lifecycle map with file:line evidence, STRIDE threat model, 10 invariants verified, findings F-1…F-9 graded; escrow-semantics disclosure §0) |
+| 6.8 | Webhook terminal-state consistency (F-1 fix: refused transition ⇒ no booking + `psp_terminal_refused` audit) | VERIFIED (code) / UNVERIFIED (E2E live) | C (applyPspWebhookOutcome now checks derivedPspState before any money effect; tsc+lint clean; live-mode rehearsal needs NylonPay credentials) |
+| 6.9 | Booking-failure observability (F-3 fix: `psp_booking_failed` audit row when confirmed money cannot be booked) | VERIFIED (code) / UNVERIFIED (E2E live) | C (webhook booking path wrapped; audit row uses the psp_amount_mismatch write pattern; rethrow preserves provider-retry contract) |
+| 6.10 | One-active-deal-per-introduction as DB constraint (F-2) | PROPOSED (owner decision) | Draft migration prisma/migrations/20261028120000_deal_active_per_introduction/migration.sql (partial unique index, unapplied; apply-migration rails required) |
 
 ## 7. Dashboards & UX
 
@@ -120,4 +124,4 @@ journey) · DB = direct read-only database evidence.
 3. Domain + DNS + Search Console.
 4. Counsel review of the 12 open legal questions (docs/LEGAL_QUESTIONS_REVIEW.md).
 5. ~~Migration-ledger resolve (owner-approved production metadata write)~~ — RESOLVED as benign 2026-10-28 (see 8.6): the two failed rows are rolled-back history and demonstrably block nothing.
-6. GitHub deploy token invalid (2026-10-28): commit c3ede79 (control center + approval workflow) is committed locally on main but NOT pushed — production is still on dc2aa07. Owner must refresh the remote token; push + production re-verification pending.
+6. ~~GitHub deploy token invalid~~ — RESOLVED 2026-10-28: owner supplied a fresh token; the repository now lives at github.com/naturalintellectscrop-ctrl/HouseForRent (remote URL updated). Commits c3ede79 + afb0642 pushed to main (dc2aa07..afb0642); Vercel deployment succeeded (commit status "Deployment has completed"); production checks passed: /platform/approvals 307→/login (route now exists where dc2aa07 served 404), /platform 307→/login, /login 200.
