@@ -31,6 +31,11 @@ export const metadata: Metadata = {
     'house for rent Uganda',
   ],
   applicationName: SITE_NAME,
+  // Deploy-origin probe (owner directive: single-branch workflow). Invisible
+  // to users; lets anyone verify which git branch production actually
+  // serves with one `curl | grep deploy-branch` - the branch/production
+  // tracking question must never again be answered by guesswork.
+  other: { 'deploy-branch': 'main' },
   authors: [{ name: 'Natural Intellects Ltd' }],
   creator: 'Natural Intellects Ltd',
   publisher: 'Natural Intellects Ltd',
