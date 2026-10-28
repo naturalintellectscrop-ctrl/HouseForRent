@@ -227,9 +227,12 @@ export function homeFor(role: AuthRole): string {
     case 'foo':
       return '/ops/today';
     case 'admin':
-      // Task 39: the platform role's home is the global control center, not
-      // the staff console. The console itself remains one click away and is
-      // still the field officers' landing surface.
+      // The platform role's home is the global control center. This is the
+      // ONLY entry into it (owner stealth directive): there is no separate
+      // operator sign-in page and no link to the area from the public site -
+      // signing in with platform credentials on the ordinary sign-in page
+      // routes here automatically, server-side. The console itself remains
+      // one click away and is still the field officers' landing surface.
       return '/platform';
     default:
       return '/account';

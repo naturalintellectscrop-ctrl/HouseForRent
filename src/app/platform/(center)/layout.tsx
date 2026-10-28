@@ -15,11 +15,21 @@ export const metadata: Metadata = {
  * ── THE GUARD ──
  * `requireRole(['admin'])` in spirit, written out because the redirect
  * targets differ from the public surfaces: an anonymous visitor goes to the
- * operator entry point, and any authenticated NON-platform role goes to its
- * OWN home (a tenant who followed a link has done nothing wrong; a field
- * officer belongs in the ops console). This layout is a convenience gate,
- * not the security boundary - it spares people confusing errors, while every
- * API and service behind it re-authorises the caller regardless (NFR-1).
+ * ordinary public sign-in (the same door every account uses - there is no
+ * separate operator sign-in surface to discover), and any authenticated
+ * NON-platform role goes to its OWN home (a tenant who followed a link has
+ * done nothing wrong; a field officer belongs in the ops console). After
+ * that sign-in the server-resolved role does the routing: homeFor('admin')
+ * is /platform, so the platform owner lands back here without ever typing
+ * a URL. This layout is a convenience gate, not the security boundary - it
+ * spares people confusing errors, while every API and service behind it
+ * re-authorises the caller regardless (NFR-1).
+ *
+ * ── STEALTH (owner directive) ──
+ * The existence of a platform-level surface is not advertised: no link from
+ * the public site, no dedicated login page, no "/platform" reference in any
+ * user-visible URL. Users should never learn this area exists. Signing in
+ * with platform credentials on the ordinary sign-in page IS the entry.
  *
  * ── A different register, the same product ──
  * Dark chrome and a control-center nav, sharing every token with the rest of
@@ -33,7 +43,9 @@ export default async function PlatformLayout({
 }) {
   const session = await resolveSession();
   if (!session) {
-    redirect('/platform/login');
+    // The one and only door: the public sign-in. The role the server
+    // resolves after it decides where the account lands.
+    redirect('/login');
   }
   if (session.role !== 'admin') {
     redirect(homeFor(session.role));

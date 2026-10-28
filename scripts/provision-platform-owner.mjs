@@ -154,7 +154,10 @@ async function main() {
   console.log(`  Sign-in email   : ${OWNER_EMAIL}`);
   console.log(`  Sign-in phone   : ${OWNER_PHONE}`);
   console.log(`  Sessions revoked: ${revoked.count}`);
-  console.log('  Sign-in surface : /platform/login (email or phone + password)');
+  console.log('  Sign-in surface : the ordinary public sign-in page (/login) -');
+  console.log('                    email or phone + password. The server resolves');
+  console.log('                    the platform role and routes to /platform');
+  console.log('                    automatically. No operator-specific URL exists.');
   console.log('  The password itself was never logged, stored in plaintext, or audited.');
 }
 
