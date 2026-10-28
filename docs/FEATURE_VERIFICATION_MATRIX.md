@@ -96,6 +96,11 @@ journey) · DB = direct read-only database evidence.
 | 7.3 | Ops console (verification queue, viewings, capture) | BLOCKED | Admin/officer session dependency (5.2) |
 | 7.4 | Empty/error/loading states + recovery flows | VERIFIED | P (degraded-DB copy Task 43; honest upload error Task 44) |
 | 7.5 | Layout integrity at 412px/1280px | VERIFIED | P (Task 43/44 browser passes); re-audit this round |
+| 7.6 | Control center overview (attention band, queues, activity, honest provider status) | VERIFIED (isolated rig, end-to-end) | D (commit c3ede79: real register → dashboard shows 1 waiting application + nav badge; attention tiles all live queries; desktop 1280 + 400px screenshots; empty states honest) |
+| 7.7 | Landlord approval queue (/platform/approvals) | VERIFIED (isolated rig) | D (queue lists applicants, landlords first, identity-attempt state, waiting age; Review → routes to decision surface) |
+| 7.8 | Approval = operations identity check → activation | VERIFIED (isolated rig) | D (browser: valid NIN + name match → status Active, trail records acting admin; mock provider labelled on-surface) |
+| 7.9 | Application rejection with recorded reason | VERIFIED (isolated rig) | D (reason required; decision card + trail show actor/time/reason; status suspended; sign-in refused with generic ACCOUNT_BLOCKED - no reason leak) |
+| 7.10 | Decision authorization + stale-state safety | VERIFIED (rig, direct API) | S (anonymous 401, lister session 403, staff target 422, empty reason 400, repeat-decision 409 APPLICATION_NOT_PENDING after fix; concurrent-safe conditional update) |
 
 ## 8. Data protection & resilience
 
@@ -106,7 +111,7 @@ journey) · DB = direct read-only database evidence.
 | 8.3 | Production export (consistent, checksummed) | VERIFIED | S (first real export 2026-10-23, 76 rows, SHA-256) |
 | 8.4 | Restore to separate recovery DB + integrity gates | VERIFIED | S (production-recovery-drill ALL CHECKS PASSED 2026-10-23) |
 | 8.5 | Secrets hygiene (no secrets in repo/logs/chat) | VERIFIED | R (gitignored .env*; guarded scripts; worklog discipline) |
-| 8.6 | Migration ledger anomaly (2 failed better_auth rows) | FAILED (latent) | DB (finished_at NULL rows block future prisma migrate deploy); owner decision pending |
+| 8.6 | Migration ledger anomaly (2 failed better_auth rows) | VERIFIED (benign) | DB (2026-10-28 read-only audit: both rows rolled_back_at set, applied_steps 0; the SAME migration then applied successfully 18s later, and every later migration incl. media_variants applied after them ⇒ they do NOT block migrate deploy; no production writes made) |
 
 ## Standing external blockers (not locally actionable)
 
@@ -114,4 +119,5 @@ journey) · DB = direct read-only database evidence.
 2. Identity provider contract (currently a disclosed mock).
 3. Domain + DNS + Search Console.
 4. Counsel review of the 12 open legal questions (docs/LEGAL_QUESTIONS_REVIEW.md).
-5. Migration-ledger resolve (owner-approved production metadata write).
+5. ~~Migration-ledger resolve (owner-approved production metadata write)~~ — RESOLVED as benign 2026-10-28 (see 8.6): the two failed rows are rolled-back history and demonstrably block nothing.
+6. GitHub deploy token invalid (2026-10-28): commit c3ede79 (control center + approval workflow) is committed locally on main but NOT pushed — production is still on dc2aa07. Owner must refresh the remote token; push + production re-verification pending.
