@@ -1445,3 +1445,12 @@ Stage Summary:
 - The recurring review now exists on an honest footing: bounded, evidence-writing, self-limiting, and cheap enough to survive the platform's execution limits — the exact opposite of the payload that got 481026 disabled.
 - Recurring-execution verification is time-gated: the job is configured correctly and its evidence trail (docs/REVIEW_LOG.md + scheduler run_count/last_run_at) is the proof channel; whether a scheduled fire succeeds is observable only after the first scheduled run, and is recorded as such — not claimed.
 - Standing blockers unchanged: NylonPay KYC (#1), F-2/F-6 migration decisions, R-3 policy decision. Recurring environmental hazard re-confirmed: sandbox resets revert .env — future rounds must check datasource health before diagnosing anything else.
+
+---
+Task ID: 53b (round 53 continuation — scheduler verification + media defect)
+Agent: web takeover agent
+Work Log:
+- DEPLOY VERIFIED: b36a882 Vercel commit status "Deployment has completed" via GitHub API; production home serves real data ("1 verified home available right now", "Verified in person"). Follow-up docs push 959a998.
+- SCHEDULER VERIFICATION (honest): job 483029 active (status 0, fixed_rate 900s). At the first expected fire (~05:54 UTC) run_count stayed 1 — but 481026's counter ALSO never incremented during its 3.5h enabled window, so run_count cannot distinguish "fires don't happen" from "fires don't count". Scheduled execution therefore remains UNVERIFIED; the observable proof channel is docs/REVIEW_LOG.md lines + [cron-review] commits appearing every ~15 min. Configured-but-not-yet-verified is the accurate label.
+- MEDIA DEFECT FOUND AND DOCUMENTED (no code change, per discipline): homepage/properties reference media IDs that 404 warm; DB holds 4 MediaAsset rows with storageRef set; media/listings/* wiped by the sandbox reset; production media route 503 fail-closed with 9 dead refs on prod home. Root cause: ephemeral local media storage vs persistent Supabase DB. Recorded as matrix blocker #9 (durable blob store owner decision + sanctioned re-upload walk; landlord creds not retained by design).
+- Timezone note: scheduler API timestamps are UTC+8 (platform-local); fixed_rate intervals are timezone-agnostic by construction; the `next` field is always empty (API does not expose next-run).
