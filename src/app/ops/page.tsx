@@ -113,7 +113,8 @@ export default async function OpsPage() {
       <p className="muted">
         Qualifying means live, verified, in-corridor <em>and</em> confirmed
         within the freshness window. Stale inventory is counted separately
-        rather than hidden - {gate.staleExcluded} listings one field visit
+        rather than hidden - {gate.staleExcluded}{' '}
+        {gate.staleExcluded === 1 ? 'listing' : 'listings'} one field visit
         away from qualifying is a different problem from not having them.
       </p>
 
