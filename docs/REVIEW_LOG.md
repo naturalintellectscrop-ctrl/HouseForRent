@@ -1,0 +1,9 @@
+# House For Rent — Recurring Review Log
+
+Append-only evidence log for the 15-minute `webDevReview` job.
+One line per run: timestamp (UTC) → what was checked → result → action taken.
+No run may rewrite or delete earlier lines. A no-op review is a valid outcome.
+
+| Time (UTC) | Checked | Result | Action |
+|---|---|---|---|
+| 2026-10-29 05:4x | (session round 53) repo state, dev server boot, DB connectivity, /properties live data | Dev tree healthy: server renders real Supabase data after blocker #7 recurrence fixed (.env restored); stale dev tree killed | Scheduler rebuilt (bounded payload); round-52 redesign prepared for supervised commit |
