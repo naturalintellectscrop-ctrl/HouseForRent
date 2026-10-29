@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { api, ApiError, type Reconciliation } from '@/lib/api';
 import { AdminOnly, Empty, shillings, StatusDot, when } from '@/app/ui';
+import { RunReconciliationControl } from './run-control';
 
 /**
  * FR-10.4 - ledger ↔ custodian reconciliation.
@@ -37,9 +38,11 @@ export default async function ReconciliationPage() {
       <>
         <h1>Reconciliation</h1>
         <p className="lede">
-          No reconciliation check has run yet. Run one from the operations
-          overview once the ledger has activity to compare.
+          The ledger and the custodian are compared on every load once a
+          first check has been recorded. Each run writes one immutable
+          history row; nothing is adjusted by running it.
         </p>
+        <RunReconciliationControl />
         <Empty title="No prior checks recorded.">
           A row is written each time reconciliation runs. Until the first run
           completes there is no history to compare the current figures
@@ -58,6 +61,8 @@ export default async function ReconciliationPage() {
       <p className="lede">
         Checked fresh on load, at {when(latest.runAt)}.
       </p>
+
+      <RunReconciliationControl />
 
       {!internallyConsistent && (
         <p className="alert alert-error" role="alert">
