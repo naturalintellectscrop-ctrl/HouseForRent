@@ -1606,3 +1606,30 @@ Work Log:
 - NOT A DEFECT: a click landing before React finishes hydrating a cold dev compile is inert — identical gating applies to every other client-interactive control in this product (save-toggle, panels, etc.); production hydration is far faster.
 Stage Summary:
 - All 7 password fields product-wide now have an accessible, keyboard-operable show/hide toggle built in the house style; nothing else about any form changed; records updated; commit + push + production probe of /login after deploy.
+
+Task ID: 61
+Agent: web takeover agent (owner report: sign-out missing + 1hr auto-logout)
+Task: "there's no way to sign out. and the timeout to auto log out is 1hr" - make sign-out findable and working, enforce the 1-hour auto-logout.
+
+Work Log:
+- DIAGNOSIS (three separate truths behind the one complaint):
+  * Sign-out DID exist but was an icon-only ghost glyph in the shell sidebar footer - on a phone the sidebar only exists inside the drawer, so an unlabelled glyph was effectively invisible. Not foundable.
+  * WORSE: POST /api/v1/auth/logout redirected to `process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'` and that env var is NOT set on the deployment - a live production probe returned `location: http://localhost:3000/`. The browser followed it, found nothing, and the user stayed on the page looking signed in. Even the person who FOUND the glyph experienced sign-out as broken. Root cause.
+  * The session layer had NO idle timeout: SESSION_TTL_MS was 30 days, absolute. No 1-hour behavior existed anywhere; the owner was setting policy, not reporting observed behavior.
+- FIX 1 (logout route): redirect target derives from the request itself - x-forwarded-host/proto (first hop value) -> Host -> nextUrl. No env dependency, correct behind the Caddy gateway and on Vercel, and correct for any future custom domain. Curl-proven with both a plain Host and forwarded https://myhost.example.
+- FIX 2 (app-shell): the footer control is now a visible icon+text "Sign out" button (.btn-ghost.btn-sm). AppShell is shared by portal/ops/platform, so all three operating registers (light + forest) get it, desktop sidebar AND mobile drawer. site-chrome already had labeled sign-out links.
+- FIX 3 (session policy, owner-set, NO schema change - the production session table is shared and owner-gated):
+  * SESSION_IDLE_MS = 1h: a session dies after one hour with NO server-side request.
+  * Activity slides expires_at to now+1h, throttled to at most one small UPDATE per session per 5 minutes (dead zone 55-60min remaining writes nothing).
+  * Clamp branch: any session found with MORE than one idle window remaining (pre-policy production sessions carry the old 30-day expiry) is put on the idle clock at its very next request - the policy takes effect at deploy, not weeks later.
+  * Absolute cap unchanged: never extended past created_at + 30 days (mirrors the real deployment's refresh-token lifetime). Cookie maxAge stays 30d so an ACTIVE user never loses the cookie mid-use; a dead token inside a live cookie resolves to nothing and redirects to sign-in.
+- TOOLING: scripts/session-probe.mjs (committed) - row-level session-policy probe for the disposable rig (show/expire/slide/clamp/cap). Two tooling bugs fixed during verification: .env.test-rig grep matched both admin lines; Prisma $queryRaw returns an array on postgres, not {rows}.
+- EVIDENCE (isolated rig, per-call segments):
+  * Row-level: fresh session expires exactly created+60min; simulated pre-policy 20d session clamped to request-time+1h on next /auth/me; simulated idle hour (expires-1s) -> 401 UNAUTHENTICATED; 54min-remaining session slid to request-time+60min after one request; backdated created_at (cap now+30min) with expires now+10min slid to EXACTLY the cap, not past it.
+  * Browser: register via real UI -> /account footer shows "Sign out"; click -> LANDED ON / in 1s, homepage shows "Sign in"; browser fetch /api/v1/auth/me -> 401 (server-side revocation, not just cookie clearing). Platform center + ops console footers show the labeled control (screenshots: /tmp/signout-platform.png, /tmp/after-signout.png).
+  * tsc 0; ESLint 0.
+- HONEST NOTES:
+  * "1hr" implemented as INACTIVITY timeout (standard auto-logout semantics; banking-app style). If the owner meant a hard 1-hour cap regardless of activity, that is a one-line change (drop the slide branch) - flagged in the reply.
+  * Production sign-out fix is verifiable without credentials: POST /api/v1/auth/logout Location header must equal the vercel origin (probed pre-fix: it returned localhost).
+Stage Summary:
+- Sign-out is now visible, labeled, and actually returns the user to the homepage with the session revoked; every session product-wide is on the owner's 1-hour inactivity clock with the 30-day absolute cap preserved; all verified at row level, HTTP level and browser level; records updated; deploy + production Location probe to close.

@@ -23,8 +23,31 @@ import { maySignIn, type AuthRole } from './domain';
 export { maySignIn };
 
 export const SESSION_COOKIE = 'hfr_session';
-/** Mirrors the real deployment's 30-day refresh-token lifetime. */
-const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
+/* ── Session lifetime policy (owner-set, round 60) ──────────────────────
+ *
+ * A session is killed by INACTIVITY: after one hour with no server-side
+ * request it expires. Each authenticated request slides the stored expiry
+ * forward ("you have one more hour from now"), so continuous use is never
+ * interrupted mid-task, but a session left open on a shared computer is
+ * dead within the hour - auto-logout that the SERVER enforces, not the
+ * browser.
+ *
+ * The absolute cap mirrors the real deployment's 30-day refresh-token
+ * lifetime: no amount of activity keeps one session row alive past 30
+ * days from issuance (a fresh sign-in starts a new cap). The cookie
+ * itself lives the full 30 days so an active user's browser never drops
+ * it mid-use; a cookie whose server-side session has expired is simply
+ * an ignored token, and it is cleared on the next sign-out.
+ *
+ * Implemented WITHOUT a schema change: the existing `expires_at` column
+ * carries the sliding deadline, `created_at` anchors the absolute cap.
+ */
+const SESSION_IDLE_MS = 60 * 60 * 1000;
+const SESSION_ABSOLUTE_MS = 30 * 24 * 60 * 60 * 1000;
+/** Slide the stored expiry at most this often - one small UPDATE per
+    session per interval under steady traffic, not one per request. */
+const SESSION_SLIDE_MIN_MS = 5 * 60 * 1000;
 
 /**
  * A constant VALID dummy bcrypt hash so a missing account costs the same
@@ -97,6 +120,38 @@ export const resolveSession = cache(async (): Promise<ResolvedSession | null> =>
   // An account blocked after the session was issued cannot act on it.
   if (!maySignIn(party.status, account.authRole as AuthRole)) return null;
 
+  // ── Inactivity slide (the 1-hour auto-logout) ──
+  // This request is activity. Sessions issued before this policy (or by
+  // an older build) carry a long stored expiry; the first branch clamps
+  // any session with MORE than one idle window left onto the idle clock
+  // at this moment - so the policy takes effect for existing sessions on
+  // their very next request, not weeks from now. The second branch slides
+  // a near-expiry session forward, never past the absolute cap anchored
+  // at createdAt. Both are throttled so steady traffic costs one small
+  // write per session per slide interval, not one per request.
+  const now = Date.now();
+  const remaining = row.expiresAt.getTime() - now;
+  const capped = new Date(
+    Math.min(
+      now + SESSION_IDLE_MS,
+      row.createdAt.getTime() + SESSION_ABSOLUTE_MS,
+    ),
+  );
+  if (remaining > SESSION_IDLE_MS) {
+    // Pre-policy or over-long deadline: put it on the idle clock now.
+    await db.session.update({
+      where: { id: row.id },
+      data: { expiresAt: capped },
+    });
+  } else if (remaining < SESSION_IDLE_MS - SESSION_SLIDE_MIN_MS) {
+    if (capped.getTime() > row.expiresAt.getTime()) {
+      await db.session.update({
+        where: { id: row.id },
+        data: { expiresAt: capped },
+      });
+    }
+  }
+
   return {
     sessionId: row.id,
     partyId: party.id,
@@ -115,7 +170,10 @@ export async function issueSession(userAccountId: string): Promise<void> {
     data: {
       userAccountId,
       refreshTokenHash: hashToken(token),
-      expiresAt: new Date(Date.now() + SESSION_TTL_MS),
+      // A fresh session gets exactly one idle window: it dies after an
+      // hour of silence, and every authenticated request slides it (see
+      // resolveSession) - never past createdAt + absolute cap.
+      expiresAt: new Date(Date.now() + SESSION_IDLE_MS),
     },
   });
   const jar = await cookies();
@@ -124,7 +182,10 @@ export async function issueSession(userAccountId: string): Promise<void> {
     sameSite: 'lax',
     secure: process.env.NODE_ENV === 'production',
     path: '/',
-    maxAge: SESSION_TTL_MS / 1000,
+    // The cookie outlives any single session on purpose: an active user
+    // must not lose the cookie mid-use. A dead token inside a live
+    // cookie resolves to nothing and redirects to sign-in.
+    maxAge: SESSION_ABSOLUTE_MS / 1000,
   });
 }
 

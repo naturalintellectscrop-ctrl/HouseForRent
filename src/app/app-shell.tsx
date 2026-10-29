@@ -83,14 +83,15 @@ export function AppShell({
                 </span>
                 {/* Sign-out is a plain HTML form to the API, which revokes
                     the session server-side and clears the cookie - no
-                    JavaScript involved, and the token cannot be replayed. */}
+                    JavaScript involved, and the token cannot be replayed.
+                    The visible word matters: the icon-only control was not
+                    being found (round-60 owner feedback), and on a phone
+                    the sidebar only exists inside the drawer, where an
+                    unlabelled glyph was effectively invisible. */}
                 <form action="/api/v1/auth/logout" method="post">
-                  <button
-                    type="submit"
-                    className="btn btn-ghost btn-sm"
-                    aria-label="Sign out"
-                  >
-                    <Icon.signout size={17} />
+                  <button type="submit" className="btn btn-ghost btn-sm">
+                    <Icon.signout size={16} />
+                    <span>Sign out</span>
                   </button>
                 </form>
               </div>
