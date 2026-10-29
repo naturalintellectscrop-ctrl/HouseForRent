@@ -2729,12 +2729,66 @@ a.card-link:hover .card-title {
   resize: vertical;
 }
 
+/* ── password fields ──────────────────────────────────────────────────
+ *
+ * Every password field in the product is wrapped by the shared
+ * PasswordInput client component, which overlays a show/hide toggle on
+ * the input's right edge. The wrapper is the positioning context; the
+ * input reserves trailing space so text never runs beneath the button,
+ * in both the public (2.875rem) and console (2.5rem) field heights.
+ *
+ * The toggle sits AFTER the console's bare-form-control rules above so
+ * the padding-right wins the specificity tie for password inputs, and
+ * the console's bare-button treatment explicitly excludes it - the eye
+ * is a field affordance, never a submit-styled action.
+ *
+ * The input keeps its own value when the button is pressed (mousedown is
+ * cancelled in the component), so focus stays in the field while the
+ * glyphs switch.
+ */
+.password-wrap {
+  position: relative;
+  display: block;
+}
+.password-wrap input[type='password'],
+.password-wrap input[type='text'] {
+  padding-right: 2.9rem;
+}
+.password-eye {
+  position: absolute;
+  top: 0.2rem;
+  bottom: 0.2rem;
+  right: 0.2rem;
+  width: 2.6rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--ink-faint);
+  cursor: pointer;
+  transition: color 140ms ease, background-color 140ms ease;
+}
+.password-eye:hover {
+  color: var(--ink);
+  background: var(--accent-soft);
+}
+.password-eye:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent-soft);
+  color: var(--ink);
+}
+.password-eye:active {
+  color: var(--accent);
+}
+
 /*
  * A bare `<button>` in the console gets the primary treatment. The console
  * has exactly one kind of button per form - the one that submits it - so
  * requiring a class on each would be ceremony without a decision behind it.
  */
-.ops button:not(.btn):not(.chip) {
+.ops button:not(.btn):not(.chip):not(.password-eye) {
   display: inline-flex;
   align-items: center;
   justify-content: center;

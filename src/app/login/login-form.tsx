@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { postJson, ClientApiError } from '@/lib/client';
 import { ApiAlert } from '@/app/ui';
+import { PasswordInput } from '@/app/password-input';
 
 /**
  * The only client component on this page. It exists for one reason: to show
@@ -77,11 +78,9 @@ export function LoginForm({ next }: { next: string | null }) {
         <label className="label" htmlFor="password">
           Password
         </label>
-        <input
+        <PasswordInput
           id="password"
           name="password"
-          type="password"
-          className="input"
           autoComplete="current-password"
           required
         />

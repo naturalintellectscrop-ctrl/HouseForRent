@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { postJson, ClientApiError } from '@/lib/client';
 import { ApiAlert } from '@/app/ui';
+import { PasswordInput } from '@/app/password-input';
 
 /**
  * Self-service registration. Only `tenant` and `lister` exist here - staff
@@ -136,11 +137,9 @@ export function RegisterForm({
         <label className="label" htmlFor="password">
           Choose a password
         </label>
-        <input
+        <PasswordInput
           id="password"
           name="password"
-          type="password"
-          className="input"
           autoComplete="new-password"
           required
           minLength={8}

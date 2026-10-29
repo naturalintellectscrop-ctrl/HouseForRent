@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { postJson, ClientApiError } from '@/lib/client';
 import { ApiAlert } from '@/app/ui';
+import { PasswordInput } from '@/app/password-input';
 
 /**
  * The shared password-change form, rendered by BOTH /account/security
@@ -102,11 +103,9 @@ function PasswordFields() {
         <label className="label" htmlFor="pw-current">
           Current password
         </label>
-        <input
+        <PasswordInput
           id="pw-current"
           name="currentPassword"
-          type="password"
-          className="input"
           autoComplete="current-password"
           required
         />
@@ -115,11 +114,9 @@ function PasswordFields() {
         <label className="label" htmlFor="pw-new">
           New password
         </label>
-        <input
+        <PasswordInput
           id="pw-new"
           name="newPassword"
-          type="password"
-          className="input"
           autoComplete="new-password"
           minLength={8}
           required
@@ -133,11 +130,9 @@ function PasswordFields() {
         <label className="label" htmlFor="pw-confirm">
           Repeat the new password
         </label>
-        <input
+        <PasswordInput
           id="pw-confirm"
           name="confirm"
-          type="password"
-          className="input"
           autoComplete="new-password"
           required
         />
