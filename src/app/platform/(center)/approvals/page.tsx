@@ -46,14 +46,16 @@ export default async function PlatformApprovalsPage() {
 
   return (
     <div className="stack-lg">
-      <header className="stack-sm">
-        <h1 className="h1">Account applications</h1>
-        <p className="muted">
-          Accounts waiting on activation. Approval means an identity check
-          that passes - the one server path that flips an account active.
-          It verifies the PERSON; it does not verify any property, approve
-          any listing, or grant staff privileges.
-        </p>
+      <header className="plat-page-head">
+        <div className="stack-sm">
+          <h1 className="h1">Account applications</h1>
+          <p className="muted">
+            Accounts waiting on activation. Approval means an identity check
+            that passes - the one server path that flips an account active.
+            It verifies the PERSON; it does not verify any property, approve
+            any listing, or grant staff privileges.
+          </p>
+        </div>
       </header>
 
       {rows.length === 0 ? (

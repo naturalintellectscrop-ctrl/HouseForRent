@@ -160,7 +160,7 @@ export default async function KycReviewPage(props: { params: Promise<{ submissio
       </header>
 
       {isOtherDocument ? (
-        <div className="card plat-section" style={{ borderLeft: '4px solid var(--accent-strong, #0a402b)' }}>
+        <div className="card plat-section plat-section--accent">
           <h2 className="h2">Owner review requested</h2>
           <p className="muted" style={{ marginBottom: 0 }}>
             The applicant chose the <strong>non-standard document path</strong>{' '}

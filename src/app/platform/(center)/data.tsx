@@ -9,6 +9,7 @@
  * or a 500.
  */
 import type { ReactNode } from 'react';
+import { Icon } from '@/app/ui';
 
 export type DbResult<T> = { ok: true; data: T } | { ok: false };
 
@@ -57,7 +58,8 @@ export function SectionCard(props: { title: string; href?: string; children: Rea
         <h2 className="h2">{props.title}</h2>
         {props.href ? (
           <a className="plat-section-link" href={props.href}>
-            Open ↗
+            Open
+            <Icon.arrowUpRight size={13} />
           </a>
         ) : null}
       </div>

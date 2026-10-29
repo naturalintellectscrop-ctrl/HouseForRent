@@ -40,12 +40,14 @@ export default async function PlatformSystemPage() {
 
   return (
     <div className="stack-lg">
-      <header className="stack-sm">
-        <h1 className="h1">System</h1>
-        <p className="muted">
-          Platform plumbing and configuration - the things that are either
-          true or false, never opinions.
-        </p>
+      <header className="plat-page-head">
+        <div className="stack-sm">
+          <h1 className="h1">System</h1>
+          <p className="muted">
+            Platform plumbing and configuration - the things that are either
+            true or false, never opinions.
+          </p>
+        </div>
       </header>
 
       <div className="plat-stats">

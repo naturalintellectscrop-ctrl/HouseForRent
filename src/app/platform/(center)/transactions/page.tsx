@@ -34,12 +34,14 @@ export default async function PlatformTransactionsPage() {
 
   return (
     <div className="stack-lg">
-      <header className="stack-sm">
-        <h1 className="h1">Transactions</h1>
-        <p className="muted">
-          Escrow, commission and settlement across the whole platform - the
-          immutable ledger and the payment-provider boundary.
-        </p>
+      <header className="plat-page-head">
+        <div className="stack-sm">
+          <h1 className="h1">Transactions</h1>
+          <p className="muted">
+            Escrow, commission and settlement across the whole platform - the
+            immutable ledger and the payment-provider boundary.
+          </p>
+        </div>
       </header>
 
       <div className="plat-stats">

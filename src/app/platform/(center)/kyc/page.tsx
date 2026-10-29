@@ -98,15 +98,17 @@ export default async function KycQueuePage() {
 
   return (
     <div className="stack-lg">
-      <header className="stack-sm">
-        <h1 className="h1">Landlord verification</h1>
-        <p className="muted">
-          Applications from landlords: identity documents, declared
-          relationship with the property, and payout details. Three reviews
-          per application, decided independently — approving one never
-          approves the others, and nothing here verifies a property or
-          publishes a listing.
-        </p>
+      <header className="plat-page-head">
+        <div className="stack-sm">
+          <h1 className="h1">Landlord verification</h1>
+          <p className="muted">
+            Applications from landlords: identity documents, declared
+            relationship with the property, and payout details. Three reviews
+            per application, decided independently — approving one never
+            approves the others, and nothing here verifies a property or
+            publishes a listing.
+          </p>
+        </div>
       </header>
 
       <div className="plat-stats">
@@ -127,7 +129,7 @@ export default async function KycQueuePage() {
       </div>
 
       {data.rows.length === 0 ? (
-        <div className="card plat-section">
+        <div className="plat-empty">
           <h2 className="h2">No applications yet</h2>
           <p className="muted">
             When a landlord submits the onboarding verification, it appears

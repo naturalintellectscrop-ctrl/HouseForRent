@@ -31,12 +31,14 @@ export default async function PlatformUsersPage() {
 
   return (
     <div className="stack-lg">
-      <header className="stack-sm">
-        <h1 className="h1">Users</h1>
-        <p className="muted">
-          Accounts across the whole platform - tenants, landlords, field
-          officers and platform staff - most recent first.
-        </p>
+      <header className="plat-page-head">
+        <div className="stack-sm">
+          <h1 className="h1">Users</h1>
+          <p className="muted">
+            Accounts across the whole platform - tenants, landlords, field
+            officers and platform staff - most recent first.
+          </p>
+        </div>
       </header>
 
       <div className="plat-grid-2">

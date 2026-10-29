@@ -36,12 +36,14 @@ export default async function PlatformListingsPage() {
 
   return (
     <div className="stack-lg">
-      <header className="stack-sm">
-        <h1 className="h1">Listings</h1>
-        <p className="muted">
-          Every home on the platform and where it sits in the pipeline - from
-          draft to live to rented.
-        </p>
+      <header className="plat-page-head">
+        <div className="stack-sm">
+          <h1 className="h1">Listings</h1>
+          <p className="muted">
+            Every home on the platform and where it sits in the pipeline - from
+            draft to live to rented.
+          </p>
+        </div>
       </header>
 
       <div className="plat-grid-2">

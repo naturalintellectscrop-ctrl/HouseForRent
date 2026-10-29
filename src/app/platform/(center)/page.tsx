@@ -193,10 +193,18 @@ export default async function PlatformOverviewPage() {
               (sum, s) => sum + s._count._all,
               0,
             );
-            const livePct =
-              totalListings === 0
-                ? 0
-                : Math.round((liveListings / totalListings) * 100);
+            // A 0% dial over zero listings is not a metric, it is noise -
+            // the honest empty state says what is missing instead.
+            if (totalListings === 0) {
+              return (
+                <p className="muted" style={{ margin: '0 0 1.25rem' }}>
+                  No listings have been authored yet, so there is no live
+                  share to show. This becomes the live-in-search gauge once
+                  the first home is authored.
+                </p>
+              );
+            }
+            const livePct = Math.round((liveListings / totalListings) * 100);
             return (
               <div className="stack" style={{ marginBottom: '1.25rem' }}>
                 <div
