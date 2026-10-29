@@ -4,6 +4,7 @@ import { mediaUrl } from '@/lib/contract';
 import { apiGet, type Neighbourhood, type SearchResponse } from '@/lib/api';
 import { pageMetadata } from '@/lib/seo';
 import { Icon, PropertyCard, SectionHeader, TAGLINE } from '@/app/ui';
+import { MediaImage } from '@/app/media-image';
 
 /*
  * The marketplace is rendered per request: listings, escrow figures and
@@ -427,11 +428,9 @@ export default async function HomePage() {
                     stackPhotos.length === 1 ? ' field-photo-solo' : ''
                   }`}
                 >
-                  <img
+                  <MediaImage
                     src={mediaUrl(photo.url)}
                     alt="Photograph taken during a House For Rent field visit"
-                    loading="lazy"
-                    decoding="async"
                   />
                   {photo.isDevelopmentFixture ? (
                     <span className="media-fixture">Demo image</span>

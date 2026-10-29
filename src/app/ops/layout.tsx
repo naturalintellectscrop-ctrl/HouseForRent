@@ -10,6 +10,11 @@ import { requireStaff } from '@/lib/session';
  */
 export const metadata: Metadata = {
   robots: { index: false, follow: false },
+  // Without a section default every ops page inherited the PUBLIC tagline
+  // ("verified homes to rent…") in the tab - a small but constant signal
+  // that the officer had left the product for the marketing site. The
+  // root template appends the product name, so this is the bare section.
+  title: { default: 'Operations', template: '%s · House For Rent' },
 };
 
 /**

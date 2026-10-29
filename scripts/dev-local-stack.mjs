@@ -63,7 +63,7 @@ if (fresh) {
 const server = new PGLiteSocketServer({ db, port: PORT, host: '127.0.0.1', maxConnections: 8 });
 await server.start();
 console.log(`dev-local-stack: listening on 127.0.0.1:${PORT} (data: ${DATA_DIR})`);
-console.log(`dev-local-stack: point DATABASE_URL at postgres://dev:dev@127.0.0.1:${PORT}/postgres?pgbouncer=true&connection_limit=1&pool_timeout=60`);
+console.log(`dev-local-stack: point DATABASE_URL at "postgres://dev:dev@127.0.0.1:${PORT}/postgres?pgbouncer=true&connection_limit=1&pool_timeout=60" (QUOTED — unquoted & truncates the assignment in shell)`);
 
 const shutdown = async () => {
   await server.stop().catch(() => {});

@@ -961,6 +961,30 @@ a.foot-contact-row:hover,
     var(--bg-soft) 20px
   );
 }
+/* The honest failure frame (round-56): a DB row whose bytes the store
+   cannot serve. Same register as .media-empty, absolute-fill so it works
+   inside every photo container (.media, .field-photo, .gallery-thumb). */
+.media-missing {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: 1rem;
+  text-align: center;
+  color: var(--ink-faint);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--bg-sunk),
+    var(--bg-sunk) 10px,
+    var(--bg-soft) 10px,
+    var(--bg-soft) 20px
+  );
+}
 
 /*
  * Fixture imagery is labelled ON the image, not in a caption below it. A
@@ -3644,6 +3668,40 @@ a.card-link:hover .card-title {
 /* Decision cards sit slightly raised in the same register. */
 .plat-decide { border-color: #354039; }
 
+/* Decision scope list: the grants/limits contract at the point of action,
+   as two scannable rows instead of a prose paragraph (round-56 readability
+   pass). Green tint = what activation grants; amber tint = what it
+   deliberately does not. */
+.plat-scope-list {
+  list-style: none;
+  margin: 0 0 0.9rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  font-size: 0.875rem;
+  line-height: 1.45;
+}
+.plat-scope-list li {
+  padding: 0.5rem 0.7rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+}
+.plat-scope-list li.is-grant {
+  background: color-mix(in srgb, var(--brand-green) 8%, transparent);
+  border-color: color-mix(in srgb, var(--brand-green) 22%, transparent);
+}
+.plat-scope-list li.is-grant strong {
+  color: var(--brand-action);
+}
+.plat-scope-list li.is-limit {
+  background: color-mix(in srgb, #b45309 7%, transparent);
+  border-color: color-mix(in srgb, #b45309 22%, transparent);
+}
+.plat-scope-list li.is-limit strong {
+  color: #92400e;
+}
+
 /* Phones: the control center stays one column, the head wraps cleanly. */
 @media (max-width: 51.99rem) {
   .plat-who { margin-left: 0; width: 100%; justify-content: space-between; }
@@ -3739,6 +3797,28 @@ a.card-link:hover .card-title {
   text-decoration: none;
   color: inherit;
   padding: 1.1rem 1.25rem 0.9rem;
+  flex: none;
+  min-width: 0;
+}
+/* The wordmark renders as a two-line lockup in the sidebar: name on the
+   first row, surface label ("Platform Control", "Operations") beneath it —
+   the one-line string overflowed the 18rem column and was clipped (the
+   original clipping bug), and the pre-fix bare link had no padding at all. */
+.shell-side-brand .brand {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  column-gap: 0.55rem;
+  row-gap: 0.1rem;
+  min-width: 0;
+  font-size: 0.95rem;
+}
+.shell-side-brand .brand-sub {
+  grid-column: 2;
+  font-size: 0.8rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .shell-side-body {
   flex: 1;
@@ -4122,6 +4202,17 @@ a.card-link:hover .card-title {
 }
 .shell-side--forest .shell-side-brand {
   color: #ffffff;
+}
+/* The .brand link paints its own ink (var(--ink)) — on the deep-forest
+   fill that is dark-on-dark and the name simply vanished (the owner only
+   ever saw "· Platform Control"). The link needs its own forest colour. */
+.shell-side--forest .shell-side-brand .brand {
+  color: #ffffff;
+}
+/* The sub-label's default ink-faint is a dark tone - unreadable on the
+   deep-forest fill, so the forest sidebar carries its own. */
+.shell-side--forest .shell-side-brand .brand-sub {
+  color: rgba(233, 241, 236, 0.56);
 }
 .shell-side--forest .shell-nav-label {
   color: rgba(233, 241, 236, 0.44);

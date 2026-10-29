@@ -45,12 +45,18 @@ export default async function AreasPage() {
   }
 
   // Grouped by district in the page (the service returns a flat list -
-  // grouping is presentation, not business logic).
+  // grouping is presentation, not business logic). A neighbourhood created
+  // before parent grouping - or deliberately top-level - has district null;
+  // it must stay VISIBLE under an explicit label, not crash the console:
+  // the client form string-matches district labels, and a null key once
+  // took the whole page down with a client-side exception (round-56).
+  const UNASSIGNED = 'No district assigned';
   const byDistrict = new Map<string, AreaRow[]>();
   for (const a of areas) {
-    const list = byDistrict.get(a.district) ?? [];
+    const key = a.district ?? UNASSIGNED;
+    const list = byDistrict.get(key) ?? [];
     list.push(a);
-    byDistrict.set(a.district, list);
+    byDistrict.set(key, list);
   }
   const districts = [...byDistrict.keys()].sort((x, y) => x.localeCompare(y));
 
@@ -80,7 +86,14 @@ export default async function AreasPage() {
       ) : (
         districts.map((district) => (
           <section key={district} aria-label={district} style={{ marginBottom: '1.5rem' }}>
-            <h2 style={{ fontSize: '1.05rem', marginBottom: '0.6rem' }}>{district}</h2>
+            <h2 style={{ fontSize: '1.05rem', marginBottom: district === UNASSIGNED ? '0.15rem' : '0.6rem' }}>
+              {district}
+            </h2>
+            {district === UNASSIGNED && (
+              <p className="faint" style={{ fontSize: '0.8125rem', marginTop: 0, marginBottom: '0.6rem' }}>
+                Recorded without a district grouping - it works everywhere, but give it one when convenient.
+              </p>
+            )}
             <div className="table-scroll">
               <table className="table-compact">
                 <thead>

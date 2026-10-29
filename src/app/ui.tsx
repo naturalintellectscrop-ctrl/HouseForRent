@@ -10,6 +10,7 @@
 import Link from 'next/link';
 import type { ListingPhoto } from '@/lib/contract';
 import { mediaUrl } from '@/lib/contract';
+import { MediaImage } from '@/app/media-image';
 
 /* ── iconography ────────────────────────────────────────────────────── */
 
@@ -503,12 +504,14 @@ export function PropertyMedia({
   return (
     <div className="media">
       { }
-      <img
+      {/* The honest-failure frame: a row whose bytes the store cannot serve
+          renders the labelled "Photograph unavailable" tile, never the
+          browser's broken-image glyph. */}
+      <MediaImage
         src={mediaUrl(renditionSrc)}
         alt={alt}
-        loading={priority ? 'eager' : 'lazy'}
-        decoding="async"
-        fetchPriority={priority ? 'high' : 'auto'}
+        eager={priority}
+        fetchHighPriority={priority}
       />
       {photo.isDevelopmentFixture ? (
         <span className="media-fixture">Demo image</span>

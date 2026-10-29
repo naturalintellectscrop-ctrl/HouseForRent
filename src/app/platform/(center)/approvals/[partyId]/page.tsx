@@ -191,12 +191,19 @@ export default async function ReviewApplicationPage(props: {
               <h2 className="h2">Approve - run the identity check</h2>
             </div>
             <p className="muted" style={{ marginTop: 0 }}>
-              On a verified result the account becomes active immediately.
-              This grants the person an active platform account -{' '}
-              <strong>it does not</strong> verify any property, approve or
-              publish any listing (that is the field-officer publish gate),
-              or grant staff privileges.
+              The same sandbox check the applicant runs on themselves: the
+              NIN&rsquo;s structure, and whether the name matches this account.
+              A verified result activates the account immediately.
             </p>
+            <ul className="plat-scope-list">
+              <li className="is-grant">
+                <strong>Grants:</strong> an active platform account.
+              </li>
+              <li className="is-limit">
+                <strong>Does not:</strong> verify any property, publish any
+                listing (field-officer gate), or grant staff access.
+              </li>
+            </ul>
             <IdentityCheckControl
               partyId={party.id}
               displayName={party.displayName}

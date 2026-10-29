@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { PropertyMedia } from '@/app/ui';
 import { mediaUrl } from '@/lib/contract';
+import { MediaImage } from '@/app/media-image';
 import type { ListingPhoto } from '@/lib/contract';
 
 /**
@@ -119,7 +120,7 @@ export function PhotoGallery({
                 onKeyDown={(e) => onThumbKeyDown(e, i)}
                 onClick={() => setSelected(i)}
               >
-                <img src={mediaUrl(photo.thumbUrl)} alt="" loading="lazy" decoding="async" />
+                <MediaImage src={mediaUrl(photo.thumbUrl)} alt="" />
                 {photo.isDevelopmentFixture ? (
                   <span className="gallery-thumb-flag">demo</span>
                 ) : null}

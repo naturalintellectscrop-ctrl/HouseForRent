@@ -38,8 +38,13 @@ export function NeighbourhoodCreateForm({ districts }: { districts: string[] }) 
 
   // Existing districts are offered as starting points (they are the real
   // taxonomy); typing a new one is allowed - that is how a new district
-  // opens. The dropdown is a suggestion, not a constraint.
-  const suggestions = districts.filter((d) => d.toLowerCase() !== district.toLowerCase());
+  // opens. The dropdown is a suggestion, not a constraint. The type guard
+  // is load-bearing: a null-ish label (a neighbourhood recorded without a
+  // district grouping) once took this whole page down with a client-side
+  // exception — the console degrades, it never crashes.
+  const suggestions = districts.filter(
+    (d): d is string => typeof d === 'string' && d.toLowerCase() !== (district ?? '').toLowerCase(),
+  );
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();

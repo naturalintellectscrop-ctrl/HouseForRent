@@ -135,13 +135,28 @@ class SupabaseMediaStorage implements MediaStorageProvider {
     } catch (err) {
       throw new MediaStoreError(`media store unreachable: ${String(err)}`);
     }
-    if (res.status === 404) {
+    if (res.ok) return new Uint8Array(await res.arrayBuffer());
+
+    // ── The wire signature of "absent" (round-56 finding) ──
+    // Supabase Storage reports a missing object as HTTP 400 whose BODY is
+    // the real verdict: {"code":"NoSuchKey"} for a missing object,
+    // {"code":"NoSuchBucket"} for a missing bucket (a plain 404 is kept
+    // for API shapes that do return one). Treating every 4xx as "the store
+    // refused" mapped genuinely-absent bytes to 503 MEDIA_STORE_UNAVAILABLE
+    // — the exact production symptom this release fixes.
+    //
+    // The distinction matters: a missing OBJECT is the honest per-asset
+    // MEDIA_GONE (404); a missing BUCKET is a deployment fault that stays a
+    // diagnosable 503 naming the refusal.
+    const body = await safeBody(res);
+    const absentObject = res.status === 404 || (res.status === 400 && /\bNoSuchKey\b/.test(body));
+    if (absentObject) {
       throw new MediaNotFoundError('media file missing from store');
     }
     if (!res.ok) {
-      // 400 here is a configuration refusal (RLS/key), not a missing file -
-      // reporting it as MEDIA_GONE would hide a real deployment fault.
-      throw new MediaStoreError(`media store read failed (HTTP ${res.status}): ${await safeBody(res)}`);
+      // Other refusals (RLS/key/bucket-missing) name the deployment fault;
+      // the token-redacted body is what makes an operator's 503 fixable.
+      throw new MediaStoreError(`media store read failed (HTTP ${res.status}): ${body}`);
     }
     return new Uint8Array(await res.arrayBuffer());
   }

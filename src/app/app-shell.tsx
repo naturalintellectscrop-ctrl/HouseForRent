@@ -63,7 +63,13 @@ export function AppShell({
         <header className="shell-topbar">
           <div className="shell-topbar-inner">
             <ShellDrawer variant={variant}>
-              <Brand sub={brandSub} href={brandHref} />
+              {/* The wrapper carries the sidebar's brand-row padding and
+                  no-wrap rules (globals.css `.shell-side-brand`); the bare
+                  link once rendered unpadded and its wrapped wordmark was
+                  clipped off the viewport top on every shell surface. */}
+              <div className="shell-side-brand">
+                <Brand sub={brandSub} href={brandHref} />
+              </div>
               <div className="shell-side-body">
                 <AppShellNav groups={nav} />
               </div>
