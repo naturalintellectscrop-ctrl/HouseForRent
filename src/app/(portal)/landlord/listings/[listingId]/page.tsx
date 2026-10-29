@@ -129,7 +129,18 @@ export default async function LandlordListingPage({
           {/* ── what is outstanding ──────────────────────────────── */}
           <section className="stack">
             <h2 className="h2">What happens next</h2>
-            {listing.blockedBy.length === 0 ? (
+            {listing.publicationState === 'live' ? (
+              <p className="notice notice-ok">
+                This home is live in search. Nothing is outstanding — withdraw it from search
+                if you need to change the photographs, and our team manages its photography
+                while it is published.
+              </p>
+            ) : listing.publicationState === 'rented' ? (
+              <p className="notice notice-ok">
+                This home is let. Its time in search is done; the tenancy is recorded against
+                the deal.
+              </p>
+            ) : listing.blockedBy.length === 0 ? (
               <p className="notice notice-ok">
                 Everything is in place. Publish whenever you are ready.
               </p>

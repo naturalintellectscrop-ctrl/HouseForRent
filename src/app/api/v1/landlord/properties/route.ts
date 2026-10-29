@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createPropertyWithListing } from '@/server/listings';
 import { markListingAwaitingVerification } from '@/server/ops';
-import { parseShillings, readJson, requireRole, requireString, route } from '@/server/http';
+import { ApiError, parseShillings, readJson, requireRole, requireString, route } from '@/server/http';
 
 /**
  * POST /api/v1/landlord/properties - the landlord authors the property and
@@ -26,12 +26,26 @@ export const POST = route(async (req: NextRequest) => {
     throw new Error('requiredMonthsUpfront must be between 1 and 24');
   }
 
+  // Enum allowlists at the edge: an unknown propertyType or furnishing state
+  // is the caller's mistake and must read as a 400 VALIDATION, not surface as
+  // a Prisma validation 500 (the QA-round finding).
+  const PROPERTY_TYPES: ReadonlySet<string> = new Set(['apartment', 'house', 'room', 'other']);
+  const FURNISHED_STATES: ReadonlySet<string> = new Set(['furnished', 'semi_furnished', 'unfurnished']);
+  const propertyType = requireString(body, 'propertyType');
+  const furnished = requireString(body, 'furnished');
+  if (!PROPERTY_TYPES.has(propertyType)) {
+    throw new ApiError(400, 'VALIDATION', 'propertyType must be one of apartment, house, room, other');
+  }
+  if (!FURNISHED_STATES.has(furnished)) {
+    throw new ApiError(400, 'VALIDATION', 'furnished must be one of furnished, semi_furnished, unfurnished');
+  }
+
   const { listing } = await createPropertyWithListing({
     ownerPartyId: session.partyId,
-    propertyType: requireString(body, 'propertyType') as never,
+    propertyType: propertyType as never,
     bedrooms,
     bathrooms,
-    furnished: requireString(body, 'furnished'),
+    furnished,
     neighbourhoodId: requireString(body, 'neighbourhoodId'),
     landmarkText: requireString(body, 'landmarkText'),
     streetAddress: typeof body.streetAddress === 'string' && body.streetAddress.trim() ? body.streetAddress.trim() : undefined,
