@@ -1585,3 +1585,24 @@ Stage Summary:
 - The ENTIRE product (all five roles, money path, media degradation, all 13 ops routes) has now been exercised on the CURRENT schema with browser evidence, not just KYC; the KYC suites re-ran green; two real defects and one hygiene defect are fixed and re-verified.
 - Every pre-KYC open item was reconciled against its original identifier (matrix section 10 + section A-H report); nothing was abandoned, renamed, or silently deferred; owner-gated items keep their original closing criteria.
 - Remaining blockers are exactly the owner-gated/external set: 9-data-half (lost originals), 10 (KYC migration DDL), NylonPay merchant KYC, identity provider contract, domain/DNS, counsel review, F-2/F-6/R-3 decisions. The owner can begin manual acceptance testing now; the KYC journey on production needs the migration first.
+
+Task ID: 60
+Agent: web takeover agent (owner request: password reveal toggle)
+Task: Make every password field show/hide-able — the eye. Fix the bad UX directly, do not redesign anything else.
+
+Work Log:
+- SURVEY: grep found 7 password inputs in 4 client forms: /login (1), /register (1), /platform/login operator (1), shared portal PasswordForm rendered by BOTH /account/security and /landlord/security (3). No other password inputs exist (CSS selectors only, after the change).
+- NEW shared component src/app/password-input.tsx ('use client', the project's convention of small per-purpose client files): wraps the input in .password-wrap, overlays a real <button type="button" class="password-eye"> with two house-style thin-line SVG glyphs (24-grid, strokeWidth 1.6 — drawn locally so the client bundle carries nothing else; matches the Icon set's documented anti-emoji rationale). Type flips password↔text on click. onMouseDown is cancelled so pressing the eye never steals focus from the field being typed in. aria-label + title flip ("Show password"/"Hide password"), aria-pressed reflects state — screen readers announce a toggle, not a glyph. The button can never submit the form.
+- CSS (globals.css): .password-wrap (positioning context), input padding-right 2.9rem so text never runs beneath the button, .password-eye anchored top/bottom+right inside the field (fits BOTH the public 2.875rem and console 2.5rem field heights), hover/focus-visible/active states on the existing forest tokens (--accent-soft, --ink, --radius-sm). Two rules guarded against the console's blanket styles: `.ops button:not(.btn):not(.chip):not(.password-eye)` (the eye is a field affordance, never a submit-styled action) and eye input-padding placed AFTER the console form rules so it wins the specificity tie.
+- WIRED: all four forms import the shared component; every other prop (autoComplete, minLength, aria-describedby, required) preserved exactly.
+- BROWSER E2E (agent-browser on isolated test-rig, per-call segments as established in round 59):
+  * /login: type password→text→password across two clicks; value readable when revealed; document.activeElement stays the field; aria-label flips; aria-pressed=true; screenshot kept.
+  * KEYBOARD: focus the eye, Enter toggles both ways.
+  * GOLDEN PATH: submit wrong credentials through the wrapped field → honest "Those credentials were not accepted." — the wrapper did not disturb FormData/form semantics.
+  * /register: eye works post-hydration; register-as-tenant through the real UI (using the wrapped field) → auto-session → /account.
+  * /account/security: 3 eyes rendered; first field flips and reads back; screenshot kept.
+  * /platform/login: eye works; screenshot kept.
+  * Console: zero errors. ESLint: zero findings. No remaining bare password inputs in TSX.
+- NOT A DEFECT: a click landing before React finishes hydrating a cold dev compile is inert — identical gating applies to every other client-interactive control in this product (save-toggle, panels, etc.); production hydration is far faster.
+Stage Summary:
+- All 7 password fields product-wide now have an accessible, keyboard-operable show/hide toggle built in the house style; nothing else about any form changed; records updated; commit + push + production probe of /login after deploy.
