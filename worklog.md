@@ -1471,3 +1471,13 @@ Stage Summary:
 - Phase 6.E conclusion upgraded from "configured but not yet verified" to "NOT POSSIBLE in this environment (as currently observable)": the platform accepts fixed_rate jobs, runs them once at creation, then never re-fires them while reporting them enabled. Recurring unattended automation cannot be claimed, and nothing was claimed.
 - The bounded payload + evidence-channel infrastructure remains in place, so if the platform's scheduler behavior changes, recurring execution resumes safely without re-work.
 - Standing blockers unchanged: #1 NylonPay KYC, #9 media storage (owner decision), F-2/F-6 migrations, R-3 policy.
+
+---
+Task ID: 55
+Agent: web takeover agent (owner access restore — sanctioned rotation)
+Work Log:
+- OWNER REPORT: INVALID_CREDENTIALS at production /login with the pre-round-52 owner password. Read-only DB check confirmed the account is healthy: party 738bb062 (Natural Intellects Ltd) active, UserAccount authRole=admin, UserCredential present with updatedAt 2026-10-28T14:56:32Z and TWO prior platform_owner_provisioned audits — i.e. the round-52 sanctioned rotation changed the password and the owner was using the pre-rotation value. The auth system behaved correctly.
+- FIX (sanctioned mechanism only): scripts/provision-platform-owner.mjs run with OWNER_PASSWORD supplied via env (owner-requested value; never logged, never stored in plaintext, never committed, never audited). Idempotent rotation: bcrypt cost 10, 3 stale sessions revoked, audit event #3 written (platform_owner_provisioned, contact identifiers only).
+- VERIFIED ON PRODUCTION: POST /api/v1/auth/login with the new password → 200 (partyId 738bb062…); old password → 401 INVALID_CREDENTIALS; real-browser /login → sign-in routes into the Platform Control Center (platform sidebar renders, approvals queue visible).
+- IDENTIFIER NOTE: sign-in accepts the provisioned email (naturalintellectsltd@gmail.com) or phone (+256762449504). "intellect@NIltd" is not a provisioned identifier on any account — it cannot be a username until provisioned (owner decision; the provisioner's OWNER_EMAIL env is the sanctioned way).
+- Discipline: no secrets in files, logs, or this worklog.
