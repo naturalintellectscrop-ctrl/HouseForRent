@@ -25,6 +25,7 @@ const LANDLORD_NAV: ShellNavGroup[] = [
     items: [
       { href: '/landlord', label: 'Portfolio', icon: 'home' },
       { href: '/landlord/properties/new', label: 'Add a property', icon: 'plus' },
+      { href: '/landlord/verification', label: 'Verification', icon: 'shield' },
       { href: '/landlord/deals', label: 'Lettings', icon: 'swap' },
       { href: '/landlord/earnings', label: 'Earnings', icon: 'coins' },
     ],

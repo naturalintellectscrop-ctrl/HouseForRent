@@ -26,6 +26,7 @@
  *    a public object URL.
  */
 import { db } from '@/lib/db';
+import { Prisma } from '@prisma/client';
 import { ApiError } from './http';
 import { processImage } from './image-pipeline';
 import { NotYourListingError } from './listings';
@@ -140,18 +141,32 @@ export interface UploadedMediaResult {
  *    can never hold objects no row names, and a listing can never point at
  *    bytes that are not there.
  */
-async function persistPhotoAsset(params: {
+/**
+ * The shared storage + rows core. Order matters:
+ * 1. process (already done by the caller — corrupt/pixel-bomb bytes never
+ *    reach storage);
+ * 2. store the ORIGINAL (private, metadata intact) plus the three WebP
+ *    renditions;
+ * 3. commit asset + variant rows in ONE transaction (plus whatever extra
+ *    rows and the audit event the caller's `commit` adds);
+ * 4. any step-3 failure compensates EVERY stored object away, so the store
+ *    can never hold objects no row names.
+ *
+ * The listing path (persistPhotoAsset) passes a commit that also writes the
+ * ListingPhoto row in the SAME transaction — a failed upload can never
+ * leave a published listing pointing at nothing. The KYC evidence path
+ * (src/server/kyc.ts) passes a commit with no photo row.
+ */
+async function storeAssetWithRows<T>(params: {
   baseDir: string;
-  listingId: string;
   actorPartyId: string;
   sniffed: { mime: string; ext: string };
   bytes: Uint8Array;
   processed: Awaited<ReturnType<typeof processImage>>;
-  source: 'field_officer' | 'lister';
-  caption: string | null;
-  auditVia: 'officer' | 'lister';
-  auditExtras: Record<string, unknown>;
-}): Promise<UploadedMediaResult> {
+  /** Writes any additional rows (photo link, KYC bookkeeping) + the audit
+   * event inside the SAME transaction as the asset rows. */
+  commit: (tx: Prisma.TransactionClient, assetId: string) => Promise<T>;
+}): Promise<T> {
   const { provider } = mediaStorage();
   const assetId = crypto.randomUUID();
   const base = `${params.baseDir}/${assetId}`;
@@ -176,7 +191,7 @@ async function persistPhotoAsset(params: {
 
   try {
     return await db.$transaction(async (tx) => {
-      const asset = await tx.mediaAsset.create({
+      await tx.mediaAsset.create({
         data: {
           id: assetId,
           storageRef: originalRef,
@@ -189,7 +204,7 @@ async function persistPhotoAsset(params: {
       for (const v of params.processed.variants) {
         await tx.mediaVariant.create({
           data: {
-            mediaAssetId: asset.id,
+            mediaAssetId: assetId,
             variant: v.variant,
             storageRef: `${base}/${v.variant}.webp`,
             mimeType: v.mimeType,
@@ -199,42 +214,61 @@ async function persistPhotoAsset(params: {
           },
         });
       }
-      const last = await tx.listingPhoto.findFirst({
-        where: { listingId: params.listingId },
-        orderBy: { sortOrder: 'desc' },
-        select: { sortOrder: true },
-      });
-      const photo = await tx.listingPhoto.create({
-        data: {
-          listingId: params.listingId,
-          mediaAssetId: asset.id,
-          sortOrder: (last?.sortOrder ?? 0) + 1,
-          caption: params.caption,
-          source: params.source,
-        },
-      });
+      return params.commit(tx, assetId);
+    });
+  } catch (err) {
+    // Compensation: the bytes exist but the rows do not. Remove them so
+    // storage cannot accumulate objects no row will ever name — and so the
+    // bucket cannot become an un-governed archive.
+    await Promise.allSettled(storedRefs.map((ref) => provider.delete(ref)));
+    throw err;
+  }
+}
+
+/** Shared result shape for both upload paths. */
+export interface StoredAssetResult {
+  mediaAssetId: string;
+  mimeType: string;
+  byteSize: number;
+  variants: Array<{ variant: string; width: number; height: number; byteSize: number }>;
+  originalWidth: number;
+  originalHeight: number;
+  processingMs: number;
+}
+
+/**
+ * Stores an asset that is NOT a listing photograph (KYC evidence). Same
+ * content rules, same transactional rows+bytes contract, same compensation
+ * — but no ListingPhoto row, so the asset never becomes publicly readable
+ * via a listing and never appears in a gallery.
+ */
+export async function persistStandaloneAsset(params: {
+  baseDir: string;
+  actorPartyId: string;
+  sniffed: { mime: string; ext: string };
+  bytes: Uint8Array;
+  processed: Awaited<ReturnType<typeof processImage>>;
+  auditEventType: string;
+  auditPayload: Prisma.InputJsonValue;
+}): Promise<StoredAssetResult> {
+  const result = await storeAssetWithRows<StoredAssetResult>({
+    baseDir: params.baseDir,
+    actorPartyId: params.actorPartyId,
+    sniffed: params.sniffed,
+    bytes: params.bytes,
+    processed: params.processed,
+    commit: async (tx, assetId) => {
       await tx.auditEvent.create({
         data: {
           actorPartyId: params.actorPartyId,
-          eventType: 'media_uploaded',
-          subjectRef: asset.id,
-          payload: {
-            listingId: params.listingId,
-            via: params.auditVia,
-            byteSize: params.bytes.length,
-            mimeType: params.sniffed.mime,
-            originalDimensions: { width: params.processed.width, height: params.processed.height },
-            variants: params.processed.variants.map((v) => ({ variant: v.variant, byteSize: v.byteSize })),
-            processingMs: params.processed.processingMs,
-            ...params.auditExtras,
-          },
+          eventType: params.auditEventType,
+          subjectRef: assetId,
+          payload: params.auditPayload,
           occurredAt: new Date(),
         },
       });
       return {
-        mediaAssetId: asset.id,
-        listingPhotoId: photo.id,
-        sortOrder: photo.sortOrder,
+        mediaAssetId: assetId,
         mimeType: params.sniffed.mime,
         byteSize: params.bytes.length,
         variants: params.processed.variants.map((v) => ({
@@ -247,14 +281,82 @@ async function persistPhotoAsset(params: {
         originalHeight: params.processed.height,
         processingMs: params.processed.processingMs,
       };
+    },
+  });
+  return result;
+}
+
+async function persistPhotoAsset(params: {
+  baseDir: string;
+  listingId: string;
+  actorPartyId: string;
+  sniffed: { mime: string; ext: string };
+  bytes: Uint8Array;
+  processed: Awaited<ReturnType<typeof processImage>>;
+  source: 'field_officer' | 'lister';
+  caption: string | null;
+  auditVia: 'officer' | 'lister';
+  auditExtras: Record<string, unknown>;
+}): Promise<UploadedMediaResult> {
+  const photoSortAndWrite = async (tx: Prisma.TransactionClient, assetId: string) => {
+    const last = await tx.listingPhoto.findFirst({
+      where: { listingId: params.listingId },
+      orderBy: { sortOrder: 'desc' },
+      select: { sortOrder: true },
     });
-  } catch (err) {
-    // Compensation: the bytes exist but the rows do not. Remove them so
-    // storage cannot accumulate objects no row will ever name — and so the
-    // bucket cannot become an un-governed archive.
-    await Promise.allSettled(storedRefs.map((ref) => provider.delete(ref)));
-    throw err;
-  }
+    const photo = await tx.listingPhoto.create({
+      data: {
+        listingId: params.listingId,
+        mediaAssetId: assetId,
+        sortOrder: (last?.sortOrder ?? 0) + 1,
+        caption: params.caption,
+        source: params.source,
+      },
+    });
+    await tx.auditEvent.create({
+      data: {
+        actorPartyId: params.actorPartyId,
+        eventType: 'media_uploaded',
+        subjectRef: assetId,
+        payload: {
+          listingId: params.listingId,
+          via: params.auditVia,
+          byteSize: params.bytes.length,
+          mimeType: params.sniffed.mime,
+          originalDimensions: { width: params.processed.width, height: params.processed.height },
+          variants: params.processed.variants.map((v) => ({ variant: v.variant, byteSize: v.byteSize })),
+          processingMs: params.processed.processingMs,
+          ...params.auditExtras,
+        },
+        occurredAt: new Date(),
+      },
+    });
+    return {
+      mediaAssetId: assetId,
+      listingPhotoId: photo.id,
+      sortOrder: photo.sortOrder,
+      mimeType: params.sniffed.mime,
+      byteSize: params.bytes.length,
+      variants: params.processed.variants.map((v) => ({
+        variant: v.variant,
+        width: v.width,
+        height: v.height,
+        byteSize: v.byteSize,
+      })),
+      originalWidth: params.processed.width,
+      originalHeight: params.processed.height,
+      processingMs: params.processed.processingMs,
+    } satisfies UploadedMediaResult;
+  };
+
+  return storeAssetWithRows({
+    baseDir: params.baseDir,
+    actorPartyId: params.actorPartyId,
+    sniffed: params.sniffed,
+    bytes: params.bytes,
+    processed: params.processed,
+    commit: photoSortAndWrite,
+  });
 }
 
 export async function uploadViewingMedia(params: {

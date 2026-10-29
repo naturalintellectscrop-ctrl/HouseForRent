@@ -1090,6 +1090,68 @@ async function resolveCommissionRates() {
   return rows.map((r) => ({ id: r.id, rateBp: r.rateBpOfMonth, effectiveFrom: r.effectiveFrom.toISOString() }));
 }
 
+// ── landlord onboarding KYC (consolidated round) ────────────────────────────
+
+/** The caller's terms status + latest application (lister/admin). */
+async function resolveLandlordKycStatus() {
+  const caller = await requireCaller();
+  if (caller.role !== 'lister' && caller.role !== 'admin') {
+    throw new ApiError(403, 'FORBIDDEN', 'landlord surface');
+  }
+  const { kycStatusForParty } = await import('@/server/kyc');
+  return kycStatusForParty(caller.partyId);
+}
+
+/** The caller's onboarding-terms record (lister/admin). */
+async function resolveLandlordTermsStatus() {
+  const caller = await requireCaller();
+  if (caller.role !== 'lister' && caller.role !== 'admin') {
+    throw new ApiError(403, 'FORBIDDEN', 'landlord surface');
+  }
+  const { getLandlordTermsStatus } = await import('@/server/kyc');
+  return getLandlordTermsStatus(caller.partyId);
+}
+
+/** The review queue (admin only — enforced here like the API guards would). */
+async function resolveAdminKycQueue() {
+  const caller = await requireCaller();
+  if (caller.role !== 'admin') throw new ApiError(403, 'FORBIDDEN', 'admin surface');
+  const { adminKycQueue } = await import('@/server/kyc');
+  const queue = await adminKycQueue();
+  return {
+    total: queue.length,
+    rows: queue.map(({ row, flags }) => ({
+      id: row.id,
+      submittedAt: row.submittedAt.toISOString(),
+      updatedAt: row.updatedAt.toISOString(),
+      applicant: {
+        id: row.party.id,
+        displayName: row.party.displayName,
+        primaryPhone: row.party.primaryPhone,
+        status: row.party.status,
+        createdAt: row.party.createdAt.toISOString(),
+      },
+      legalName: row.legalName,
+      idDocumentType: row.idDocumentType,
+      relationship: row.relationship,
+      identityState: row.identityState,
+      authorityState: row.authorityState,
+      payoutState: row.payoutState,
+      flags,
+    })),
+  };
+}
+
+/** One application's full review record (admin only). */
+async function resolveAdminKycDetail(submissionId: string) {
+  const caller = await requireCaller();
+  if (caller.role !== 'admin') throw new ApiError(403, 'FORBIDDEN', 'admin surface');
+  const { adminKycDetail } = await import('@/server/kyc');
+  // The service returns the shared review shape (ISO strings, evidence ids,
+  // no URLs) — identical to what the API route and the page consume.
+  return adminKycDetail(submissionId);
+}
+
 // ── the dispatcher ───────────────────────────────────────────────────────
 
 type Resolver = () => Promise<unknown>;
@@ -1135,6 +1197,15 @@ function resolverFor(path: string, authenticated: boolean): Resolver {
   // mutation and belongs to its route handler (which calls the service
   // directly), never to this GET-only dispatcher.
   if (parts[1] === 'landlord' && parts[2] === 'mandates') return () => resolveLandlordMandates();
+  // Landlord onboarding KYC (GET reads; mutations are route handlers).
+  if (parts[1] === 'landlord' && parts[2] === 'terms') return () => resolveLandlordTermsStatus();
+  if (parts[1] === 'landlord' && parts[2] === 'kyc' && parts.length === 3) {
+    return () => resolveLandlordKycStatus();
+  }
+  if (parts[1] === 'admin' && parts[2] === 'kyc' && parts.length === 3) return () => resolveAdminKycQueue();
+  if (parts[1] === 'admin' && parts[2] === 'kyc' && parts.length === 4) {
+    return () => resolveAdminKycDetail(parts[3]);
+  }
   if (parts[1] === 'admin' && parts[2] === 'mandates') return () => resolveAdminMandates(u.searchParams);
   if (parts[1] === 'admin' && parts[2] === 'launch-gate') return () => resolveLaunchGate();
   if (parts[1] === 'admin' && parts[2] === 'verification-queue') return () => resolveVerificationQueue();

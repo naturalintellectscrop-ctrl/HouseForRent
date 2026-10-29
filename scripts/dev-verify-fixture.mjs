@@ -52,9 +52,14 @@ async function account(displayName, phone, role, status, opts = {}) {
     include: { userAccounts: true },
   });
   if (!party) {
+    // authRole lives on user_account, not party (the seed-demo drift this
+    // script replaced had it on party — do not reintroduce it here).
     party = await prisma.party.create({
-      data: { displayName, primaryPhone: phone, status, authRole: role },
+      data: { displayName, primaryPhone: phone, status },
     });
+    // create() returns no included relations; the heal path below must see
+    // an empty account list, not undefined.
+    party = { ...party, userAccounts: [] };
   }
   // Heal a half-created party from an earlier failed run: the account row
   // is what every read path requires (adminPartyDetail throws without it).

@@ -64,11 +64,24 @@ export default async function PlatformLayout({
     pendingApplications = null;
   }
 
+  // Landlord verification queue: applications with a section still awaiting
+  // a reviewer (identity or authority). Counted here so the nav carries the
+  // workload; a missing table (migration pending) degrades to null.
+  let openKyc: number | null = null;
+  try {
+    openKyc = await db.landlordKyc.count({
+      where: { OR: [{ identityState: 'pending' }, { identityState: 'more_info' }, { authorityState: 'pending' }, { authorityState: 'more_info' }] },
+    });
+  } catch {
+    openKyc = null;
+  }
+
   const platform: ShellNavGroup = {
     label: 'Platform',
     items: [
       { href: '/platform', label: 'Overview', icon: 'chart' },
       { href: '/platform/approvals', label: 'Approvals', icon: 'users', count: pendingApplications },
+      { href: '/platform/kyc', label: 'Landlord verification', icon: 'shield', count: openKyc },
       { href: '/platform/users', label: 'Users', icon: 'user' },
       { href: '/platform/listings', label: 'Listings', icon: 'home' },
       { href: '/platform/transactions', label: 'Transactions', icon: 'coins' },

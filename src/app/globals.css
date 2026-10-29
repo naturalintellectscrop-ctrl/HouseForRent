@@ -4347,3 +4347,59 @@ a.card-link:hover .card-title {
   max-width: 36rem;
   margin: 0;
 }
+
+/* Landlord KYC review (consolidated round): the queue's flag list and the
+   review screen's evidence grid + decision rail. */
+.plat-flag-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.plat-flag-list li {
+  font-size: 0.8125rem;
+  color: var(--ink-soft);
+  padding-left: 0.9rem;
+  position: relative;
+}
+.plat-flag-list li::before {
+  content: '•';
+  position: absolute;
+  left: 0.15rem;
+  color: var(--ink-soft);
+}
+.plat-evidence-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+}
+.plat-evidence {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md, 12px);
+  overflow: hidden;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+}
+.plat-evidence .plat-evidence-media {
+  aspect-ratio: 4 / 3;
+  background: color-mix(in srgb, var(--ink) 4%, transparent);
+  overflow: hidden;
+}
+.plat-evidence .plat-evidence-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.plat-evidence .plat-evidence-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 0.5rem 0.65rem;
+  border-top: 1px solid var(--line);
+}

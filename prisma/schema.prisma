@@ -111,6 +111,11 @@ model Party {
   mandatesAsLister   PropertyMandate[] @relation("MandateLister")
   mandatesVerifiedBy PropertyMandate[] @relation("MandateVerifier")
 
+  /// Landlord onboarding KYC (additive, consolidated round 2026-10-29):
+  /// applications this party submitted and review decisions they took.
+  landlordKycSubmissions LandlordKyc[] @relation("KycApplicant")
+  landlordKycReviews     LandlordKyc[] @relation("KycReviewer")
+
   propertiesOwned Property[]
 
   viewingsAsTenant Viewing[] @relation("ViewingTenant")
@@ -158,19 +163,19 @@ enum AuthRole {
 /// (e.g. a landlord created by ops) before self-service credentials. V1: one
 /// primary role per account (Data_Model.md §2.2).
 model UserAccount {
-  id             String   @id @default(uuid())
-  partyId        String   @map("party_id")
-  authRole  AuthRole @map("auth_role")
+  id          String    @id @default(uuid())
+  partyId     String    @map("party_id")
+  authRole    AuthRole  @map("auth_role")
   /// Set on each successful login. Nullable because an account that has
   /// never signed in genuinely has no value — a sentinel date would make
   /// "never" indistinguishable from "long ago".
   lastLoginAt DateTime? @map("last_login_at")
-  createdAt DateTime @default(now()) @map("created_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
 
-  party            Party              @relation(fields: [partyId], references: [id])
-  sessions         Session[]
-  credential       UserCredential?
-  passwordResets   PasswordResetToken[]
+  party          Party                @relation(fields: [partyId], references: [id])
+  sessions       Session[]
+  credential     UserCredential?
+  passwordResets PasswordResetToken[]
 
   @@map("user_account")
 }
@@ -480,6 +485,11 @@ model Property {
 
   mandates PropertyMandate[]
   listings Listing[]
+
+  /// KYC applications that cite this property for the ownership/authority
+  /// review (additive, 2026-10-29). Optional: an applicant may describe a
+  /// property they have not registered yet.
+  landlordKycSubmissions LandlordKyc[]
 
   @@map("property")
 }
@@ -1010,6 +1020,15 @@ model MediaAsset {
   listingPhotos    ListingPhoto[]
   variants         MediaVariant[]
 
+  /// KYC evidence slots (additive, 2026-10-29). A decided review's evidence
+  /// is part of the record: RESTRICT on delete makes removing bytes while a
+  /// decided submission still cites them impossible (the detach-then-delete
+  /// path in src/server/kyc.ts is the only way, and only while open).
+  kycIdFrontSlots           LandlordKyc[] @relation("KycIdFront")
+  kycIdBackSlots            LandlordKyc[] @relation("KycIdBack")
+  kycSelfieSlots            LandlordKyc[] @relation("KycSelfie")
+  kycOwnershipEvidenceSlots LandlordKyc[] @relation("KycOwnershipEvidence")
+
   @@map("media_asset")
 }
 
@@ -1041,7 +1060,7 @@ model MediaVariant {
   height           Int
   byteSize         Int              @map("byte_size")
   processingStatus String           @default("ready") @map("processing_status")
-  createdAt        DateTime         @default(now())  @map("created_at")
+  createdAt        DateTime         @default(now()) @map("created_at")
 
   /// CASCADE is the contract the delete path relies on: removing an asset
   /// removes its rendition metadata in the same statement (the stored
@@ -1132,6 +1151,144 @@ model SavedListing {
   // listing_id (found by the Gate-1 schema-parity diff; additive, no push).
   @@index([listingId])
   @@map("saved_listing")
+}
+
+// ============================================================================
+// Landlord onboarding KYC (additive, consolidated round 2026-10-29)
+// ============================================================================
+
+enum KycIdDocumentType {
+  /// The standard path: a Ugandan National ID (front + back) + a selfie —
+  /// the intended workflow for eligible Ugandan citizens.
+  national_id
+  /// The documented exception: a passport, permit or other evidence for a
+  /// person who cannot hold a Ugandan National ID. Never treated as a
+  /// rejection or an auto-approval — every review surface marks it for
+  /// owner review rather than inventing an eligibility rule in code.
+  other_document
+}
+
+enum KycRelationship {
+  /// Lists a property they own.
+  owner
+  /// Markets the property for someone else. Per the EXISTING publication
+  /// rule, such a listing cannot go live without a verified per-property
+  /// mandate — this application does not change that.
+  broker_agent
+  /// Another association with the property (family, caretaker, ...).
+  other_associated
+}
+
+enum KycReviewState {
+  /// Waiting for a reviewer. The applicant may still edit an open section.
+  pending
+  /// A reviewer asked for more information; the applicant resubmits.
+  more_info
+  approved
+  rejected
+}
+
+enum KycPayoutMethod {
+  /// The ONLY method the actual provider integration supports today:
+  /// the NylonPay collection API takes a mobile-money phone number. A
+  /// bank-transfer option would invent a provider capability that has
+  /// never been shown (DPA: collect only what the rails actually need).
+  mobile_money
+}
+
+/// A landlord's onboarding application. One row per submission episode
+/// (a rejected application's successor is a NEW row — history is the rows
+/// plus their audit events, never an edit). Three INDEPENDENT section
+/// states: identity, ownership/authority, payout — a single approved
+/// boolean here would erase the distinctions the platform's rules are
+/// built on (identity ≠ authority ≠ payout ≠ listing publication ≠
+/// field verification, each of which keeps its own state elsewhere).
+///
+/// ── What approval here does and does not mean ──
+/// Identity approval records a MANUAL review of submitted documents. The
+/// platform runs no independent identity verification (the NIN provider
+/// is a disclosed sandbox mock) — no surface may claim otherwise.
+/// Authority approval records a review of a DECLARED relationship; a
+/// broker or associated person is never recorded as the property owner.
+/// Payout approval verifies payment DETAILS only; real-money movement
+/// stays disabled until the provider (NylonPay merchant KYC) and legal
+/// prerequisites close — an external blocker, unchanged.
+model LandlordKyc {
+  id      String @id @default(uuid())
+  partyId String @map("party_id")
+
+  // ── identity section ──
+  legalName          String            @map("legal_name")
+  idDocumentType     KycIdDocumentType @default(national_id) @map("id_document_type")
+  /// The applicant's age-eligibility declaration (18+, consistent with the
+  /// National ID path). A claim on the record — not an independent check.
+  ageConfirmed       Boolean           @default(false) @map("age_confirmed")
+  idFrontMediaId     String?           @map("id_front_media_id")
+  idBackMediaId      String?           @map("id_back_media_id")
+  selfieMediaId      String?           @map("selfie_media_id")
+  identityState      KycReviewState    @default(pending) @map("identity_state")
+  identityReviewNote String?           @map("identity_review_note")
+
+  // ── ownership / authority section ──
+  relationship             KycRelationship @default(owner)
+  /// Optional link to an existing property record for context. The
+  /// property/ownership system of record stays exactly where it was;
+  /// this is a reference for the reviewer, not a transfer of anything.
+  propertyId               String?         @map("property_id")
+  /// Title particulars / property details as declared by the applicant.
+  titleParticulars         String?         @map("title_particulars")
+  ownershipEvidenceMediaId String?         @map("ownership_evidence_media_id")
+  /// Up to four property photograph asset ids (Json array — primitives
+  /// cannot be lists in this schema; the ids are validated on write).
+  propertyPhotos           Json?           @map("property_photos")
+  /// Required for broker_agent / other_associated: the authority story.
+  authorityExplanation     String?         @map("authority_explanation")
+  authorityState           KycReviewState  @default(pending) @map("authority_state")
+  authorityReviewNote      String?         @map("authority_review_note")
+
+  // ── payout section (verification of DETAILS only) ──
+  payoutRecipientName String?          @map("payout_recipient_name")
+  payoutMethod        KycPayoutMethod? @map("payout_method")
+  /// Mobile-money destination, stored as the normalized +256 number. No
+  /// PINs, no passwords, no OTPs — those are never KYC information.
+  payoutDestination   String?          @map("payout_destination")
+  payoutState         KycReviewState   @default(pending) @map("payout_state")
+  payoutReviewNote    String?          @map("payout_review_note")
+
+  // ── declarations + terms ──
+  /// The accountability declarations the applicant checked, stored as
+  /// { identityAccurate, relationshipHonest, authorityDisclosed,
+  ///   accuracyOngoing, agreeTerms } — server-validated before submit.
+  declarations Json
+  /// The exact landlord-onboarding terms version accepted (also recorded
+  /// as a ConsentRecord — this column keeps the application self-describing).
+  termsVersion String @map("terms_version")
+
+  // ── lifecycle ──
+  submittedAt           DateTime  @default(now()) @map("submitted_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+  /// The most recent reviewer (display convenience; the authoritative
+  /// history is the audit trail — every decision is an append-only row).
+  lastReviewedByPartyId String?   @map("last_reviewed_by_party_id")
+  lastReviewedAt        DateTime? @map("last_reviewed_at")
+
+  party                  Party       @relation("KycApplicant", fields: [partyId], references: [id])
+  property               Property?   @relation(fields: [propertyId], references: [id])
+  // Evidence FKs RESTRICT on delete: a decided review's evidence is part of
+  // the record, and nothing (not even a raw DELETE) may silently detach it.
+  // The detach-then-delete path in src/server/kyc.ts is the only way to
+  // remove evidence, and only while the application is still open.
+  idFrontMedia           MediaAsset? @relation("KycIdFront", fields: [idFrontMediaId], references: [id], onDelete: Restrict)
+  idBackMedia            MediaAsset? @relation("KycIdBack", fields: [idBackMediaId], references: [id], onDelete: Restrict)
+  selfieMedia            MediaAsset? @relation("KycSelfie", fields: [selfieMediaId], references: [id], onDelete: Restrict)
+  ownershipEvidenceMedia MediaAsset? @relation("KycOwnershipEvidence", fields: [ownershipEvidenceMediaId], references: [id], onDelete: Restrict)
+  lastReviewedBy         Party?      @relation("KycReviewer", fields: [lastReviewedByPartyId], references: [id])
+
+  @@index([partyId, submittedAt])
+  @@index([identityState])
+  @@index([authorityState])
+  @@index([payoutState])
+  @@map("landlord_kyc")
 }
 
 // ============================================================================

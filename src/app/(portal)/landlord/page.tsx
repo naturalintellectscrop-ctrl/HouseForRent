@@ -10,6 +10,7 @@ import {
 import { daysAgo, Empty, Icon, shillings, Status } from '@/app/ui';
 import { ActivityFeed } from '../activity-feed';
 import type { ActivityRow } from '@/server/activity';
+import type { KycStatusView } from './verification/page';
 
 export const metadata = { title: 'Your properties' };
 
@@ -25,7 +26,7 @@ export const metadata = { title: 'Your properties' };
  * would eventually tell somebody they were ready when the server disagreed.
  */
 export default async function LandlordPage() {
-  const [listings, deals, activity] = await Promise.all([
+  const [listings, deals, activity, kyc] = await Promise.all([
     api<MyListing[]>('/v1/listings/mine').catch((e) => {
       if (e instanceof ApiError) return [];
       throw e;
@@ -36,6 +37,12 @@ export default async function LandlordPage() {
     }),
     api<ActivityRow[]>('/v1/activity/mine').catch((e) => {
       if (e instanceof ApiError) return [];
+      throw e;
+    }),
+    // The landlord's verification standing (terms + the three section
+    // states). A failure degrades to null — the portfolio must still render.
+    api<KycStatusView>('/v1/landlord/kyc').catch((e) => {
+      if (e instanceof ApiError) return null;
       throw e;
     }),
   ]);
@@ -66,6 +73,33 @@ export default async function LandlordPage() {
           </Link>
         </div>
       </div>
+
+      {kyc ? (
+        <div className="card" style={{ padding: '0.9rem 1.1rem' }}>
+          <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+            <span>
+              <span className="badge badge-ok">
+                <Icon.shield size={12} /> Verification
+              </span>{' '}
+              {!kyc.terms.current ? (
+                <span className="badge badge-warn">terms need accepting</span>
+              ) : kyc.application ? (
+                <span className="faint" style={{ fontSize: '0.8125rem' }}>
+                  identity: {kyc.application.identityState.replace('_', ' ')} · authority:{' '}
+                  {kyc.application.authorityState.replace('_', ' ')}
+                </span>
+              ) : (
+                <span className="faint" style={{ fontSize: '0.8125rem' }}>
+                  terms accepted — no application yet
+                </span>
+              )}
+            </span>
+            <Link href="/landlord/verification" className="btn btn-ghost btn-sm">
+              {kyc.application ? 'View verification' : 'Start verification'}
+            </Link>
+          </div>
+        </div>
+      ) : null}
 
       {listings.length === 0 ? (
         <Empty
