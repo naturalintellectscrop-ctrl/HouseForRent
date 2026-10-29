@@ -426,6 +426,16 @@ export async function readMediaBytes(storageRef: string): Promise<{ bytes: Uint8
     if (err instanceof MediaNotFoundError) {
       throw new ApiError(404, 'MEDIA_GONE', 'media file missing from store');
     }
+    // Server-side diagnosability only: the provider's failure reason is
+    // already token-redacted (safeBody) and names the actual deployment
+    // fault — bucket missing, key refused, network unreachable. The client
+    // response stays deliberately vague (no infrastructure detail leaves
+    // the server), but the operator log must not be vague.
+    console.error(
+      `[media] store read failed for ref=${storageRef.slice(0, 80)}: ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+    );
     throw new ApiError(503, 'MEDIA_STORE_UNAVAILABLE', 'the media store could not be reached');
   }
 }
