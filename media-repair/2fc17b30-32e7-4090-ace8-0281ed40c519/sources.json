@@ -14,9 +14,10 @@
     {
       "file": "1-exterior.jpg",
       "slot": "cover / apartment block exterior",
-      "sourceSite": "Uganda Broadcasting Corporation (via image search)",
-      "sourceUrl": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/4c09980753d9.jpeg",
-      "originalDescription": "mid-rise residential apartment block with fenced compound, Kampala"
+      "sourceSite": "LegitPlot — Uganda real-estate listing (via image search)",
+      "sourceUrl": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/cf06a234abec.jpg",
+      "originalDescription": "four-storey apartment block behind a perimeter wall with a sliding gate, paved compound, Kampala",
+      "reselected": "round 63 (owner DB-credential session): the previously staged mid-rise block overshot the listing's own description (\"quiet, gated plot … compound shared with two other units\"); this gated-compound photograph matches the listing information more honestly"
     },
     {
       "file": "2-living.jpg",
@@ -28,9 +29,10 @@
     {
       "file": "3-bedroom.jpg",
       "slot": "bedroom",
-      "sourceSite": "Expedia property listing (via image search)",
-      "sourceUrl": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/7a6d852a4e04.jpg",
-      "originalDescription": "double bedroom with wardrobe and en-suite, East African home"
+      "sourceSite": "Uganda Property Agents (via image search)",
+      "sourceUrl": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/aff4ce20fe9d.jpeg",
+      "originalDescription": "double bedroom, wooden headboard, dressing table with mirror, tiled floor, Kampala rental apartment",
+      "reselected": "round 63: the previously staged bedroom read as hotel photography (mosquito-net canopy, hotel dresser/TV); this residential bedroom matches a mid-market rental listing more honestly"
     },
     {
       "file": "4-kitchen.jpg",
