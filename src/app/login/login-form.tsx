@@ -86,7 +86,7 @@ export function LoginForm({ next }: { next: string | null }) {
         />
       </div>
 
-      <button type="submit" className="btn btn-primary" disabled={pending}>
+      <button type="submit" className="btn btn-primary btn-block" disabled={pending}>
         {pending ? 'Signing in…' : 'Sign in'}
       </button>
     </form>

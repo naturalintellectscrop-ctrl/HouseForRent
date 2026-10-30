@@ -2734,13 +2734,17 @@ a.card-link:hover .card-title {
  * Every password field in the product is wrapped by the shared
  * PasswordInput client component, which overlays a show/hide toggle on
  * the input's right edge. The wrapper is the positioning context; the
- * input reserves trailing space so text never runs beneath the button,
- * in both the public (2.875rem) and console (2.5rem) field heights.
+ * component forwards the shared `.input` treatment to the field (every
+ * surface - public doors, portal cards, operator login - relies on it,
+ * and nothing styles bare inputs anymore since the console register was
+ * retired), so the rules here only add what the wrapper itself owns:
+ * the field always fills the row, and it reserves trailing space so
+ * text never runs beneath the toggle.
  *
- * The toggle sits AFTER the console's bare-form-control rules above so
- * the padding-right wins the specificity tie for password inputs, and
- * the console's bare-button treatment explicitly excludes it - the eye
- * is a field affordance, never a submit-styled action.
+ * The toggle sits after those rules so the padding-right wins the tie
+ * for password inputs, and any future bare-button register must
+ * explicitly exclude it - the eye is a field affordance, never a
+ * submit-styled action.
  *
  * The input keeps its own value when the button is pressed (mousedown is
  * cancelled in the component), so focus stays in the field while the
@@ -2752,6 +2756,7 @@ a.card-link:hover .card-title {
 }
 .password-wrap input[type='password'],
 .password-wrap input[type='text'] {
+  width: 100%;
   padding-right: 2.9rem;
 }
 .password-eye {

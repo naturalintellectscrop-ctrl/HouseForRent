@@ -319,6 +319,14 @@ async function main() {
   }
 
   try {
+    // The repair's transaction carries ~29 sequential statements (delete the
+    // dead rows, then asset + 3 variants + photo per replacement + the audit
+    // event). From the operator's sandbox each statement pays a pooler round
+    // trip, so the whole transaction can legitimately run past Prisma's
+    // 5-second interactive-transaction default — which closes the tx and
+    // surfaces later as "Transaction not found" (observed live twice). The
+    // generous explicit budget covers exactly this one repair batch; nothing
+    // else about the transaction's atomicity changes.
     await db.$transaction(async (tx) => {
       for (const p of deadPhotos) {
         await tx.listingPhoto.deleteMany({ where: { listingId: LISTING_ID, mediaAssetId: p.mediaAsset.id } });
@@ -364,7 +372,7 @@ async function main() {
           occurredAt: new Date(),
         },
       });
-    });
+    }, { timeout: 120_000, maxWait: 20_000 });
   } catch (err) {
     await Promise.allSettled(writtenRefs.map((ref) => deleteObjectBestEffort(ref)));
     fail(`row transaction failed, uploaded objects compensated away: ${redact(err?.stack ?? err?.message ?? err)}`);

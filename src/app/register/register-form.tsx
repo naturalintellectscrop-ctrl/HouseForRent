@@ -150,7 +150,7 @@ export function RegisterForm({
         </p>
       </div>
 
-      <button type="submit" className="btn btn-primary" disabled={pending}>
+      <button type="submit" className="btn btn-primary btn-block" disabled={pending}>
         {pending ? 'Creating your account…' : 'Create account'}
       </button>
 

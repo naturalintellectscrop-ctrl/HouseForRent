@@ -12,6 +12,16 @@ import type { InputHTMLAttributes } from 'react';
  * it in its own small client module means a visit to /login ships the
  * toggle and nothing else.
  *
+ * ── The field always carries the shared input treatment ──
+ * The inner input is rendered with the shared `.input` class (merged with
+ * anything the caller passes). It used to carry no class at all: the old
+ * console register happened to style bare inputs itself, but public doors
+ * style fields through the class - so on /login, /register and the
+ * operator login the password box collapsed to the browser's default
+ * width while the eye sat at the far edge of the row. The class makes the
+ * field identical to the input beside it on every surface, and the
+ * `.password-wrap` rules reserve the trailing space the eye occupies.
+ *
  * ── Accessibility ──
  * The toggle is a real button with `type="button"` (it must never submit
  * the form), a flipping `aria-label`/`title` and `aria-pressed`, so a
@@ -24,10 +34,15 @@ export function PasswordInput(
   props: Omit<InputHTMLAttributes<HTMLInputElement>, 'type'>,
 ) {
   const [visible, setVisible] = useState(false);
+  const { className, ...rest } = props;
 
   return (
     <span className="password-wrap">
-      <input {...props} type={visible ? 'text' : 'password'} />
+      <input
+        {...rest}
+        type={visible ? 'text' : 'password'}
+        className={className ? `input ${className}` : 'input'}
+      />
       <button
         type="button"
         className="password-eye"
