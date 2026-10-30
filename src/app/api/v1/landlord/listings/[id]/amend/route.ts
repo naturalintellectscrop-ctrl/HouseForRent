@@ -41,6 +41,12 @@ export const POST = route(async (req: NextRequest, ctx: { params: Promise<{ id: 
     monthlyRent: body.monthlyRent !== undefined ? parseShillings(body.monthlyRent, 'monthlyRent') : undefined,
     depositAmount: body.depositAmount !== undefined ? parseShillings(body.depositAmount, 'depositAmount') : undefined,
     requiredMonthsUpfront: months,
+    advanceMutualAgreementRef:
+      body.advanceMutualAgreementRef !== undefined &&
+      typeof body.advanceMutualAgreementRef === 'string' &&
+      body.advanceMutualAgreementRef.trim()
+        ? body.advanceMutualAgreementRef.trim()
+        : undefined,
     descriptionText:
       body.descriptionText === null
         ? null

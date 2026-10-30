@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDealForCaller } from '@/server/deals';
-import { requireSession, route } from '@/server/http';
+import { jsonSafe, requireSession, route } from '@/server/http';
 
 /**
  * GET /api/v1/deals/:id - the deal, its context, its ledger-derived figures
@@ -10,5 +10,5 @@ export const GET = route(async (_req: NextRequest, ctx: { params: Promise<{ id: 
   const session = await requireSession();
   const { id } = await ctx.params;
   const deal = await getDealForCaller(id, session.partyId, session.role);
-  return NextResponse.json(deal);
+  return NextResponse.json(jsonSafe(deal));
 });

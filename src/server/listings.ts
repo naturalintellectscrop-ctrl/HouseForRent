@@ -363,9 +363,12 @@ export async function createPropertyWithListing(params: {
   requiredMonthsUpfront: number;
   depositAmount: bigint;
   descriptionText?: string;
+  /** Recorded mutual agreement for advance rent ABOVE THREE MONTHS. */
+  advanceMutualAgreementRef?: string;
 }) {
   const neighbourhood = await db.neighbourhood.findUnique({ where: { id: params.neighbourhoodId } });
   if (!neighbourhood) throw new NeighbourhoodNotFoundError(params.neighbourhoodId);
+  assertAdvanceMutualAgreement(params.requiredMonthsUpfront, params.advanceMutualAgreementRef);
 
   // timeout: this transaction drafts property + listing + agreement together
   // (4+ round-trips). The 5s default expired even on a local socket during
@@ -393,6 +396,8 @@ export async function createPropertyWithListing(params: {
         requiredMonthsUpfront: params.requiredMonthsUpfront,
         depositAmount: params.depositAmount,
         descriptionText: params.descriptionText,
+        advanceMutualAgreementRef:
+          params.requiredMonthsUpfront > 3 ? (params.advanceMutualAgreementRef ?? null) : null,
       },
     });
     // Drafting the listing also drafts its agreement for acceptance.
@@ -641,6 +646,27 @@ export async function withdrawListing(params: { listingId: string; listerPartyId
   return db.listing.update({ where: { id: params.listingId }, data: { publicationState: 'withdrawn' } });
 }
 
+// ── the >3-months advance mutual-agreement rule (approved policy) ─────────
+
+/**
+ * Advance rent ABOVE THREE MONTHS is allowed only with a recorded mutual
+ * agreement between landlord and tenant. The reference (free text naming the
+ * agreement, or an evidence id) is required at terms-setting time and is
+ * snapshotted onto any deal signed against these terms.
+ */
+export function assertAdvanceMutualAgreement(
+  months: number,
+  ref: string | undefined | null,
+): void {
+  if (months > 3 && !(ref && ref.trim())) {
+    throw new ApiError(
+      422,
+      'ADVANCE_MUTUAL_AGREEMENT_REQUIRED',
+      'advance rent above three months requires a recorded mutual agreement between the landlord and the tenant - supply advanceMutualAgreementRef describing that agreement (or its evidence)',
+    );
+  }
+}
+
 // ── amendment (the landlord corrects their own unpublished listing) ───────
 
 export interface AmendListingInput {
@@ -657,6 +683,8 @@ export interface AmendListingInput {
   depositAmount?: bigint;
   requiredMonthsUpfront?: number;
   descriptionText?: string | null;
+  /** Recorded mutual agreement for advance rent ABOVE THREE MONTHS. */
+  advanceMutualAgreementRef?: string;
 }
 
 /**
@@ -699,6 +727,10 @@ export async function amendListing(params: AmendListingInput) {
   const nextRent = params.monthlyRent ?? listing.monthlyRent;
   const nextDeposit = params.depositAmount ?? listing.depositAmount;
   const nextMonths = params.requiredMonthsUpfront ?? listing.requiredMonthsUpfront;
+  const nextMutualRef =
+    params.advanceMutualAgreementRef !== undefined
+      ? params.advanceMutualAgreementRef
+      : listing.advanceMutualAgreementRef;
   const nextDescription = params.descriptionText !== undefined ? params.descriptionText : listing.descriptionText;
 
   if (!Number.isInteger(nextBedrooms) || nextBedrooms < 0 || nextBedrooms > 20) {
@@ -710,6 +742,7 @@ export async function amendListing(params: AmendListingInput) {
   if (!Number.isInteger(nextMonths) || nextMonths < 1 || nextMonths > 24) {
     throw new ApiError(400, 'VALIDATION', 'requiredMonthsUpfront must be between 1 and 24');
   }
+  assertAdvanceMutualAgreement(nextMonths, nextMutualRef);
   if (nextLandmark.trim().length < 4) {
     throw new ApiError(400, 'VALIDATION', 'landmark text is required');
   }
@@ -737,6 +770,7 @@ export async function amendListing(params: AmendListingInput) {
   if (nextRent !== listing.monthlyRent) changedFields.push('monthlyRent');
   if (nextDeposit !== listing.depositAmount) changedFields.push('depositAmount');
   if (nextMonths !== listing.requiredMonthsUpfront) changedFields.push('requiredMonthsUpfront');
+  if (nextMutualRef !== listing.advanceMutualAgreementRef) changedFields.push('advanceMutualAgreementRef');
   if (nextDescription !== listing.descriptionText) changedFields.push('descriptionText');
 
   // Nothing moved: still audited (an amendment submission IS an event), but
@@ -771,6 +805,7 @@ export async function amendListing(params: AmendListingInput) {
           depositAmount: nextDeposit,
           requiredMonthsUpfront: nextMonths,
           descriptionText: nextDescription,
+          advanceMutualAgreementRef: nextMonths > 3 ? (nextMutualRef ?? null) : null,
           ...listerUpdate,
         },
       });

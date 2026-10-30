@@ -53,6 +53,10 @@ export const POST = route(async (req: NextRequest) => {
     requiredMonthsUpfront: months,
     depositAmount: parseShillings(body.depositAmount, 'depositAmount'),
     descriptionText: typeof body.descriptionText === 'string' && body.descriptionText.trim() ? body.descriptionText.trim() : undefined,
+    advanceMutualAgreementRef:
+      typeof body.advanceMutualAgreementRef === 'string' && body.advanceMutualAgreementRef.trim()
+        ? body.advanceMutualAgreementRef.trim()
+        : undefined,
   });
 
   await markListingAwaitingVerification(listing.id);

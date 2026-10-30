@@ -49,6 +49,9 @@ export function jsonError(err: unknown): NextResponse {
     ListingTermsChangedError: { status: 422, code: 'LISTING_TERMS_CHANGED' },
     AmountNotAuthoritativeError: { status: 422, code: 'AMOUNT_NOT_AUTHORITATIVE' },
     NothingHeldError: { status: 409, code: 'NOTHING_HELD' },
+    CommissionNotEarnedError: { status: 409, code: 'COMMISSION_NOT_EARNED' },
+    CommissionAlreadyRecognisedError: { status: 409, code: 'COMMISSION_ALREADY_RECOGNISED' },
+    MoveInVerificationNotFoundError: { status: 409, code: 'MOVE_IN_VERIFICATION_MISSING' },
     DealAlreadyExistsError: { status: 409, code: 'DEAL_ALREADY_EXISTS' },
     MissingListingAgreementError: { status: 409, code: 'MISSING_LISTING_AGREEMENT' },
     MissingIntroductionRecordError: { status: 409, code: 'MISSING_INTRODUCTION_RECORD' },
@@ -105,6 +108,19 @@ export function jsonError(err: unknown): NextResponse {
     },
     { status: 500 },
   );
+}
+
+/** BigInt → string, recursively: money never crosses the wire as a BigInt. */
+export function jsonSafe(value: unknown): unknown {
+  if (typeof value === 'bigint') return value.toString();
+  if (value instanceof Date) return value.toISOString();
+  if (Array.isArray(value)) return value.map(jsonSafe);
+  if (value && typeof value === 'object') {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value)) out[k] = jsonSafe(v);
+    return out;
+  }
+  return value;
 }
 
 /** Wraps a handler with the error mapping. */

@@ -207,3 +207,56 @@ enforced by review; control center states the provider status on-surface.
   the added audit rows use the same write pattern as the existing `psp_amount_mismatch` path.
 - F-2/F-6 migration drafts are committed as FILES ONLY, deliberately unapplied; `apply-migration.mjs`
   rails (two-key + name-ledger) make accidental application impossible without an explicit owner act.
+
+---
+
+## Addendum — financial architecture foundation (2026-10-30)
+
+The task "Financial Architecture Foundation" extended this system per the approved business
+policies; the design record is `docs/FINANCIAL_ARCHITECTURE.md`. What changed at the audit level:
+
+- **Commission earning moved** from the post-move-in admin action to **confirmed payment**
+  (`applyEscrowFunding` recognises it inside the same transaction as custody, from the deal's own
+  snapshots). `commission_earned` remains a valid status for legacy deals; the legacy earn action is
+  still reachable from `move_in_confirmed` and refuses a second recognition
+  (`CommissionAlreadyRecognisedError`).
+- **Snapshot completeness (closes F-5's window):** advance months, total advance rent, deposit,
+  commission payer, the >3-months mutual-agreement reference and policy tokens are now frozen onto
+  the deal at signing; funding derives EVERY figure from the deal's own columns. The rent tripwire
+  (`ListingTermsChangedError`) became a soft, audited `listing_terms_drift` flag - funding no longer
+  depends on the listing, so a hard stop would be a false-positive risk.
+- **Rent/deposit split:** new classifications `rent_escrow_liability` / `deposit_liability`
+  (`fundEscrowSplit`). Settlement pays the RENT side only; the deposit discharges through its own
+  lifecycle. Legacy deals keep the single `escrow_liability` shape and the pre-extension semantics.
+- **New lifecycles:** move-in verification (evidence-based, silence never auto-confirms and never
+  blocks forever - the decision is admin-recorded with reasons), deposit deductions
+  (propose → HFR review → tenant accept/dispute → apply), refunds with kinds + pending/failed
+  records, provider payment reversal (exact reversing postings; terminal `reversed` pre-settlement,
+  `financial_review_required` post-settlement), provider fees as `psp_fee_expense`, financial
+  adjustments, and post-settlement landlord refund coordination (explicitly NOT a platform
+  liability - no guarantee balance).
+- **Reconciliation extended:** inflow (prefix-matched), classification consistency, and payout
+  honesty (release/refund instructions 1:1 against ledger payout credits; clawback legs excluded on
+  both sides). Deduction payouts now carry their own release instruction so the 1:1 holds.
+- **Mock PSP carries a synthetic providerRef**, so signature-verified webhook deliveries can be
+  rehearsed against the sandbox (duplicate-confirmation + terminal-refusal + amount-guard paths are
+  now EXECUTED in `scripts/finance-pipeline-tests.mjs`, not merely reasoned about).
+- **Pool-deadlock fix learned en route:** the PSP seam must never be awaited inside an interactive
+  transaction under a size-1 pool (P2028); `reverseCommission` follows the established preflight
+  pattern (instruction issued before the tx opens).
+- **Audit actors:** lifecycle audit rows use the labelled system party (`House For Rent System
+  (PSP webhook)`), never a fabricated `'system'` id (FK integrity).
+
+Verification: `scripts/finance-pipeline-tests.mjs` — 89/89 checks executed against the isolated rig
+(real HTTP surface, real schema DDL, mock PSP): advance-rent math, 10%-of-one-month commission,
+deposit exclusion, fee expense, >3-months mutual agreement (refused/accepted), snapshot immunity
+after listing edits, duplicate-payment safety (re-funding, duplicate webhook, amount mismatch,
+unknown reference), pre-verification settlement refusal, both-confirm + dispute + verify/reject
+paths, settlement = rent − commission, deposit separation + partial deduction + release + case
+closure, pre-settlement refund (+ commission retention default + approved-category reversal +
+POLICY_PENDING refusal), partial refunds, post-settlement coordination with NO platform balance,
+provider reversal to terminal `reversed`, role refusals (tenant/landlord cannot settle/refund/earn),
+reconciliation isReconciled=true, transition history + audit rows, and the public/admin/ops surfaces
+still serving. Regression: KYC 80/80, image pipeline ALL PASS. Migration committed as a FILE ONLY
+(`prisma/migrations/20261030120000_financial_architecture_foundation`) — additive, unapplied,
+owner-gated via `scripts/apply-migration.mjs` rails.

@@ -28,6 +28,7 @@ import {
 } from './domain';
 import * as ledger from './ledger';
 import { nylonPayLive } from './nylonpay';
+import { policySnapshotValue } from './finance/policy';
 
 type Tx = Parameters<Parameters<typeof db.$transaction>[0]>[0];
 
@@ -87,6 +88,24 @@ export class NothingHeldError extends Error {
     this.name = 'NothingHeldError';
   }
 }
+export class CommissionNotEarnedError extends Error {
+  constructor(dealId: string) {
+    super(
+      `deal ${dealId} has not earned its commission yet. Recognise the commission before settling ` +
+        'so the landlord receives the net rent, never the gross.',
+    );
+    this.name = 'CommissionNotEarnedError';
+  }
+}
+export class CommissionAlreadyRecognisedError extends Error {
+  constructor(dealId: string) {
+    super(
+      `deal ${dealId} already carries recognised commission. Commission is charged once on the ` +
+        'initial rental transaction; corrections go through an approved reversal, not a second posting.',
+    );
+    this.name = 'CommissionAlreadyRecognisedError';
+  }
+}
 export class MissingListingAgreementError extends Error {
   constructor(listingId: string) {
     super(
@@ -139,15 +158,18 @@ export class DealAlreadyExistsError extends Error {
 }
 
 /**
- * Deal statuses whose arrival is a MONEY EVENT, and the audit action each
- * maps to. Mapping here means the audit write happens on the single path
- * every transition already takes.
+ * Deal statuses whose arrival is a MONEY EVENT or an ops-visible anomaly, and
+ * the audit action each maps to. Mapping here means the audit write happens
+ * on the single path every transition already takes.
  */
 const AUDITED_STATUSES: Partial<Record<DealStatus, string>> = {
   escrow_funded: 'escrow_funded',
   commission_earned: 'commission_earned',
   settled: 'deal_settled',
   refunded: 'deal_refunded',
+  partially_refunded: 'deal_partially_refunded',
+  reversed: 'deal_reversed',
+  financial_review_required: 'financial_review_required',
 };
 
 // ── creation ─────────────────────────────────────────────────────────────
@@ -225,8 +247,12 @@ export async function matchTenant(params: {
 }
 
 /**
- * tenant_matched → agreement_signed. THE SNAPSHOT POINT (FR-7.4): rent and
- * rate are COPIED onto the deal here and never updated again.
+ * tenant_matched → agreement_signed. THE SNAPSHOT POINT (FR-7.4): rent, rate
+ * AND THE FULL ACCEPTED FINANCIAL TERMS are COPIED onto the deal here and
+ * never updated again. From this moment the deal is priced by its OWN
+ * columns: advance months, total advance rent, deposit, commission payer,
+ * the >3-months mutual-agreement reference and the policy tokens in force -
+ * a later listing edit cannot re-price any of it (docs/FINANCIAL_ARCHITECTURE.md G-1).
  */
 export async function signAgreement(params: {
   dealId: string;
@@ -254,6 +280,10 @@ export async function signAgreement(params: {
     });
     if (!agreement) throw new MissingListingAgreementError(deal.listingId);
 
+    const listing = await tx.listing.findUniqueOrThrow({ where: { id: deal.listingId } });
+    const advanceMonths = listing.requiredMonthsUpfront;
+    const advanceRent = agreement.monthlyRentAtSigning * BigInt(advanceMonths);
+
     return applyTransition(
       {
         deal,
@@ -266,6 +296,13 @@ export async function signAgreement(params: {
           monthlyRentSnapshot: agreement.monthlyRentAtSigning,
           commissionRateBpSnapshot: agreement.commissionRateVersion.rateBpOfMonth,
           commissionRateVersionId: agreement.commissionRateVersionId,
+          // the full accepted financial terms (immutable from here):
+          advanceMonthsSnapshot: advanceMonths,
+          advanceRentSnapshot: advanceRent,
+          depositAmountSnapshot: listing.depositAmount,
+          commissionPayerSnapshot: 'landlord',
+          mutualAgreementRefSnapshot: listing.advanceMutualAgreementRef,
+          policySnapshot: policySnapshotValue(),
         },
       },
       tx,
@@ -274,13 +311,15 @@ export async function signAgreement(params: {
 }
 
 /**
- * agreement_signed → escrow_funded. Posts fundEscrow in the SAME
+ * agreement_signed → escrow_funded (or, live-PSP, agreement_signed →
+ * payment_pending until the webhook confirms). Posts the funding in the SAME
  * transaction as the status change: liability up, no revenue.
  *
- * The amount is DERIVED, never accepted (F-012): monthlyRentSnapshot ×
- * requiredMonthsUpfront + depositAmount. The rent comes from the DEAL's
- * snapshot; a mismatch against the listing is a tripwire meaning the terms
- * were edited since signing, and the other two cannot be trusted either.
+ * The amount is DERIVED, never accepted (F-012) - and since the 2026-10-30
+ * extension it derives from the DEAL'S OWN SNAPSHOT COLUMNS (advance rent +
+ * deposit, frozen at signing), so a later listing edit can no longer re-price
+ * months or deposit. Legacy deals (snapshots absent) keep the pre-extension
+ * derivation from the live listing, unchanged.
  */
 export async function fundEscrow(params: {
   dealId: string;
@@ -297,29 +336,41 @@ export async function fundEscrow(params: {
   if (!preflight) throw new DealNotFoundError(params.dealId);
   assertTransitionAllowed(preflight.status as DealStatus, 'escrow_funded');
 
-  const listing = await db.listing.findUniqueOrThrow({ where: { id: preflight.listingId } });
-  if (preflight.monthlyRentSnapshot === null) throw new ListingTermsChangedError(params.dealId);
-  const amount = preflight.monthlyRentSnapshot * BigInt(listing.requiredMonthsUpfront) + listing.depositAmount;
-  if (params.expectedAmount !== undefined && params.expectedAmount !== amount) {
-    throw new AmountNotAuthoritativeError(params.expectedAmount, amount);
+  const derived = await deriveFundingAmount(preflight);
+  if (params.expectedAmount !== undefined && params.expectedAmount !== derived.amount) {
+    throw new AmountNotAuthoritativeError(params.expectedAmount, derived.amount);
   }
   const instruction = await ledger.issuePspInstruction({
     dealId: preflight.id,
     kind: 'collect',
-    amount,
+    amount: derived.amount,
     idempotencyKey: `fund:${preflight.id}`,
   });
 
-  // LIVE PSP: the collection is in flight on the tenant's phone. Custody is
-  // booked by the verified webhook when the provider confirms the money -
-  // never on faith. The untouched deal is returned so the page reloads and
-  // shows the deal still unfunded, which is the truth until the webhook.
+  // LIVE PSP: the collection is in flight on the tenant's phone. The deal
+  // becomes payment_pending so the wait is VISIBLE, and custody is booked by
+  // the verified webhook when the provider confirms the money - never on
+  // faith. The page reloads and shows the deal still unfunded, which is the
+  // truth until the webhook.
   const pspState = ledger.derivedPspState(instruction);
   if (pspState === 'pending') {
-    return {
-      ...preflight,
-      pspInstruction: { id: instruction.id, kind: instruction.kind, state: pspState },
-    };
+    return transactional(async (tx) => {
+      const deal = await requireDeal(params.dealId, tx);
+      if (deal.status === 'agreement_signed') {
+        return applyTransition(
+          {
+            deal,
+            to: 'payment_pending',
+            actorPartyId: params.actorPartyId,
+            reason:
+              params.reason ??
+              'Payment provider collection issued - awaiting the tenant’s approval of the payment prompt.',
+          },
+          tx,
+        );
+      }
+      return deal; // already payment_pending from an earlier attempt - idempotent
+    });
   }
 
   return applyEscrowFunding({
@@ -327,16 +378,54 @@ export async function fundEscrow(params: {
     actorPartyId: params.actorPartyId,
     expectedAmount: params.expectedAmount,
     reason: params.reason,
+    instructionId: instruction.id,
   });
+}
+
+/**
+ * Derives the authoritative funding figure. NEW-SHAPE deals (full terms
+ * snapshotted at signing) derive EVERYTHING from the deal's own columns;
+ * legacy deals keep the pre-extension derivation (snapshot rent × live
+ * listing months + live listing deposit) exactly as before.
+ */
+async function deriveFundingAmount(deal: {
+  id: string;
+  listingId: string;
+  monthlyRentSnapshot: bigint | null;
+  advanceRentSnapshot: bigint | null;
+  depositAmountSnapshot: bigint | null;
+}): Promise<{ amount: bigint; rentAmount: bigint; depositAmount: bigint; newShape: boolean }> {
+  if (deal.advanceRentSnapshot !== null && deal.depositAmountSnapshot !== null) {
+    return {
+      amount: deal.advanceRentSnapshot + deal.depositAmountSnapshot,
+      rentAmount: deal.advanceRentSnapshot,
+      depositAmount: deal.depositAmountSnapshot,
+      newShape: true,
+    };
+  }
+  const listing = await db.listing.findUniqueOrThrow({ where: { id: deal.listingId } });
+  if (deal.monthlyRentSnapshot === null) throw new ListingTermsChangedError(deal.id);
+  const rentAmount = deal.monthlyRentSnapshot * BigInt(listing.requiredMonthsUpfront);
+  return {
+    amount: rentAmount + listing.depositAmount,
+    rentAmount,
+    depositAmount: listing.depositAmount,
+    newShape: false,
+  };
 }
 
 /**
  * The funding transaction - the ONLY place escrow custody is ever booked.
  * The synchronous deal action calls it after the mock instruction settles;
  * the PSP webhook calls it after the provider confirms the money. It
- * re-derives the figure from the deal's own snapshotted terms inside the
- * transaction, so no caller - human, route, or webhook - can post an amount
- * the deal's signed terms do not support.
+ * re-derives the figure from the deal's own terms inside the transaction, so
+ * no caller - human, route, or webhook - can post an amount the deal's
+ * signed terms do not support.
+ *
+ * NEW-SHAPE deals split the custody posting into rent and deposit
+ * liabilities, recognise COMMISSION IN THE SAME TRANSACTION (approved policy:
+ * commission is earned at confirmed payment - and this only ever runs on
+ * provider-confirmed money), and open the deposit lifecycle.
  */
 export async function applyEscrowFunding(params: {
   dealId: string;
@@ -344,26 +433,83 @@ export async function applyEscrowFunding(params: {
   actorRole?: string;
   expectedAmount?: bigint;
   reason?: string;
+  instructionId?: string;
 }) {
-  const listing = await db.listing.findUniqueOrThrow({
-    where: { id: (await db.deal.findUniqueOrThrow({ where: { id: params.dealId }, select: { listingId: true } })).listingId },
-  });
-
   return transactional(async (tx) => {
     const deal = await requireDeal(params.dealId, tx);
-    assertTransitionAllowed(deal.status as DealStatus, 'escrow_funded');
-
-    // Re-derive INSIDE the transaction: this is the figure that gets posted.
-    if (deal.monthlyRentSnapshot === null || deal.monthlyRentSnapshot !== listing.monthlyRent) {
-      throw new ListingTermsChangedError(params.dealId);
-    }
-    const derived = deal.monthlyRentSnapshot * BigInt(listing.requiredMonthsUpfront) + listing.depositAmount;
-    if (params.expectedAmount !== undefined && params.expectedAmount !== derived) {
-      throw new AmountNotAuthoritativeError(params.expectedAmount, derived);
+    // Custody books from agreement_signed (mock instant) or payment_pending
+    // (webhook-confirmed live collection); anything else is refused by the
+    // same machine check the action route would apply.
+    if (deal.status !== 'agreement_signed' && deal.status !== 'payment_pending') {
+      assertTransitionAllowed(deal.status as DealStatus, 'escrow_funded');
     }
 
-    await ledger.fundEscrow({ dealId: deal.id, amount: derived }, tx);
+    const derived = await deriveFundingAmount(deal);
+    if (params.expectedAmount !== undefined && params.expectedAmount !== derived.amount) {
+      throw new AmountNotAuthoritativeError(params.expectedAmount, derived.amount);
+    }
 
+    if (derived.newShape) {
+      // Soft drift flag: funding no longer depends on the listing, but a
+      // rent drift between signing and funding is still an ops-visible event.
+      const listing = await tx.listing.findUniqueOrThrow({ where: { id: deal.listingId } });
+      if (listing.monthlyRent !== deal.monthlyRentSnapshot) {
+        await tx.auditEvent.create({
+          data: {
+            actorPartyId: await systemPartyId(tx),
+            eventType: 'listing_terms_drift',
+            subjectRef: deal.id,
+            payload: {
+              note: 'The listing rent no longer matches this deal’s signed snapshot. Funding used the deal’s own immutable terms.',
+              listingRent: listing.monthlyRent.toString(),
+              dealRentSnapshot: deal.monthlyRentSnapshot?.toString() ?? null,
+            },
+            occurredAt: new Date(),
+          },
+        });
+      }
+
+      await ledger.fundEscrowSplit(
+        {
+          dealId: deal.id,
+          rentAmount: derived.rentAmount,
+          depositAmount: derived.depositAmount,
+          instructionId: params.instructionId,
+        },
+        tx,
+      );
+
+      // COMMISSION IS EARNED HERE - at confirmed payment, from the deal's
+      // OWN snapshots (never a live rate, never the escrow total), inside the
+      // same transaction as custody so the books cannot half-land.
+      const commissionAmount = computeCommission({
+        monthlyRentSnapshot: deal.monthlyRentSnapshot,
+        commissionRateBpSnapshot: deal.commissionRateBpSnapshot,
+      });
+      if (commissionAmount > 0n) {
+        await ledger.recogniseCommissionFromRent({ dealId: deal.id, amount: commissionAmount }, tx);
+      }
+
+      // The deposit lifecycle opens with custody: one case per deal.
+      await tx.depositCase.create({
+        data: { dealId: deal.id, custodyBasisRef: params.instructionId ?? null },
+      });
+
+      return applyTransition(
+        {
+          deal,
+          to: 'escrow_funded',
+          actorPartyId: params.actorPartyId,
+          actorRole: params.actorRole,
+          reason: params.reason,
+          data: { commissionAmount },
+        },
+        tx,
+      );
+    }
+
+    // ── legacy deal: pre-extension posting shape, unchanged ──
+    await ledger.fundEscrow({ dealId: deal.id, amount: derived.amount }, tx);
     return applyTransition(
       {
         deal,
@@ -377,26 +523,44 @@ export async function applyEscrowFunding(params: {
   });
 }
 
-/** escrow_funded → move_in_confirmed. No ledger effect - this UNLOCKS the earn step. */
-export async function confirmMoveIn(params: { dealId: string; actorPartyId: string; reason?: string }) {
-  return transactional(async (tx) => {
-    const deal = await requireDeal(params.dealId, tx);
-    assertTransitionAllowed(deal.status as DealStatus, 'move_in_confirmed');
-    return applyTransition(
-      { deal, to: 'move_in_confirmed', actorPartyId: params.actorPartyId, reason: params.reason },
-      tx,
-    );
-  });
+/**
+ * escrow_funded → move_in_awaiting_verification (or, when the tenant's
+ * confirmation completes an open verification, straight through to
+ * move_in_confirmed). The tenant's confirmation is the FIRST entry of the
+ * verification record; the landlord confirms independently; an authorized
+ * review decides anything else. No ledger effect - verification UNLOCKS
+ * settlement, it never moves money.
+ *
+ * (Delegated to the move-in service; kept here under the same name the
+ * action catalogue has always imported.)
+ */
+export async function confirmMoveIn(params: {
+  dealId: string;
+  actorPartyId: string;
+  actorRole?: string;
+  reason?: string;
+  note?: string;
+  evidenceRef?: string;
+}) {
+  const { confirmMoveIn: confirm } = await import('./finance/move-in');
+  return confirm(params);
 }
 
 /**
- * move_in_confirmed → commission_earned. COMMISSION IS EARNED HERE (FR-7.5)
- * - not at funding, not at settlement.
+ * move_in_confirmed → commission_earned. THE LEGACY EARN STEP - kept for
+ * deals signed before commission moved to confirmed payment. New-shape deals
+ * earn commission at funding; a second recognition is refused.
  */
 export async function earnCommission(params: { dealId: string; actorPartyId: string; reason?: string }) {
   return transactional(async (tx) => {
     const deal = await requireDeal(params.dealId, tx);
     assertTransitionAllowed(deal.status as DealStatus, 'commission_earned');
+
+    // Commission is charged ONCE on the initial rental transaction: a deal
+    // whose books already carry commission revenue cannot earn it again.
+    if ((await ledger.commissionRecognised(deal.id, tx)) > 0n) {
+      throw new CommissionAlreadyRecognisedError(deal.id);
+    }
 
     // from the SNAPSHOTS - never a live rate, never the escrow total
     const commissionAmount = computeCommission({
@@ -420,17 +584,32 @@ export async function earnCommission(params: { dealId: string; actorPartyId: str
 }
 
 /**
- * commission_earned → settled. Releases what is still held to the landlord
- * (FR-7.6). The amount is the OUTSTANDING LIABILITY, read inside the
- * settling transaction - never a caller-supplied total.
+ * move_in_confirmed → settled (mock PSP; live parks settlement_pending).
+ * Releases what the deal still owes the LANDLORD (FR-7.6) - for split-custody
+ * deals that is the RENT side only, the deposit keeps its own lifecycle. The
+ * amount is the outstanding liability read inside the settling transaction -
+ * never a caller-supplied total.
  */
 export async function settle(params: { dealId: string; actorPartyId: string; reason?: string }) {
   const preflight = await db.deal.findUnique({ where: { id: params.dealId } });
   if (!preflight) throw new DealNotFoundError(params.dealId);
   assertTransitionAllowed(preflight.status as DealStatus, 'settled');
 
-  const provisional = await ledger.outstandingEscrowLiability(preflight.id);
+  const provisional = await settlementAmount(preflight);
   if (provisional <= 0n) throw new NothingHeldError(preflight.id);
+
+  // Legacy guard: a pre-extension deal that never went through the earn step
+  // must not settle gross - the old machine only reached settled from
+  // commission_earned, and that invariant is preserved here.
+  if (!(await ledger.hasSplitCustody(preflight.id))) {
+    if (
+      preflight.status === 'move_in_confirmed' &&
+      (await ledger.commissionRecognised(preflight.id)) === 0n &&
+      preflight.commissionRateBpSnapshot !== null
+    ) {
+      throw new CommissionNotEarnedError(preflight.id);
+    }
+  }
 
   const instruction = await ledger.issuePspInstruction({
     dealId: preflight.id,
@@ -439,42 +618,83 @@ export async function settle(params: { dealId: string; actorPartyId: string; rea
     idempotencyKey: `settle:${preflight.id}`,
   });
 
-  // LIVE PSP: the payout is not dispatched yet - the instruction parks
-  // `pending` rather than pretending the landlord was paid. The verified
-  // webhook completes it. (Current state derives from the instruction's
-  // events - the row itself is immutable.)
+  // LIVE PSP: the payout is not dispatched yet - the deal parks
+  // settlement_pending rather than pretending the landlord was paid. The
+  // verified webhook completes it.
   const pspState = ledger.derivedPspState(instruction);
   if (pspState === 'pending') {
-    return {
-      ...preflight,
-      pspInstruction: { id: instruction.id, kind: instruction.kind, state: pspState },
-    };
+    return transactional(async (tx) => {
+      const deal = await requireDeal(params.dealId, tx);
+      if (deal.status === 'move_in_confirmed' || deal.status === 'commission_earned') {
+        return applyTransition(
+          {
+            deal,
+            to: 'settlement_pending',
+            actorPartyId: params.actorPartyId,
+            reason:
+              params.reason ??
+              'Landlord payout instructed - awaiting dispatch and confirmation by the payment provider.',
+          },
+          tx,
+        );
+      }
+      return deal; // already settlement_pending - idempotent
+    });
   }
 
-  return applySettlement({ dealId: params.dealId, actorPartyId: params.actorPartyId, reason: params.reason });
+  return applySettlement({
+    dealId: params.dealId,
+    actorPartyId: params.actorPartyId,
+    reason: params.reason,
+    instructionId: instruction.id,
+  });
+}
+
+/** The outstanding LANDLORD-SETTLEMENT amount: rent side for split-custody deals, the whole liability for legacy ones. */
+async function settlementAmount(deal: { id: string }, tx?: Tx): Promise<bigint> {
+  if (await ledger.hasSplitCustody(deal.id, tx)) {
+    return ledger.outstandingLiability(deal.id, 'rent_escrow_liability', tx);
+  }
+  return ledger.outstandingEscrowLiability(deal.id, tx);
 }
 
 /**
  * The settlement transaction - shared by the sync path (mock) and the PSP
  * webhook. Re-reads the outstanding liability INSIDE the transaction: that
- * figure, never a caller-supplied total, is what gets posted.
+ * figure, never a caller-supplied total, is what gets posted. Split-custody
+ * deals settle the RENT side only; the deposit is never landlord proceeds.
  */
 export async function applySettlement(params: {
   dealId: string;
   actorPartyId?: string;
   actorRole?: string;
   reason?: string;
+  instructionId?: string;
 }) {
   return transactional(async (tx) => {
     const deal = await requireDeal(params.dealId, tx);
-    assertTransitionAllowed(deal.status as DealStatus, 'settled');
+    if (
+      deal.status !== 'move_in_confirmed' &&
+      deal.status !== 'commission_earned' &&
+      deal.status !== 'settlement_pending'
+    ) {
+      assertTransitionAllowed(deal.status as DealStatus, 'settled');
+    }
 
     // Re-read inside the transaction. THIS is the figure that gets posted.
-    const netToLandlord = await ledger.outstandingEscrowLiability(deal.id, tx);
+    const netToLandlord = await settlementAmount(deal, tx);
     if (netToLandlord <= 0n) throw new NothingHeldError(deal.id);
 
-    await ledger.settle({ dealId: deal.id, amount: netToLandlord }, tx);
-    await ledger.releaseToLandlord({ dealId: deal.id, amount: netToLandlord }, tx);
+    if (await ledger.hasSplitCustody(deal.id, tx)) {
+      await ledger.settleRent({ dealId: deal.id, amount: netToLandlord, instructionId: params.instructionId }, tx);
+      await ledger.releaseToLandlord(
+        { dealId: deal.id, amount: netToLandlord, instructionId: params.instructionId },
+        tx,
+      );
+    } else {
+      await ledger.settle({ dealId: deal.id, amount: netToLandlord }, tx);
+      await ledger.releaseToLandlord({ dealId: deal.id, amount: netToLandlord }, tx);
+    }
 
     return applyTransition(
       { deal, to: 'settled', actorPartyId: params.actorPartyId, actorRole: params.actorRole, reason: params.reason },
@@ -496,56 +716,136 @@ export async function close(params: { dealId: string; actorPartyId: string; reas
 }
 
 /**
- * escrow_funded → refunded (also from dispute_hold). Everything still held
- * goes back to the tenant (FR-7.7) and NO commission is earned.
+ * escrow_funded → refunded (also from dispute_hold, the verification states,
+ * partially_refunded, financial_review_required). Everything still held as
+ * RENT goes back to the tenant (FR-7.7) and NO commission is earned. The
+ * refund gets a RefundRecord (the audit trail behind the posting) whose id
+ * IS the instruction idempotency key - retries reuse it, new refunds don't.
+ * Live PSP: the deal parks refund_pending until the webhook confirms.
  */
 export async function refund(params: { dealId: string; actorPartyId: string; reason?: string }) {
   const preflight = await db.deal.findUnique({ where: { id: params.dealId } });
   if (!preflight) throw new DealNotFoundError(params.dealId);
   assertTransitionAllowed(preflight.status as DealStatus, 'refunded');
 
-  const provisional = await ledger.outstandingEscrowLiability(preflight.id);
+  const provisional = await refundableRentAmount(preflight);
   if (provisional <= 0n) throw new NothingHeldError(preflight.id);
+
+  const record = await db.refundRecord.create({
+    data: {
+      dealId: preflight.id,
+      kind: 'full_pre_settlement',
+      amount: provisional,
+      reason: params.reason ?? 'Full refund of the rent held before settlement.',
+      requestedByPartyId: params.actorPartyId,
+    },
+  });
 
   const instruction = await ledger.issuePspInstruction({
     dealId: preflight.id,
     kind: 'refund',
     amount: provisional,
-    idempotencyKey: `refund:${preflight.id}`,
+    idempotencyKey: `refund:${record.id}`,
   });
+  await db.refundRecord.update({ where: { id: record.id }, data: { instructionId: instruction.id } });
 
-  // LIVE PSP: same honesty as settlement - the instruction parks `pending`
+  // LIVE PSP: same honesty as settlement - the deal parks refund_pending
   // until the provider confirms the payout, and only then does the ledger
-  // release the liability back to the tenant.
+  // release the rent liability back to the tenant.
   const pspState = ledger.derivedPspState(instruction);
   if (pspState === 'pending') {
-    return {
-      ...preflight,
-      pspInstruction: { id: instruction.id, kind: instruction.kind, state: pspState },
-    };
+    return transactional(async (tx) => {
+      const deal = await requireDeal(params.dealId, tx);
+      if (deal.status !== 'refund_pending') {
+        return applyTransition(
+          {
+            deal,
+            to: 'refund_pending',
+            actorPartyId: params.actorPartyId,
+            reason:
+              params.reason ??
+              'Refund instructed - awaiting dispatch and confirmation by the payment provider.',
+          },
+          tx,
+        );
+      }
+      return deal;
+    });
   }
 
-  return applyRefundCompletion({ dealId: params.dealId, actorPartyId: params.actorPartyId, reason: params.reason });
+  return applyRefundCompletion({
+    dealId: params.dealId,
+    actorPartyId: params.actorPartyId,
+    reason: params.reason,
+    refundRecordId: record.id,
+  });
 }
 
-/** The refund transaction - shared by the sync path and the PSP webhook. */
+/** The outstanding RENT-refund amount: rent side for split-custody deals, the whole liability for legacy ones. */
+async function refundableRentAmount(deal: { id: string }, tx?: Tx): Promise<bigint> {
+  if (await ledger.hasSplitCustody(deal.id, tx)) {
+    return ledger.outstandingLiability(deal.id, 'rent_escrow_liability', tx);
+  }
+  return ledger.outstandingEscrowLiability(deal.id, tx);
+}
+
+/**
+ * The refund transaction - shared by the sync path and the PSP webhook.
+ * Posts the rent-side refund, marks the refund record, and lands the deal on
+ * refunded (terminal) or partially_refunded (when rent liability remains).
+ */
 export async function applyRefundCompletion(params: {
   dealId: string;
   actorPartyId?: string;
   actorRole?: string;
   reason?: string;
+  refundRecordId?: string;
+  instructionId?: string;
+  /** The refund record's authorized amount (full = outstanding; partial is bounded by it). */
+  amountOverride?: bigint;
 }) {
   return transactional(async (tx) => {
     const deal = await requireDeal(params.dealId, tx);
     assertTransitionAllowed(deal.status as DealStatus, 'refunded');
 
-    const amount = await ledger.outstandingEscrowLiability(deal.id, tx);
-    if (amount <= 0n) throw new NothingHeldError(deal.id);
+    const outstanding = await refundableRentAmount(deal, tx);
+    if (outstanding <= 0n) throw new NothingHeldError(deal.id);
+    const amount = params.amountOverride ?? outstanding;
+    if (amount <= 0n || amount > outstanding) {
+      throw new AmountNotAuthoritativeError(amount, outstanding);
+    }
 
-    await ledger.refund({ dealId: deal.id, amount }, tx);
+    if (await ledger.hasSplitCustody(deal.id, tx)) {
+      await ledger.refundRent(
+        { dealId: deal.id, amount, instructionId: params.instructionId ?? params.refundRecordId },
+        tx,
+      );
+    } else {
+      await ledger.refund({ dealId: deal.id, amount }, tx);
+    }
+
+    const remaining = await refundableRentAmount(deal, tx);
+    const to: DealStatus = remaining > 0n ? 'partially_refunded' : 'refunded';
+
+    if (params.refundRecordId) {
+      await tx.refundRecord.update({
+        where: { id: params.refundRecordId },
+        data: { state: 'confirmed', confirmedAt: new Date() },
+      });
+    }
 
     return applyTransition(
-      { deal, to: 'refunded', actorPartyId: params.actorPartyId, actorRole: params.actorRole, reason: params.reason },
+      {
+        deal,
+        to,
+        actorPartyId: params.actorPartyId,
+        actorRole: params.actorRole,
+        reason:
+          params.reason ??
+          (to === 'partially_refunded'
+            ? 'Partial refund confirmed - the remaining rent stays held for this deal.'
+            : undefined),
+      },
       tx,
     );
   });
@@ -631,6 +931,16 @@ function ledgerCreditsByReference(
     .reduce((sum, e) => sum + e.amount, 0n);
 }
 
+/** Credit total across a reference PREFIX (e.g. `fund_escrow:{instructionId}`). */
+function ledgerCreditsByReferencePrefix(
+  entries: Array<{ direction: string; amount: bigint; reference: string | null }>,
+  prefix: string,
+): bigint {
+  return entries
+    .filter((e) => (e.reference ?? '').startsWith(prefix) && e.direction === 'credit')
+    .reduce((sum, e) => sum + e.amount, 0n);
+}
+
 async function ledgerEntriesFor(dealId: string) {
   return db.ledgerEntry.findMany({
     where: { dealId },
@@ -649,6 +959,13 @@ async function ledgerEntriesFor(dealId: string) {
  * Everything an operator needs to understand this deal, computed HERE from
  * the ledger - the same rows reconciliation reads - so the console and the
  * books cannot disagree. Money leaves as STRINGS of integer shillings.
+ *
+ * Since the 2026-10-30 extension the classification is explicit: the rent
+ * and deposit liabilities are reported separately (the deposit is never
+ * part of a generic escrow figure), commission is recognised at confirmed
+ * payment, provider fees appear as the HFR-borne expense they are, and the
+ * accepted-terms snapshot is surfaced verbatim. Legacy deals (no split
+ * postings) keep exactly the figures they always showed.
  */
 export async function financialSummary(dealId: string) {
   const deal = await db.deal.findUnique({
@@ -659,21 +976,44 @@ export async function financialSummary(dealId: string) {
 
   const entries = await ledgerEntriesFor(dealId);
 
+  // The expected upfront: the deal's own accepted terms when present, the
+  // listing's current terms otherwise (legacy deals, and pre-signing reads).
   const expectedUpfront =
-    deal.listing.monthlyRent * BigInt(deal.listing.requiredMonthsUpfront) + deal.listing.depositAmount;
+    deal.advanceRentSnapshot !== null && deal.depositAmountSnapshot !== null
+      ? deal.advanceRentSnapshot + deal.depositAmountSnapshot
+      : deal.listing.monthlyRent * BigInt(deal.listing.requiredMonthsUpfront) + deal.listing.depositAmount;
+
+  const rentHeld = (-ledgerBalance(entries, 'rent_escrow_liability')).toString();
+  const depositHeld = (-ledgerBalance(entries, 'deposit_liability')).toString();
+  const legacyHeld = (-ledgerBalance(entries, 'escrow_liability')).toString();
 
   return {
     expectedUpfront: expectedUpfront.toString(),
     monthlyRentSnapshot: deal.monthlyRentSnapshot?.toString() ?? null,
     commissionRateBpSnapshot: deal.commissionRateBpSnapshot,
     commissionAmount: deal.commissionAmount?.toString() ?? null,
-    heldInEscrow: (-ledgerBalance(entries, 'escrow_liability')).toString(),
+    // ── accepted-terms snapshot (null on legacy/pre-signing deals) ──
+    advanceMonthsSnapshot: deal.advanceMonthsSnapshot,
+    advanceRentSnapshot: deal.advanceRentSnapshot?.toString() ?? null,
+    depositAmountSnapshot: deal.depositAmountSnapshot?.toString() ?? null,
+    commissionPayerSnapshot: deal.commissionPayerSnapshot,
+    mutualAgreementRefSnapshot: deal.mutualAgreementRefSnapshot,
+    policySnapshot: deal.policySnapshot ?? null,
+    // ── classification-aware balances ──
+    heldInEscrow: (BigInt(rentHeld) + BigInt(depositHeld) + BigInt(legacyHeld)).toString(),
+    rentHeld,
+    depositHeld,
     owedToLandlord: (-ledgerBalance(entries, 'landlord_payable')).toString(),
     commissionRecognised: (-ledgerBalance(entries, 'commission_revenue')).toString(),
-    funded: ledgerCreditsByReference(entries, 'fund_escrow').toString(),
+    providerFeesRecorded: ledgerBalance(entries, 'psp_fee_expense').toString(),
+    funded: ledgerCreditsByReferencePrefix(entries, 'fund_escrow').toString(),
     releasedToLandlord: ledgerCreditsByReference(entries, 'release_to_landlord').toString(),
-    refunded: ledgerCreditsByReference(entries, 'refund').toString(),
-    escrowDischarged: ledgerBalance(entries, 'escrow_liability') === 0n,
+    refunded: ledgerCreditsByReferencePrefix(entries, 'refund').toString(),
+    depositReleased: ledgerCreditsByReferencePrefix(entries, 'deposit_refund').toString(),
+    escrowDischarged:
+      ledgerBalance(entries, 'escrow_liability') === 0n &&
+      ledgerBalance(entries, 'rent_escrow_liability') === 0n &&
+      ledgerBalance(entries, 'deposit_liability') === 0n,
   };
 }
 
@@ -835,11 +1175,20 @@ export async function getDealForCaller(dealId: string, callerPartyId: string, ca
   // 404, not 403, for non-parties: a 403 confirms the resource exists.
   if (!isParty && !isStaff) throw new DealNotFoundError(dealId);
 
-  const [context, financials, transitions] = await Promise.all([
-    dealContext(dealId),
-    financialSummary(dealId),
-    getTransitionHistory(dealId),
-  ]);
+  const [context, financials, transitions, moveIn, deposit, refunds, adjustments, postSettlement] =
+    await Promise.all([
+      dealContext(dealId),
+      financialSummary(dealId),
+      getTransitionHistory(dealId),
+      db.moveInVerification.findUnique({ where: { dealId } }),
+      db.depositCase.findUnique({
+        where: { dealId },
+        include: { deductions: { orderBy: { createdAt: 'asc' } } },
+      }),
+      db.refundRecord.findMany({ where: { dealId }, orderBy: { createdAt: 'asc' } }),
+      db.financialAdjustment.findMany({ where: { dealId }, orderBy: { createdAt: 'asc' } }),
+      db.postSettlementRefund.findMany({ where: { dealId }, orderBy: { createdAt: 'asc' } }),
+    ]);
 
   return {
     id: deal.id,
@@ -848,6 +1197,38 @@ export async function getDealForCaller(dealId: string, callerPartyId: string, ca
     updatedAt: deal.updatedAt,
     ...context,
     financials,
+    moveInVerification: moveIn,
+    depositCase: deposit,
+    refunds: refunds.map((r) => ({
+      id: r.id,
+      kind: r.kind,
+      amount: r.amount.toString(),
+      state: r.state,
+      reason: r.reason,
+      instructionId: r.instructionId,
+      confirmedAt: r.confirmedAt,
+      failureReason: r.failureReason,
+      createdAt: r.createdAt,
+    })),
+    financialAdjustments: adjustments.map((a) => ({
+      id: a.id,
+      kind: a.kind,
+      reasonCategory: a.reasonCategory,
+      reason: a.reason,
+      amount: a.amount.toString(),
+      actorPartyId: a.actorPartyId,
+      createdAt: a.createdAt,
+    })),
+    postSettlementRefunds: postSettlement.map((p) => ({
+      id: p.id,
+      amountClaimed: p.amountClaimed.toString(),
+      reason: p.reason,
+      state: p.state,
+      requestedByPartyId: p.requestedByPartyId,
+      resolutionNote: p.resolutionNote,
+      resolvedAt: p.resolvedAt,
+      createdAt: p.createdAt,
+    })),
     availableActions: availableDealActions({
       deal: { status: deal.status, tenantPartyId: deal.tenantPartyId, landlordPartyId: deal.landlordPartyId },
       callerPartyId,
@@ -895,7 +1276,7 @@ export async function getDealRow(dealId: string) {
 
 // ── internals ────────────────────────────────────────────────────────────
 
-async function requireDeal(dealId: string, tx: Tx) {
+export async function requireDeal(dealId: string, tx: Tx) {
   const deal = await tx.deal.findUnique({ where: { id: dealId } });
   if (!deal) throw new DealNotFoundError(dealId);
   return deal;
@@ -907,7 +1288,7 @@ async function requireDeal(dealId: string, tx: Tx) {
  * labelled PSP actor parties for exactly this). One stable, clearly-labelled
  * system party is provisioned on demand; never a fabricated human actor.
  */
-async function systemPartyId(client: Tx | typeof db = db): Promise<string> {
+export async function systemPartyId(client: Tx | typeof db = db): Promise<string> {
   const name = 'House For Rent System (PSP webhook)';
   const existing = await client.party.findFirst({ where: { displayName: name }, select: { id: true } });
   if (existing) return existing.id;
@@ -926,7 +1307,7 @@ async function systemPartyId(client: Tx | typeof db = db): Promise<string> {
  * effect, so all three commit or roll back as one. Money events are
  * audit-logged in the SAME transaction, with amounts as strings.
  */
-async function applyTransition(
+export async function applyTransition(
   params: {
     deal: { id: string; status: string };
     to: DealStatus;
@@ -985,6 +1366,47 @@ async function applyTransition(
   }
 
   return updated;
+}
+
+/**
+ * Restores the status a deal held before entering a pending/review state -
+ * read from the transition history rather than guessed (the same discipline
+ * resolveDispute established). Used by: the provider-failure webhook paths,
+ * the stuck-pending restore action, and financial-review resolution.
+ */
+export async function revertToPrePendingStatus(
+  dealId: string,
+  reason: string,
+  tx: Tx,
+  actorPartyId?: string,
+  actorRole?: string,
+) {
+  const deal = await requireDeal(dealId, tx);
+  const entering = await tx.dealTransition.findFirst({
+    where: { dealId: deal.id, toStatus: deal.status },
+    orderBy: { createdAt: 'desc' },
+  });
+  if (!entering) {
+    throw new Error(`deal ${deal.id} has no recorded transition into ${deal.status}`);
+  }
+  return applyTransition(
+    {
+      deal,
+      to: entering.fromStatus as DealStatus,
+      actorPartyId,
+      actorRole,
+      reason,
+      skipTransitionCheck: true, // returning to the recorded prior status
+    },
+    tx,
+  );
+}
+
+/** The public action behind `restore-from-pending` (admin). */
+export async function restoreFromPending(params: { dealId: string; actorPartyId: string; reason: string }) {
+  return transactional(async (tx) => {
+    return revertToPrePendingStatus(params.dealId, params.reason, tx, params.actorPartyId, 'admin');
+  });
 }
 
 /**
@@ -1047,6 +1469,47 @@ export async function applyPspWebhookOutcome(payload: {
         toState: 'failed',
         detail: `Nylon Pay reported ${cancelled ? 'cancellation' : 'failure'}${providerBits ? `: ${providerBits}` : ''}. No ledger effect - retry the action to issue a fresh instruction.`,
       });
+
+      // An instructed-but-unconfirmed money move must not leave the deal
+      // parked forever: provider-confirmed failure reverts the pending state
+      // (the recorded prior status), with the record marked failed.
+      const deal = await db.deal.findUniqueOrThrow({ where: { id: instruction.dealId } });
+      if (instruction.kind === 'collect' && deal.status === 'payment_pending') {
+        await transactional(async (tx) => {
+          await revertToPrePendingStatus(
+            deal.id,
+            `Provider reported ${cancelled ? 'cancellation' : 'failure'} of the collection${providerBits ? `: ${providerBits}` : ''}. The deal is back at its pre-payment status; a retry issues a fresh instruction.`,
+            tx,
+          );
+        });
+        return { matched: true as const, action: 'payment_reverted' as const };
+      }
+      if (instruction.kind === 'release' && deal.status === 'settlement_pending') {
+        await transactional(async (tx) => {
+          await revertToPrePendingStatus(
+            deal.id,
+            `Provider reported ${cancelled ? 'cancellation' : 'failure'} of the landlord payout${providerBits ? `: ${providerBits}` : ''}. The deal is back at its pre-settlement status; no money left custody.`,
+            tx,
+          );
+        });
+        return { matched: true as const, action: 'settlement_reverted' as const };
+      }
+      if (instruction.kind === 'refund' && deal.status === 'refund_pending') {
+        await transactional(async (tx) => {
+          await revertToPrePendingStatus(
+            deal.id,
+            `Provider reported ${cancelled ? 'cancellation' : 'failure'} of the refund${providerBits ? `: ${providerBits}` : ''}. The deal is back at its pre-refund status; the money is still held.`,
+            tx,
+          );
+        });
+        if (instruction.id) {
+          await db.refundRecord.updateMany({
+            where: { instructionId: instruction.id, state: 'pending' },
+            data: { state: 'failed', failureReason: providerBits || 'provider reported failure' },
+          });
+        }
+        return { matched: true as const, action: 'refund_reverted' as const };
+      }
       return { matched: true as const, action: 'instruction_not_taken' as const };
     }
 
@@ -1111,33 +1574,69 @@ export async function applyPspWebhookOutcome(payload: {
       // the provider-retry contract (non-2xx means retry) intact.
       try {
         if (instruction.kind === 'collect') {
-          if (deal.status !== 'escrow_funded') {
+          if (deal.status === 'agreement_signed' || deal.status === 'payment_pending') {
             await applyEscrowFunding({
               dealId: deal.id,
               actorRole: 'psp_webhook',
               reason: 'Nylon Pay webhook confirmed the tenant’s payment.',
+              instructionId: instruction.id,
             });
             return { matched: true as const, action: 'escrow_funded' as const };
           }
+          // A SECOND "successful" for an already-applied collection: the
+          // provider may have collected the tenant twice. The ledger booked
+          // the money once; the collects-side reconciliation will show the
+          // provider-side excess, and ops resolves it as a duplicate-payment
+          // refund. Recorded here so the anomaly is visible immediately.
+          await db.auditEvent.create({
+            data: {
+              actorPartyId: await systemPartyId(),
+              eventType: 'psp_duplicate_collect_confirmation',
+              subjectRef: instruction.id,
+              payload: {
+                dealId: deal.id,
+                confirmed: payload.transaction.amount,
+                note: 'A duplicate "successful" confirmation arrived for a collection already booked. If the provider collected the tenant twice, the duplicate must be returned - reconcile and record the duplicate-payment refund.',
+              },
+              occurredAt: new Date(),
+            },
+          });
           return { matched: true as const, action: 'already_applied' as const };
         }
         if (instruction.kind === 'release') {
-          if (deal.status === 'commission_earned') {
+          if (deal.status === 'commission_earned' || deal.status === 'settlement_pending') {
             await applySettlement({
               dealId: deal.id,
               actorRole: 'psp_webhook',
               reason: 'Nylon Pay webhook confirmed the landlord payout.',
+              instructionId: instruction.id,
             });
             return { matched: true as const, action: 'settled' as const };
           }
           return { matched: true as const, action: 'already_applied' as const };
         }
-        // kind === 'refund'
-        if (deal.status === 'escrow_funded' || deal.status === 'dispute_hold') {
+        // kind === 'refund' - dispatch by the refund record's KIND.
+        const record = instruction.id
+          ? await db.refundRecord.findFirst({ where: { instructionId: instruction.id } })
+          : null;
+        if (record?.kind === 'deposit_refund') {
+          const { applyDepositRefundCompletion } = await import('./finance/deposit');
+          await applyDepositRefundCompletion({ recordId: record.id, actorRole: 'psp_webhook' });
+          return { matched: true as const, action: 'deposit_refunded' as const };
+        }
+        if (record?.kind === 'commission_reversal_payout') {
+          const { applyCommissionReversalPayout } = await import('./finance/refunds');
+          await applyCommissionReversalPayout({ recordId: record.id, actorRole: 'psp_webhook' });
+          return { matched: true as const, action: 'commission_reversal_paid' as const };
+        }
+        if (deal.status !== 'refunded') {
           await applyRefundCompletion({
             dealId: deal.id,
             actorRole: 'psp_webhook',
             reason: 'Nylon Pay webhook confirmed the refund.',
+            refundRecordId: record?.id,
+            instructionId: instruction.id,
+            amountOverride: record ? record.amount : undefined,
           });
           return { matched: true as const, action: 'refunded' as const };
         }

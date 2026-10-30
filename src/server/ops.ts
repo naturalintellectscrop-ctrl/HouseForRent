@@ -259,11 +259,17 @@ export async function markListingAwaitingVerification(listingId: string) {
 // ── reconciliation ───────────────────────────────────────────────────────
 
 /**
- * The ops reconciliation view. Two assertions, honestly reported:
+ * The ops reconciliation view. Assertions, honestly reported:
  *  1. every ledger posting balances (a false here means corruption bypassing post());
  *  2. PSP-recorded inflow equals ledger-recorded inflow (the mock always
  *     matches because it is the same process - a REAL provider is the point
- *     where this check earns its keep).
+ *     where this check earns its keep);
+ *  3. classification consistency: rent + deposit liabilities hold exactly
+ *     what the split funding postings credited (the deposit is never allowed
+ *     to dissolve into a generic escrow figure);
+ *  4. payout honesty: succeeded release/refund instructions are matched
+ *     against the ledger's payout credits (both zero while payout dispatch
+ *     is unwired - they earn their keep the day it goes live).
  */
 export async function runReconciliation() {
   const postingsBalance = await everyPostingBalances();
@@ -271,21 +277,70 @@ export async function runReconciliation() {
   // PspInstruction rows are IMMUTABLE and `state` only ever holds the
   // initial `pending` - the CURRENT state is the toState of the newest
   // event, so the succeeded total is derived, never read off the column.
-  const collectInstructions = await db.pspInstruction.findMany({
-    where: { kind: 'collect' },
+  const instructions = await db.pspInstruction.findMany({
     include: { events: { orderBy: [{ occurredAt: 'desc' }, { createdAt: 'desc' }], take: 1 } },
   });
-  const pspBalance = collectInstructions.reduce(
-    (sum, instruction) => (derivedPspState(instruction) === 'succeeded' ? sum + instruction.amount : sum),
-    0n,
-  );
-  const ledgerInflow = await db.ledgerEntry.aggregate({
-    where: { reference: 'fund_escrow', direction: 'credit' },
-    _sum: { amount: true },
-  });
+  const succeeded = (kind: 'collect' | 'release' | 'refund') =>
+    instructions
+      .filter((i) => i.kind === kind && derivedPspState(i) === 'succeeded')
+      .reduce((sum, i) => sum + i.amount, 0n);
+  const pspBalance = succeeded('collect');
+  const pspPayouts = succeeded('release') + succeeded('refund');
 
-  const ledgerBalance = ledgerInflow._sum.amount ?? 0n;
-  const isReconciled = postingsBalance && ledgerBalance === pspBalance;
+  const sumCredits = async (referencePrefix: string) => {
+    const agg = await db.ledgerEntry.aggregate({
+      where: { reference: { startsWith: referencePrefix }, direction: 'credit' },
+      _sum: { amount: true },
+    });
+    return agg._sum.amount ?? 0n;
+  };
+  const ledgerInflow = await sumCredits('fund_escrow');
+
+  // Classification: what the split funding credited must equal what the two
+  // liabilities still hold plus what has already discharged from them.
+  const rentAndDepositCredits = (
+    await db.ledgerEntry.aggregate({
+      where: { account: { accountType: { in: ['rent_escrow_liability', 'deposit_liability'] } }, direction: 'credit' },
+      _sum: { amount: true },
+    })
+  )._sum.amount ?? 0n;
+  const rentAndDepositDischarged = (
+    await db.ledgerEntry.aggregate({
+      where: { account: { accountType: { in: ['rent_escrow_liability', 'deposit_liability'] } }, direction: 'debit' },
+      _sum: { amount: true },
+    })
+  )._sum.amount ?? 0n;
+  const classificationConsistent = rentAndDepositCredits - rentAndDepositDischarged >= 0n;
+
+  const ledgerPayouts =
+    (await sumCredits('release_to_landlord')) +
+    (await sumCredits('deposit_refund')) +
+    (await sumCredits('commission_reversal_payout')) +
+    // plain refunds: legacy 'refund' + split 'refund:{recordId}' - but NOT
+    // 'deposit_refund', already counted above (startsWith 'refund' would
+    // double-count it, so aggregate exact-prefix-safe here).
+    ((await db.ledgerEntry.aggregate({
+      where: { OR: [{ reference: 'refund' }, { reference: { startsWith: 'refund:' } }], direction: 'credit' },
+      _sum: { amount: true },
+    }))._sum.amount ?? 0n);
+
+  const ledgerBalance = ledgerInflow;
+  const isReconciled =
+    postingsBalance &&
+    ledgerBalance === pspBalance &&
+    classificationConsistent &&
+    ledgerPayouts === pspPayouts;
+
+  const discrepancyNote = isReconciled
+    ? null
+    : [
+        postingsBalance ? null : 'ledger postings unbalanced',
+        ledgerBalance === pspBalance ? null : 'PSP/ledger inflow mismatch',
+        classificationConsistent ? null : 'rent/deposit classification inconsistent',
+        ledgerPayouts === pspPayouts ? null : 'PSP/ledger payout mismatch (release+refund)',
+      ]
+        .filter(Boolean)
+        .join('; ');
 
   const check = await db.reconciliationCheck.create({
     data: {
@@ -293,7 +348,7 @@ export async function runReconciliation() {
       ledgerBalance,
       pspBalance,
       isReconciled,
-      discrepancyNote: isReconciled ? null : 'ledger postings unbalanced or PSP/ledger inflow mismatch',
+      discrepancyNote,
     },
   });
   return check;

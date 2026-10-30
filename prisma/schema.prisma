@@ -532,6 +532,11 @@ model Listing {
   monthlyRent             BigInt                   @map("monthly_rent")
   requiredMonthsUpfront   Int                      @map("required_months_upfront")
   depositAmount           BigInt                   @map("deposit_amount")
+  /// Recorded mutual agreement between landlord and tenant for advance rent
+  /// ABOVE THREE MONTHS (approved policy 2026-10-30). Free-text reference or
+  /// evidence id; terms > 3 months are refused without it, and the reference
+  /// is snapshotted onto any deal signed against these terms.
+  advanceMutualAgreementRef String?                @map("advance_mutual_agreement_ref")
   tier                    ListingTier              @default(standard)
   publicationState        PublicationState         @default(draft) @map("publication_state")
   verificationState       ListingVerificationState @default(unverified) @map("verification_state")
@@ -740,6 +745,20 @@ model ScreeningModuleResult {
 /// escrow_funded are move_in_confirmed (forward) or refunded (money back).
 /// Funds are therefore unreleasable until move-in — the guarantee is the
 /// SHAPE OF THE GRAPH, needing no reserve fund.
+///
+/// 2026-10-30 financial-architecture extension (ALL ADDITIVE — no existing
+/// value changed meaning, no row migrates):
+///   payment_pending                  live collection in flight on the PSP
+///   move_in_awaiting_verification    the evidence-based move-in window
+///   move_in_disputed                 conflicting handover evidence
+///   settlement_pending               landlord payout instructed, unconfirmed
+///   refund_pending                   tenant refund instructed, unconfirmed
+///   partially_refunded               some rent refunded; the deal continues
+///   financial_review_required        a money-guard anomaly awaits ops
+///   reversed                         provider clawed a confirmed payment back
+/// commission_earned stays for deals signed before commission moved to
+/// confirmed-payment; it is no longer on the primary path (see
+/// docs/FINANCIAL_ARCHITECTURE.md §7).
 enum DealStatus {
   created
   tenant_matched
@@ -752,6 +771,14 @@ enum DealStatus {
   cancelled
   refunded
   dispute_hold
+  payment_pending
+  move_in_awaiting_verification
+  move_in_disputed
+  settlement_pending
+  refund_pending
+  partially_refunded
+  financial_review_required
+  reversed
 }
 
 model Deal {
@@ -765,9 +792,23 @@ model Deal {
   // SNAPSHOTTED at agreement_signed, immutable thereafter (FR-7.4). A later
   // change to the listing's rent or to commission_rate_version cannot alter
   // an in-flight deal — immunity is structural, not disciplinary.
-  monthlyRentSnapshot      BigInt? @map("monthly_rent_snapshot")
-  commissionRateBpSnapshot Int?    @map("commission_rate_bp_snapshot")
-  commissionRateVersionId  String? @map("commission_rate_version_id")
+  //
+  // 2026-10-30 extension: the ACCEPTED FINANCIAL TERMS are now snapshotted in
+  // full (advance months, total advance rent, deposit, commission payer, the
+  // >3-months mutual-agreement reference and the policy tokens in force at
+  // acceptance). Funding derives EVERY figure from these columns — a later
+  // listing edit can no longer re-price months or deposit either
+  // (docs/FINANCIAL_ARCHITECTURE.md G-1). Rows with these columns null are
+  // legacy deals and keep the pre-extension behaviour exactly.
+  monthlyRentSnapshot         BigInt? @map("monthly_rent_snapshot")
+  commissionRateBpSnapshot    Int?    @map("commission_rate_bp_snapshot")
+  commissionRateVersionId     String? @map("commission_rate_version_id")
+  advanceMonthsSnapshot       Int?    @map("advance_months_snapshot")
+  advanceRentSnapshot         BigInt? @map("advance_rent_snapshot")
+  depositAmountSnapshot       BigInt? @map("deposit_amount_snapshot")
+  commissionPayerSnapshot     String? @map("commission_payer_snapshot")
+  mutualAgreementRefSnapshot  String? @map("mutual_agreement_ref_snapshot")
+  policySnapshot              Json?   @map("policy_snapshot")
 
   // Derived, stored at earn time. commission_amount =
   // monthly_rent_snapshot * commission_rate_bp_snapshot / 10000, integer
@@ -791,6 +832,11 @@ model Deal {
   ledgerEntries   LedgerEntry[]
   pspInstructions PspInstruction[]
   screeningRuns   ScreeningRun[]
+  moveInVerification MoveInVerification?
+  depositCase        DepositCase?
+  refundRecords      RefundRecord[]
+  financialAdjustments FinancialAdjustment[]
+  postSettlementRefunds PostSettlementRefund[]
 
   @@map("deal")
 }
@@ -819,12 +865,25 @@ model DealTransition {
 
 /// Typed accounts (Technical Architecture §5.1). Product-agnostic: no
 /// "rent"/"commission" as columns — meaning comes from account_type.
+///
+/// 2026-10-30 additive classification (docs/FINANCIAL_ARCHITECTURE.md §3):
+///   rent_escrow_liability — the RENT side of client money held (the
+///     deposit is no longer lumped into one generic escrow balance)
+///   deposit_liability     — the deposit side, its own lifecycle
+///   psp_fee_expense       — provider processing fees borne by HFR
+///     (operating expense; never deducted from a tenant's deposit or
+///     silently added to a tenant's payment)
+/// escrow_liability remains the classification of every deal funded before
+/// the split — legacy deals are never rewritten.
 enum LedgerAccountType {
   escrow_liability
   commission_receivable
   commission_revenue
   landlord_payable
   psp_clearing
+  rent_escrow_liability
+  deposit_liability
+  psp_fee_expense
 }
 
 model LedgerAccount {
@@ -1294,3 +1353,237 @@ model LandlordKyc {
 // ============================================================================
 // Better Auth (Technical Architecture — auth provider evaluation)
 // ============================================================================
+
+// ============================================================================
+// Financial lifecycle models (additive, 2026-10-30) — the workflow records
+// behind the ledger. The ledger remains the single money truth; these tables
+// carry WHO decided WHAT, WHEN, WHY and with WHICH evidence, for the
+// multi-party lifecycles a posting alone cannot express.
+// docs/FINANCIAL_ARCHITECTURE.md §2–§6.
+// ============================================================================
+
+/// Move-in verification: evidence-based handover confirmation. Silence never
+/// auto-confirms and never blocks indefinitely — an authorized reviewer
+/// decides, and the decision (with its reason) is recorded here and audited.
+/// The response window is POLICY-PENDING: `response_deadline` stays NULL
+/// (and unenforced) until the business approves `movein_response_window_hours`.
+enum MoveInVerificationState {
+  open
+  tenant_confirmed
+  landlord_confirmed
+  disputed
+  under_review
+  verified
+  not_verified
+}
+
+model MoveInVerification {
+  id                  String                   @id @default(uuid())
+  dealId              String                   @unique @map("deal_id")
+  state               MoveInVerificationState  @default(open)
+
+  tenantConfirmedAt   DateTime? @map("tenant_confirmed_at")
+  tenantNote          String?   @map("tenant_note")
+  tenantEvidenceRef   String?   @map("tenant_evidence_ref")
+  landlordConfirmedAt DateTime? @map("landlord_confirmed_at")
+  landlordNote        String?   @map("landlord_note")
+  landlordEvidenceRef String?   @map("landlord_evidence_ref")
+
+  disputedByPartyId   String?   @map("disputed_by_party_id")
+  disputeReason       String?   @map("dispute_reason")
+  disputeEvidenceRef  String?   @map("dispute_evidence_ref")
+  disputeOpenedAt     DateTime? @map("dispute_opened_at")
+
+  /// Set only when the approved `movein_response_window_hours` config exists.
+  responseDeadline    DateTime? @map("response_deadline")
+
+  decidedByPartyId    String?   @map("decided_by_party_id")
+  decidedAt           DateTime? @map("decided_at")
+  decisionReason      String?   @map("decision_reason")
+
+  /// Officer evidence is welcome; settlement authority never follows it.
+  officerEvidenceRef  String?   @map("officer_evidence_ref")
+  officerEvidenceNote String?   @map("officer_evidence_note")
+  officerEvidenceAt   DateTime? @map("officer_evidence_at")
+  officerEvidenceBy   String?   @map("officer_evidence_by")
+
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+
+  deal Deal @relation(fields: [dealId], references: [id])
+
+  @@map("move_in_verification")
+}
+
+/// The security deposit's independent lifecycle (docs/FINANCIAL_ARCHITECTURE.md §5).
+/// One case per deal, opened in the funding transaction. The money itself is
+/// the `deposit_liability` ledger balance; this record is the workflow.
+enum DepositCaseState {
+  held
+  deduction_proposed
+  under_review
+  partially_released
+  closed
+}
+
+model DepositCase {
+  id        String          @id @default(uuid())
+  dealId    String          @unique @map("deal_id")
+  state     DepositCaseState @default(held)
+
+  /// The collect instruction whose success put the deposit in custody.
+  custodyBasisRef String?   @map("custody_basis_ref")
+  openedAt        DateTime  @default(now()) @map("opened_at")
+  closedAt        DateTime? @map("closed_at")
+  closedReason    String?   @map("closed_reason")
+
+  deductions DepositDeduction[]
+  deal       Deal               @relation(fields: [dealId], references: [id])
+
+  @@map("deposit_case")
+}
+
+/// One landlord-proposed deduction. Partial proposals are first-class.
+/// Normal wear and tear must not be charged to the tenant — that standard
+/// lives in the review guidance (action consequence copy), and every review
+/// decision records WHO approved it and WHY.
+enum DepositDeductionState {
+  proposed
+  under_review
+  accepted_by_tenant
+  disputed_by_tenant
+  approved
+  rejected
+  applied
+  withdrawn
+}
+
+model DepositDeduction {
+  id                 String                @id @default(uuid())
+  caseId             String                @map("case_id")
+  proposedByPartyId  String                @map("proposed_by_party_id")
+  amount             BigInt
+  reason             String
+  evidenceRef        String?               @map("evidence_ref")
+  state              DepositDeductionState @default(proposed)
+
+  tenantRespondedAt  DateTime? @map("tenant_responded_at")
+  tenantResponseNote String?   @map("tenant_response_note")
+  reviewedByPartyId  String?   @map("reviewed_by_party_id")
+  reviewedAt         DateTime? @map("reviewed_at")
+  reviewReason       String?   @map("review_reason")
+  appliedPostingId   String?   @map("applied_posting_id")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+
+  case DepositCase @relation(fields: [caseId], references: [id])
+
+  @@index([caseId])
+  @@map("deposit_deduction")
+}
+
+/// A refund request and its outcome — the record behind every refund posting.
+/// Kinds distinguish why money went back; amounts are server-bounded; the
+/// linked PSP instruction carries the idempotency key.
+enum RefundKind {
+  full_pre_settlement
+  partial_pre_settlement
+  duplicate_payment
+  deposit_refund
+  commission_reversal_payout
+}
+
+enum RefundState {
+  pending
+  confirmed
+  failed
+}
+
+model RefundRecord {
+  id                 String       @id @default(uuid())
+  dealId             String       @map("deal_id")
+  kind               RefundKind
+  amount             BigInt
+  state              RefundState  @default(pending)
+  reason             String
+  requestedByPartyId String       @map("requested_by_party_id")
+  instructionId      String?      @map("instruction_id")
+  confirmedAt        DateTime?    @map("confirmed_at")
+  failureReason      String?      @map("failure_reason")
+  createdAt          DateTime     @default(now()) @map("created_at")
+  updatedAt          DateTime     @updatedAt @map("updated_at")
+
+  deal Deal @relation(fields: [dealId], references: [id])
+
+  @@index([dealId])
+  @@map("refund_record")
+}
+
+/// The recorded decision behind a correction. Every adjustment names its
+/// category; commission reversals are legal ONLY for the approved categories
+/// (landlord failure to provide the property; provider payment reversal).
+enum FinancialAdjustmentKind {
+  commission_reversal
+  provider_reversal
+  correction
+  fee_correction
+}
+
+model FinancialAdjustment {
+  id              String                 @id @default(uuid())
+  dealId          String                 @map("deal_id")
+  kind            FinancialAdjustmentKind
+  /// The approved category token for reversals (policy gate); free-form for
+  /// corrections.
+  reasonCategory  String?                @map("reason_category")
+  reason          String
+  amount          BigInt
+  actorPartyId    String                 @map("actor_party_id")
+  actorRole       String?                @map("actor_role")
+  targetPostingId String?                @map("target_posting_id")
+  resultingPostingId String?             @map("resulting_posting_id")
+  evidenceRef     String?                @map("evidence_ref")
+  createdAt       DateTime               @default(now()) @map("created_at")
+
+  deal Deal @relation(fields: [dealId], references: [id])
+
+  @@index([dealId])
+  @@map("financial_adjustment")
+}
+
+/// Post-settlement unearned prepaid rent: the LANDLORD's contractual refund
+/// responsibility, coordinated by HFR. This is deliberately NOT a ledger
+/// account and NEVER an HFR liability — no artificial guarantee balance.
+/// HFR records, coordinates, and maintains the financial trail; resolution
+/// states name what ACTUALLY happened, not what is promised.
+enum PostSettlementRefundState {
+  recorded
+  landlord_acknowledged
+  coordinating
+  resolved_paid_by_landlord
+  resolved_waived_by_tenant
+  escalated
+}
+
+model PostSettlementRefund {
+  id                 String                    @id @default(uuid())
+  dealId             String                    @map("deal_id")
+  amountClaimed      BigInt                    @map("amount_claimed")
+  reason             String
+  requestedByPartyId String                    @map("requested_by_party_id")
+  state              PostSettlementRefundState @default(recorded)
+
+  landlordAcknowledgedAt DateTime? @map("landlord_acknowledged_at")
+  landlordNote           String?   @map("landlord_note")
+  evidenceRef            String?   @map("evidence_ref")
+  resolutionNote         String?   @map("resolution_note")
+  resolvedAt             DateTime? @map("resolved_at")
+  resolvedByPartyId      String?   @map("resolved_by_party_id")
+  createdAt              DateTime  @default(now()) @map("created_at")
+  updatedAt              DateTime  @updatedAt @map("updated_at")
+
+  deal Deal @relation(fields: [dealId], references: [id])
+
+  @@index([dealId])
+  @@map("post_settlement_refund")
+}

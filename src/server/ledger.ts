@@ -260,7 +260,10 @@ export async function settle(params: { dealId: string; amount: bigint }, tx?: Tx
 }
 
 /** Settlement part 2: the custodian moves it - debit landlord_payable, credit psp_clearing. */
-export async function releaseToLandlord(params: { dealId: string; amount: bigint }, tx?: Tx) {
+export async function releaseToLandlord(
+  params: { dealId: string; amount: bigint; instructionId?: string },
+  tx?: Tx,
+) {
   const landlordPayable = await accountFor('landlord_payable', params.dealId, tx);
   const pspClearing = await accountFor('psp_clearing', params.dealId, tx);
   return post(
@@ -330,6 +333,9 @@ export async function issuePspInstruction(params: {
   // same way the real provider's confirmation is: an event. The +1ms on the
   // settlement event keeps it strictly after the initial pending event even
   // within the same millisecond, so the derived state is unambiguous.
+  // The synthetic providerRef makes mock instructions addressable through
+  // the SAME webhook seam the real provider uses - signature-verified
+  // deliveries can be rehearsed against the sandbox without faking anything.
   const pendingAt = new Date();
   const instruction = await db.pspInstruction.create({
     data: {
@@ -338,6 +344,7 @@ export async function issuePspInstruction(params: {
       state: 'pending',
       amount: params.amount,
       idempotencyKey: params.idempotencyKey,
+      providerRef: randomUUID(),
     },
   });
   await db.pspInstructionEvent.createMany({
@@ -542,4 +549,256 @@ export async function transitionPspInstruction(params: {
     where: { id: instruction.id },
     include: { events: { orderBy: PSP_EVENT_ORDER, take: 1 } },
   });
+}
+
+// ── financial-architecture primitives (docs/FINANCIAL_ARCHITECTURE.md §3) ──
+//
+// New-shape deals split client money into RENT and DEPOSIT liabilities at
+// funding, recognise commission at confirmed payment, carry provider fees as
+// HFR operating expense, and reverse through exact reversing postings. The
+// legacy primitives above are untouched and keep serving pre-extension deals.
+
+/**
+ * Credit-side magnitude of ANY liability-class account for a deal, positive.
+ * The generalisation of outstandingEscrowLiability - which stays, unchanged,
+ * for legacy deals.
+ */
+export async function outstandingLiability(
+  dealId: string,
+  accountType: 'rent_escrow_liability' | 'deposit_liability',
+  tx?: Tx,
+): Promise<bigint> {
+  const client = tx ?? db;
+  const entries = await client.ledgerEntry.findMany({
+    where: { dealId, account: { accountType } },
+    select: { direction: true, amount: true },
+  });
+  return entries.reduce(
+    (acc, e) => (e.direction === 'credit' ? acc + e.amount : acc - e.amount),
+    0n,
+  );
+}
+
+/** Whether any NEW-shape posting exists for this deal (rent/deposit split). */
+export async function hasSplitCustody(dealId: string, tx?: Tx): Promise<boolean> {
+  const client = tx ?? db;
+  const count = await client.ledgerEntry.count({
+    where: { dealId, account: { accountType: { in: ['rent_escrow_liability', 'deposit_liability'] } } },
+  });
+  return count > 0;
+}
+
+/**
+ * Client money enters custody, SPLIT BY CLASS: rent side and deposit side
+ * are separate liabilities from the moment of collection (the deposit is
+ * never part of the generic escrow balance). One balanced posting:
+ *   debit psp_clearing (rent + deposit)
+ *   credit rent_escrow_liability (rent)
+ *   credit deposit_liability (deposit)
+ * NO revenue. `instructionRef` travels in the posting reference so every
+ * entry traces to the originating PSP instruction.
+ */
+export async function fundEscrowSplit(params: {
+  dealId: string;
+  rentAmount: bigint;
+  depositAmount: bigint;
+  instructionId?: string;
+}, tx?: Tx) {
+  if (params.rentAmount <= 0n) throw new InvalidAmountError(params.rentAmount);
+  if (params.depositAmount < 0n) throw new InvalidAmountError(params.depositAmount);
+  const pspClearing = await accountFor('psp_clearing', params.dealId, tx);
+  const rentLiability = await accountFor('rent_escrow_liability', params.dealId, tx);
+  const depositLiability = await accountFor('deposit_liability', params.dealId, tx);
+  const total = params.rentAmount + params.depositAmount;
+  const legs: PostingLeg[] = [
+    { accountId: pspClearing.id, direction: 'debit', amount: total },
+    { accountId: rentLiability.id, direction: 'credit', amount: params.rentAmount },
+  ];
+  if (params.depositAmount > 0n) {
+    legs.push({ accountId: depositLiability.id, direction: 'credit', amount: params.depositAmount });
+  }
+  return post(
+    {
+      legs,
+      reference: params.instructionId ? `fund_escrow:${params.instructionId}` : 'fund_escrow',
+      dealId: params.dealId,
+    },
+    tx,
+  );
+}
+
+/** Deposit release TO THE TENANT: debit deposit_liability, credit psp_clearing. */
+export async function releaseDepositToTenant(params: { dealId: string; amount: bigint; instructionId?: string }, tx?: Tx) {
+  const depositLiability = await accountFor('deposit_liability', params.dealId, tx);
+  const pspClearing = await accountFor('psp_clearing', params.dealId, tx);
+  return post(
+    {
+      legs: [
+        { accountId: depositLiability.id, direction: 'debit', amount: params.amount },
+        { accountId: pspClearing.id, direction: 'credit', amount: params.amount },
+      ],
+      reference: params.instructionId ? `deposit_refund:${params.instructionId}` : 'deposit_refund',
+      dealId: params.dealId,
+    },
+    tx,
+  );
+}
+
+/**
+ * Approved deposit deduction, leg 1: debit deposit_liability, credit
+ * landlord_payable (the custodian still has to move it - leg 2 is
+ * releaseToLandlord, unchanged).
+ */
+export async function payDeductionToLandlord(params: { dealId: string; amount: bigint }, tx?: Tx) {
+  const depositLiability = await accountFor('deposit_liability', params.dealId, tx);
+  const landlordPayable = await accountFor('landlord_payable', params.dealId, tx);
+  return post(
+    {
+      legs: [
+        { accountId: depositLiability.id, direction: 'debit', amount: params.amount },
+        { accountId: landlordPayable.id, direction: 'credit', amount: params.amount },
+      ],
+      reference: 'deposit_deduction',
+      dealId: params.dealId,
+    },
+    tx,
+  );
+}
+
+/**
+ * Provider processing fee, borne by HFR: debit psp_fee_expense, credit
+ * psp_clearing. This is an OPERATING EXPENSE record - it never touches the
+ * tenant's deposit and never silently changes a tenant's payment. Post ONLY
+ * from verified provider data; the amount is never fabricated here.
+ */
+export async function recordProviderFee(params: { dealId: string; amount: bigint; sourceRef: string }, tx?: Tx) {
+  if (params.amount <= 0n) throw new InvalidAmountError(params.amount);
+  const pspFeeExpense = await accountFor('psp_fee_expense', params.dealId, tx);
+  const pspClearing = await accountFor('psp_clearing', params.dealId, tx);
+  return post(
+    {
+      legs: [
+        { accountId: pspFeeExpense.id, direction: 'debit', amount: params.amount },
+        { accountId: pspClearing.id, direction: 'credit', amount: params.amount },
+      ],
+      reference: `psp_fee:${params.sourceRef}`,
+      dealId: params.dealId,
+    },
+    tx,
+  );
+}
+
+/** Credit total of commission_revenue recognised for a deal (positive). */
+export async function commissionRecognised(dealId: string, tx?: Tx): Promise<bigint> {
+  const client = tx ?? db;
+  const entries = await client.ledgerEntry.findMany({
+    where: { dealId, account: { accountType: 'commission_revenue' } },
+    select: { direction: true, amount: true },
+  });
+  return entries.reduce(
+    (acc, e) => (e.direction === 'credit' ? acc + e.amount : acc - e.amount),
+    0n,
+  );
+}
+
+/**
+ * Commission REVERSAL (an approved retention decision, never automatic):
+ * debit commission_revenue, credit rent_escrow_liability. The caller pairs
+ * this with the tenant payout of the restored liability (see refunds.ts) so
+ * the rent side discharges back to zero - the pair is atomic in one tx.
+ */
+export async function reverseCommissionPosting(params: { dealId: string; amount: bigint }, tx?: Tx) {
+  const commissionRevenue = await accountFor('commission_revenue', params.dealId, tx);
+  const rentLiability = await accountFor('rent_escrow_liability', params.dealId, tx);
+  return post(
+    {
+      legs: [
+        { accountId: commissionRevenue.id, direction: 'debit', amount: params.amount },
+        { accountId: rentLiability.id, direction: 'credit', amount: params.amount },
+      ],
+      reference: 'commission_reversal',
+      dealId: params.dealId,
+    },
+    tx,
+  );
+}
+
+/** Tenant payout of a restored (reversed-commission) rent liability. */
+export async function refundRentLiability(params: { dealId: string; amount: bigint; instructionId?: string }, tx?: Tx) {
+  const rentLiability = await accountFor('rent_escrow_liability', params.dealId, tx);
+  const pspClearing = await accountFor('psp_clearing', params.dealId, tx);
+  return post(
+    {
+      legs: [
+        { accountId: rentLiability.id, direction: 'debit', amount: params.amount },
+        { accountId: pspClearing.id, direction: 'credit', amount: params.amount },
+      ],
+      reference: params.instructionId ? `commission_reversal_payout:${params.instructionId}` : 'commission_reversal_payout',
+      dealId: params.dealId,
+    },
+    tx,
+  );
+}
+
+/**
+ * Settlement leg 1 for SPLIT-custody deals: debit rent_escrow_liability,
+ * credit landlord_payable - the RENT side only. The deposit is never part of
+ * a landlord settlement; it discharges through the deposit lifecycle.
+ */
+export async function settleRent(params: { dealId: string; amount: bigint; instructionId?: string }, tx?: Tx) {
+  const rentLiability = await accountFor('rent_escrow_liability', params.dealId, tx);
+  const landlordPayable = await accountFor('landlord_payable', params.dealId, tx);
+  return post(
+    {
+      legs: [
+        { accountId: rentLiability.id, direction: 'debit', amount: params.amount },
+        { accountId: landlordPayable.id, direction: 'credit', amount: params.amount },
+      ],
+      reference: 'settle',
+      dealId: params.dealId,
+    },
+    tx,
+  );
+}
+
+/**
+ * Rent refund for SPLIT-custody deals: debit rent_escrow_liability, credit
+ * psp_clearing. Full and partial refunds share this primitive - the amount
+ * is whatever the refund record authorized, always ≤ the outstanding balance.
+ */
+export async function refundRent(params: { dealId: string; amount: bigint; instructionId?: string }, tx?: Tx) {
+  const rentLiability = await accountFor('rent_escrow_liability', params.dealId, tx);
+  const pspClearing = await accountFor('psp_clearing', params.dealId, tx);
+  return post(
+    {
+      legs: [
+        { accountId: rentLiability.id, direction: 'debit', amount: params.amount },
+        { accountId: pspClearing.id, direction: 'credit', amount: params.amount },
+      ],
+      reference: 'refund',
+      dealId: params.dealId,
+    },
+    tx,
+  );
+}
+
+/**
+ * Commission recognition against the RENT liability (split-custody deals):
+ * debit rent_escrow_liability, credit commission_revenue. The deposit is
+ * never part of the commission base - the rent liability is what shrinks.
+ */
+export async function recogniseCommissionFromRent(params: { dealId: string; amount: bigint }, tx?: Tx) {
+  const rentLiability = await accountFor('rent_escrow_liability', params.dealId, tx);
+  const commissionRevenue = await accountFor('commission_revenue', params.dealId, tx);
+  return post(
+    {
+      legs: [
+        { accountId: rentLiability.id, direction: 'debit', amount: params.amount },
+        { accountId: commissionRevenue.id, direction: 'credit', amount: params.amount },
+      ],
+      reference: 'recognise_commission',
+      dealId: params.dealId,
+    },
+    tx,
+  );
 }
