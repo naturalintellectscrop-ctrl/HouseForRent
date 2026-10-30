@@ -1,5 +1,13 @@
 import { db } from '@/lib/db';
-import { DegradedPanel, SectionCard, loadPlatformData, fmtUGX } from '../data';
+import { DegradedPanel, PlatPageHead, SectionCard, loadPlatformData, fmtUGX } from '../data';
+
+/** Publication states carry their own word and their own tone. */
+const PUB_PILL: Record<string, string> = {
+  live: 'plat-pill plat-pill-ok',
+  draft: 'plat-pill plat-pill-idle',
+  rented: 'plat-pill',
+  withdrawn: 'plat-pill plat-pill-idle',
+};
 
 /**
  * The supply side of the platform: what homes exist, in what publication
@@ -36,50 +44,46 @@ export default async function PlatformListingsPage() {
 
   return (
     <div className="stack-lg">
-      <header className="plat-page-head">
-        <div className="stack-sm">
-          <h1 className="h1">Listings</h1>
-          <p className="muted">
-            Every home on the platform and where it sits in the pipeline - from
-            draft to live to rented.
-          </p>
-        </div>
-      </header>
+      <PlatPageHead
+        eyebrow="Supply"
+        title="Listings"
+        lede="Every home on the platform and where it sits in the pipeline - from draft to live to rented."
+      />
 
       <div className="plat-grid-2">
-        <SectionCard title="By publication state">
+        <SectionCard title="By publication state" eyebrow="Pipeline">
           <ul className="plat-kv">
             {publicationStates.map((s) => (
               <li key={s.publicationState}>
                 <span>{s.publicationState.replace(/_/g, ' ')}</span>
-                <strong>{s._count._all}</strong>
+                <strong>{s._count._all.toLocaleString('en-UG')}</strong>
               </li>
             ))}
           </ul>
         </SectionCard>
 
-        <SectionCard title="By verification state">
+        <SectionCard title="By verification state" eyebrow="Field work">
           <ul className="plat-kv">
             {verificationStates.map((s) => (
               <li key={s.verificationState}>
                 <span>{s.verificationState.replace(/_/g, ' ')}</span>
-                <strong>{s._count._all}</strong>
+                <strong>{s._count._all.toLocaleString('en-UG')}</strong>
               </li>
             ))}
           </ul>
         </SectionCard>
       </div>
 
-      <SectionCard title="Most recent listings">
+      <SectionCard title="Most recent listings" count={recent.length}>
         <div className="plat-table-wrap">
           <table className="plat-table">
             <thead>
               <tr>
                 <th scope="col">Home</th>
                 <th scope="col">Area</th>
-                <th scope="col">Monthly rent</th>
+                <th scope="col" className="is-num">Monthly rent</th>
                 <th scope="col">State</th>
-                <th scope="col">Created</th>
+                <th scope="col" className="is-num">Created</th>
               </tr>
             </thead>
             <tbody>
@@ -93,13 +97,21 @@ export default async function PlatformListingsPage() {
               {recent.map((l) => (
                 <tr key={l.id}>
                   <td>
-                    {l.property.propertyType} · {l.property.bedrooms} bed ·{' '}
-                    {l.property.landmarkText}
+                    <span className="plat-table-main">
+                      <span className="plat-name">
+                        {l.property.bedrooms} bed {l.property.propertyType}
+                      </span>
+                      <span className="plat-sub">{l.property.landmarkText}</span>
+                    </span>
                   </td>
                   <td>{l.property.neighbourhood.name}</td>
-                  <td>{fmtUGX(l.monthlyRent)}</td>
-                  <td>{l.publicationState.replace(/_/g, ' ')}</td>
-                  <td>{l.createdAt.toISOString().slice(0, 10)}</td>
+                  <td className="is-num">{fmtUGX(l.monthlyRent)}</td>
+                  <td>
+                    <span className={PUB_PILL[l.publicationState] ?? 'plat-pill'}>
+                      {l.publicationState.replace(/_/g, ' ')}
+                    </span>
+                  </td>
+                  <td className="is-num plat-table-muted">{l.createdAt.toISOString().slice(0, 10)}</td>
                 </tr>
               ))}
             </tbody>

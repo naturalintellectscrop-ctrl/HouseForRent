@@ -3,7 +3,7 @@ import {
   ApplicationQueueRow,
   pendingApplicationQueue,
 } from '@/server/ops';
-import { DegradedPanel, humanize, loadPlatformData } from '../data';
+import { DegradedPanel, PlatPageHead, SectionCard, humanize, loadPlatformData } from '../data';
 
 export const metadata = {
   title: 'Account applications',
@@ -46,17 +46,11 @@ export default async function PlatformApprovalsPage() {
 
   return (
     <div className="stack-lg">
-      <header className="plat-page-head">
-        <div className="stack-sm">
-          <h1 className="h1">Account applications</h1>
-          <p className="muted">
-            Accounts waiting on activation. Approval means an identity check
-            that passes - the one server path that flips an account active.
-            It verifies the PERSON; it does not verify any property, approve
-            any listing, or grant staff privileges.
-          </p>
-        </div>
-      </header>
+      <PlatPageHead
+        eyebrow="Account workqueue"
+        title="Account applications"
+        lede="Accounts waiting on activation. Approval means an identity check that passes - the one server path that flips an account active. It verifies the PERSON; it does not verify any property, approve any listing, or grant staff privileges."
+      />
 
       {rows.length === 0 ? (
         <div className="plat-empty">
@@ -75,11 +69,7 @@ export default async function PlatformApprovalsPage() {
           ]
             .filter((section) => section.group.length > 0)
             .map((section) => (
-              <section key={section.title} className="card plat-section">
-                <div className="plat-section-head">
-                  <h2 className="h2">{section.title}</h2>
-                  <span className="plat-count">{section.group.length}</span>
-                </div>
+              <SectionCard key={section.title} title={section.title} count={section.group.length}>
                 <div className="plat-table-wrap">
                   <table className="plat-table">
                     <thead>
@@ -88,7 +78,7 @@ export default async function PlatformApprovalsPage() {
                         <th scope="col">Phone</th>
                         <th scope="col">Tier</th>
                         <th scope="col">Identity</th>
-                        <th scope="col">Waiting</th>
+                        <th scope="col" className="is-num">Waiting</th>
                         <th scope="col">
                           <span className="sr-only">Actions</span>
                         </th>
@@ -98,14 +88,14 @@ export default async function PlatformApprovalsPage() {
                       {section.group.map((row) => (
                         <tr key={row.partyId}>
                           <td>
-                            <span className="plat-name">{row.displayName}</span>
-                            {row.lastLoginAt ? (
-                              <span className="plat-sub">signed in before</span>
-                            ) : (
-                              <span className="plat-sub">never signed in</span>
-                            )}
+                            <span className="plat-table-main">
+                              <span className="plat-name">{row.displayName}</span>
+                              <span className="plat-sub">
+                                {row.lastLoginAt ? 'signed in before' : 'never signed in'}
+                              </span>
+                            </span>
                           </td>
-                          <td>{row.primaryPhone}</td>
+                          <td className="plat-table-muted">{row.primaryPhone}</td>
                           <td>{row.listerTier ? humanize(row.listerTier) : '—'}</td>
                           <td>
                             {row.identityState === null ? (
@@ -119,7 +109,7 @@ export default async function PlatformApprovalsPage() {
                               </span>
                             )}
                           </td>
-                          <td title={row.waitingSince.toISOString()}>{waitingFor(row)}</td>
+                          <td className="is-num" title={row.waitingSince.toISOString()}>{waitingFor(row)}</td>
                           <td>
                             <Link className="plat-action" href={`/platform/approvals/${row.partyId}`}>
                               Review →
@@ -130,7 +120,7 @@ export default async function PlatformApprovalsPage() {
                     </tbody>
                   </table>
                 </div>
-              </section>
+              </SectionCard>
             ))}
 
           <p className="muted plat-feed-note">

@@ -58,7 +58,7 @@ export function AppShell({
   children: React.ReactNode;
 }) {
   return (
-    <div className="shell">
+    <div className={variant === 'forest' ? 'shell shell--forest' : 'shell'}>
       <div className="shell-main">
         <header className="shell-topbar">
           <div className="shell-topbar-inner">

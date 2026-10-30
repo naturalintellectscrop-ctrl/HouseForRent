@@ -90,7 +90,7 @@ const DECLARATION_LABEL: Record<string, string> = {
 function Evidence({ id, label }: { id: string | null; label: string }) {
   if (!id) {
     return (
-      <div className="plat-evidence">
+      <div className="plat-evidence is-missing">
         <div className="plat-evidence-media" aria-hidden="true" />
         <div className="plat-evidence-label">{label} · not submitted</div>
       </div>

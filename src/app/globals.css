@@ -3330,28 +3330,40 @@ a.card-link:hover .card-title {
 /* ── Data surfaces ── */
 .plat-stats {
   display: grid;
-  gap: 1rem;
-  grid-template-columns: repeat(2, 1fr);
-}
-@media (min-width: 48rem) {
-  .plat-stats { grid-template-columns: repeat(4, 1fr); }
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(11.5rem, 1fr));
 }
 .plat-grid-2 {
   display: grid;
-  gap: 1.25rem;
+  gap: 1rem;
   grid-template-columns: 1fr;
 }
 @media (min-width: 56rem) {
-  .plat-grid-2 { grid-template-columns: 1fr 1fr; }
+  .plat-grid-2 { grid-template-columns: 1fr 1fr; gap: 1.25rem; }
+}
+/* The overview's asymmetric console grid: the work queues get room, the
+   standing rail stays subordinate. One column on tablets and under. */
+.plat-console-grid {
+  display: grid;
+  gap: 1.25rem;
+  grid-template-columns: 1fr;
+  align-items: start;
+}
+@media (min-width: 64rem) {
+  .plat-console-grid { grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); }
 }
 .plat-section-head {
   display: flex;
-  align-items: baseline;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 1rem;
-  margin-bottom: 0.75rem;
+  margin-bottom: 0.9rem;
+  padding-bottom: 0.65rem;
+  border-bottom: 1px solid var(--line);
 }
-.plat-section-head .h2 { font-size: 1.0625rem; }
+.plat-section-title { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; }
+.plat-section-title .h2 { font-size: 1rem; letter-spacing: -0.01em; }
+.plat-section-side { display: inline-flex; align-items: center; gap: 0.6rem; flex: none; }
 .plat-section-link {
   display: inline-flex;
   align-items: center;
@@ -3369,6 +3381,15 @@ a.card-link:hover .card-title {
   color: var(--accent);
   transform: translate(1px, -1px);
 }
+/* The eyebrow label: the console's editorial voice — one letter-spaced
+   line that names the surface before the title names the page. */
+.plat-eyebrow {
+  font-size: 0.6875rem;
+  font-weight: 720;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
 
 .plat-kv { display: flex; flex-direction: column; }
 .plat-kv li {
@@ -3376,28 +3397,56 @@ a.card-link:hover .card-title {
   align-items: baseline;
   justify-content: space-between;
   gap: 1rem;
-  padding: 0.65rem 0;
+  padding: 0.55rem 0;
   border-bottom: 1px solid var(--line);
-  font-size: 0.9375rem;
+  font-size: 0.875rem;
 }
 .plat-kv li > span { color: var(--ink-soft); min-width: 0; }
-.plat-kv li > strong { font-weight: 620; text-align: right; }
+.plat-kv li > strong {
+  font-weight: 640;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
 .plat-kv li:last-child { border-bottom: 0; }
 
+/* The activity feed reads as a timeline: one hairline rail, an event dot
+   per row, the freshest event in the working green. */
 .plat-feed { display: flex; flex-direction: column; }
 .plat-feed li {
+  position: relative;
   display: flex;
   align-items: baseline;
   gap: 0.85rem;
   flex-wrap: wrap;
   font-size: 0.9375rem;
-  padding: 0.45rem 0;
+  padding: 0.55rem 0 0.55rem 1.3rem;
 }
-.plat-feed li + li { border-top: 1px solid var(--line); }
+.plat-feed li::before {
+  content: '';
+  position: absolute;
+  left: 0.1rem;
+  top: 1.02rem;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--line-strong);
+}
+.plat-feed li::after {
+  content: '';
+  position: absolute;
+  left: 0.43rem;
+  top: 1.75rem;
+  bottom: -0.3rem;
+  width: 1px;
+  background: var(--line);
+}
+.plat-feed li:last-child::after { display: none; }
+.plat-feed li:first-child::before { background: var(--accent); }
+.plat-feed li.is-failure::before { background: var(--danger); }
 .plat-feed-when {
   font-variant-numeric: tabular-nums;
   color: var(--ink-faint);
-  font-size: 0.8125rem;
+  font-size: 0.75rem;
   flex: none;
   min-width: 10.5rem;
 }
@@ -3412,12 +3461,14 @@ a.card-link:hover .card-title {
   -webkit-overflow-scrolling: touch;
   scrollbar-width: thin;
   border: 1px solid var(--line);
-  border-radius: var(--radius);
+  border-radius: var(--radius-lg);
   background: var(--surface);
+  box-shadow: var(--shadow-sm);
 }
 .plat-table {
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   font-size: 0.875rem;
   min-width: 40rem;
 }
@@ -3425,22 +3476,32 @@ a.card-link:hover .card-title {
   text-align: left;
   font-size: 0.6875rem;
   text-transform: uppercase;
-  letter-spacing: 0.09em;
+  letter-spacing: 0.1em;
   color: var(--ink-soft);
   background: var(--bg-soft);
-  padding: 0.6rem 0.85rem;
+  padding: 0.62rem 0.9rem;
   border-bottom: 1px solid var(--line);
   white-space: nowrap;
 }
 .plat-table td {
-  padding: 0.7rem 0.85rem;
+  padding: 0.78rem 0.9rem;
   border-bottom: 1px solid var(--line);
   vertical-align: top;
 }
 .plat-table tbody tr:last-child td { border-bottom: 0; }
+.plat-table tbody tr { transition: background-color 120ms ease; }
 @media (hover: hover) {
   .plat-table tbody tr:hover { background: color-mix(in srgb, var(--accent) 4%, transparent); }
 }
+/* Numeric columns read as a column of figures, not prose. */
+.plat-table .is-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+/* The row's identity cell: name over context, the way a case list reads. */
+.plat-table-main { display: flex; flex-direction: column; gap: 0.12rem; min-width: 0; }
+.plat-table-muted { color: var(--ink-faint); }
 .plat-code {
   font-size: 0.8125rem;
   background: color-mix(in srgb, var(--ink) 5%, transparent);
@@ -3450,12 +3511,12 @@ a.card-link:hover .card-title {
 /* The designed degraded state reads as a calm warning, not an error. */
 .plat-degraded { padding: 1.5rem; border-left: 3px solid var(--warn); }
 
-/* ── Control-center operational layer (light register) ──────────────
-   The overview's attention band, semantic pills, decision surfaces and
-   queue rows. The center renders inside the shared app shell - white
-   cards on the sage canvas - so everything here is that same light
-   register: semantic inks from the shared tokens, and colour never
-   carrying meaning without its word. */
+/* ── Control-center operational layer (operator console) ─────────────
+   Round 64: the platform center carries its own composed identity inside
+   the shared shell. One operator band answers "how is the platform";
+   one priority panel answers "what needs me"; the queues and the standing
+   rail follow in an asymmetric grid. Colour still never carries meaning
+   without its word. */
 
 .plat-page-head {
   display: flex;
@@ -3464,12 +3525,31 @@ a.card-link:hover .card-title {
   gap: 1rem;
   flex-wrap: wrap;
 }
-/* Console page titles: one step calmer than the public h1 - a working
-   surface reads denser than a marketing one, and every control-center
-   page shares this head. */
+/* Console page titles: editorial display scale, tightly tracked. Every
+   control-center page shares this head. */
 .plat-page-head .h1,
 .plat-review-head .h1 {
-  font-size: clamp(1.45rem, 1.2rem + 0.9vw, 1.85rem);
+  font-size: clamp(1.55rem, 1.25rem + 1vw, 2.05rem);
+  letter-spacing: -0.025em;
+  font-weight: 740;
+}
+.plat-head-lede { max-width: 41rem; }
+.plat-head-context {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.plat-date-chip {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0.28rem 0.7rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 .plat-page-actions {
   display: flex;
@@ -3497,63 +3577,165 @@ a.card-link:hover .card-title {
 }
 .plat-btn-ghost:hover { border-color: var(--ink-soft); background: color-mix(in srgb, var(--ink) 4%, transparent); }
 
-/* Attention band: the workload first - every tile is a routed queue.
-   White cards with a semantic left rail; the pending rail is the warn
-   amber, a cleared queue steps down to the ok green. */
-.plat-attention {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(13.5rem, 1fr));
-  gap: 0.75rem;
+/* ── The operator band: the platform's headline figures in ONE composed
+   forest surface — the console's answer to "how are things", read left
+   to right, heaviest figure first. Replaces the row of identical stat
+   cards; every figure is still a live query. */
+.opband {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(135deg, #0e3121 0%, #0a2a1c 58%, #09301f 100%);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: var(--radius-xl);
+  padding: 1.25rem 1.5rem 1.15rem;
+  color: #ffffff;
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+  box-shadow: 0 16px 36px -20px rgba(8, 32, 20, 0.6);
 }
-.plat-attention-item {
+/* One quiet depth cue — the brand green breathing in the corner. */
+.opband::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(52rem 18rem at 108% -30%, rgba(34, 197, 94, 0.14), transparent 62%);
+}
+.opband-eyebrow {
+  font-size: 0.6875rem;
+  font-weight: 720;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.52);
+}
+.opband-main { min-width: 0; position: relative; }
+.opband-grid {
   display: grid;
-  grid-template-columns: auto 1fr;
-  grid-template-areas: 'value label' 'value detail';
-  column-gap: 0.9rem;
-  align-items: center;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-left: 3px solid var(--warn);
-  border-radius: var(--radius);
-  padding: 0.9rem 1.05rem;
+  grid-template-columns: repeat(4, auto);
+  margin-top: 0.95rem;
+  align-items: end;
+}
+.opband-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.18rem;
+  padding-right: 2.2rem;
+}
+.opband-item + .opband-item { padding-left: 2.2rem; border-left: 1px solid rgba(255, 255, 255, 0.12); }
+.opband-item:last-child { padding-right: 0; }
+.opband-value {
+  font-size: 2.15rem;
+  font-weight: 760;
+  letter-spacing: -0.035em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.opband-item--hero .opband-value { color: #fcd34d; }
+.opband-label { font-size: 0.8125rem; font-weight: 620; color: rgba(255, 255, 255, 0.88); }
+.opband-sub { font-size: 0.72rem; color: rgba(255, 255, 255, 0.52); }
+.opband-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  position: relative;
+}
+.opband-note { font-size: 0.72rem; color: rgba(255, 255, 255, 0.45); text-align: right; max-width: 15rem; }
+.opband-link {
+  color: #ffffff;
+  font-size: 0.8125rem;
+  font-weight: 640;
   text-decoration: none;
-  box-shadow: var(--shadow-card);
-  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 999px;
+  padding: 0.45rem 0.9rem;
+  transition: background-color 140ms ease, border-color 140ms ease;
+  white-space: nowrap;
 }
-.plat-attention-item:hover {
-  border-color: var(--line-strong);
-  box-shadow: var(--shadow-lg);
-  transform: translateY(-1px);
+.opband-link:hover { background: rgba(255, 255, 255, 0.1); border-color: rgba(255, 255, 255, 0.45); }
+.opband-link svg { transition: transform 140ms ease; }
+.opband-link:hover svg { transform: translate(1px, -1px); }
+
+/* ── The priority panel: pending work as a case list, not a card grid.
+   One hairline-separated panel; each row routes to where the work
+   happens; a cleared queue states itself. */
+.prio { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.prio li + li { border-top: 1px solid var(--line); }
+.prio-row {
+  display: grid;
+  grid-template-columns: 3.6rem 1fr auto 1.25rem;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 0.85rem 0.4rem;
+  text-decoration: none;
+  color: inherit;
+  border-radius: var(--radius);
+  transition: background-color 140ms ease;
 }
-.plat-attention-item.is-clear { border-left-color: var(--ok); }
-.plat-attention-value {
-  grid-area: value;
-  font-size: 1.9rem;
+.prio-row:hover { background: color-mix(in srgb, var(--accent) 4%, transparent); }
+.prio-num {
+  font-size: 1.75rem;
   font-weight: 750;
   letter-spacing: -0.03em;
   font-variant-numeric: tabular-nums;
-  color: var(--ink);
   line-height: 1;
-}
-.plat-attention-label {
-  grid-area: label;
-  font-size: 0.875rem;
-  font-weight: 640;
   color: var(--ink);
 }
-.plat-attention-detail {
-  grid-area: detail;
-  font-size: 0.75rem;
+.prio-row.is-clear .prio-num { color: var(--ink-faint); }
+.prio-body { min-width: 0; }
+.prio-label { display: block; font-weight: 650; font-size: 0.9375rem; color: var(--ink); }
+.prio-detail { display: block; font-size: 0.78rem; color: var(--ink-faint); margin-top: 0.12rem; }
+.prio-state { justify-self: end; }
+.prio-go {
   color: var(--ink-faint);
-  margin-top: 0.1rem;
+  opacity: 0;
+  transform: translateX(-3px);
+  transition: opacity 140ms ease, transform 140ms ease, color 140ms ease;
 }
+.prio-row:hover .prio-go,
+.prio-row:focus-visible .prio-go { opacity: 1; transform: none; color: var(--accent); }
+@media (hover: none) {
+  .prio-go { opacity: 1; transform: none; }
+}
+
+/* ── The proportion meter: an honest share bar for the inventory mix —
+   real numerator over real denominator, legend carrying the words. */
+.meter { display: flex; flex-direction: column; gap: 0.5rem; }
+.meter-track {
+  height: 0.65rem;
+  border-radius: 999px;
+  background: var(--bg-sunk);
+  border: 1px solid var(--line);
+  overflow: hidden;
+}
+.meter-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--brand-action), var(--brand-green));
+  transition: width 400ms ease;
+}
+.meter-legend {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  font-size: 0.75rem;
+  color: var(--ink-soft);
+}
+.meter-value { font-weight: 720; color: var(--ink); font-variant-numeric: tabular-nums; }
 
 /* Semantic pills - the console's quiet status vocabulary, on the shared
    light tokens (same tones as .badge, in the console's compact shape). */
 .plat-pill {
   display: inline-block;
   font-size: 0.6875rem;
-  font-weight: 650;
+  font-weight: 660;
   line-height: 1;
   padding: 0.3rem 0.6rem;
   border-radius: 999px;
@@ -3561,6 +3743,7 @@ a.card-link:hover .card-title {
   color: var(--ink-soft);
   background: var(--bg-sunk);
   white-space: nowrap;
+  letter-spacing: 0.01em;
 }
 .plat-pill-ok {
   color: var(--ok);
@@ -3579,14 +3762,14 @@ a.card-link:hover .card-title {
 }
 .plat-pill-idle { color: var(--ink-faint); background: var(--bg-sunk); }
 
-/* Queue rows inside section cards. */
+/* Queue rows inside section cards: the work list under each queue title. */
 .plat-queue { list-style: none; margin: 0; padding: 0; }
 .plat-queue li {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.85rem;
-  padding: 0.7rem 0;
+  padding: 0.72rem 0;
   border-bottom: 1px solid var(--line);
 }
 .plat-queue li:last-child { border-bottom: 0; }
@@ -3609,10 +3792,15 @@ a.card-link:hover .card-title {
   border: 1px solid var(--line);
   border-radius: 999px;
   padding: 0.15rem 0.6rem;
+  font-variant-numeric: tabular-nums;
 }
-.plat-crumb { font-size: 0.8125rem; margin: 0; }
-.plat-crumb a { color: var(--ink-soft); }
-.plat-crumb a:hover { color: var(--ink); }
+.plat-crumb {
+  font-size: 0.8125rem;
+  margin: 0;
+  color: var(--ink-faint);
+}
+.plat-crumb a { color: var(--ink-soft); text-decoration: none; }
+.plat-crumb a:hover { color: var(--accent); text-decoration: underline; }
 .plat-review-head {
   display: flex;
   align-items: flex-start;
@@ -3626,7 +3814,7 @@ a.card-link:hover .card-title {
   background: var(--bg-soft);
   border: 1px dashed var(--line-strong);
   border-radius: var(--radius-lg);
-  padding: 2rem 1.5rem;
+  padding: 2.25rem 1.75rem;
 }
 .plat-empty .h2 { color: var(--ink); font-size: 1.05rem; }
 .plat-empty .muted { color: var(--ink-soft); }
@@ -3637,19 +3825,29 @@ a.card-link:hover .card-title {
   .plat-decide-grid { grid-template-columns: 1fr 1fr; align-items: start; }
 }
 
-/* Operational status list - the honesty block, as calm soft rows. */
-.plat-status-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.55rem; }
+/* Operational status list - the honesty block, as one calm panel of
+   hairline rows instead of stacked boxes. */
+.plat-status-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
 .plat-status-list li {
   display: flex;
   align-items: flex-start;
   gap: 0.7rem;
   font-size: 0.875rem;
   color: var(--ink);
-  background: var(--bg-soft);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  padding: 0.6rem 0.8rem;
+  padding: 0.72rem 0.95rem;
 }
+.plat-status-list li + li { border-top: 1px solid var(--line); }
 .plat-status-list .plat-pill { margin-top: 0.05rem; flex: none; }
 
 /* Decision cards sit slightly raised with an action rail: this is where
@@ -3694,14 +3892,19 @@ a.card-link:hover .card-title {
   color: #92400e;
 }
 
-/* Phones: the control center stays one column, the head wraps cleanly. */
+/* Phones: the control center stays one column, the head wraps cleanly.
+   The operator band folds to two columns of figures, then one. */
 @media (max-width: 51.99rem) {
   .plat-who-id { text-align: left; }
-  .plat-attention { grid-template-columns: 1fr 1fr; }
   .plat-page-head { flex-direction: column; align-items: stretch; }
+  .opband { flex-direction: column; }
+  .opband-side { align-items: flex-start; }
+  .opband-note { text-align: left; }
+  .opband-grid { grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 0.85rem; }
+  .opband-item { padding: 0 !important; border-left: 0 !important; }
 }
-@media (max-width: 29.99rem) {
-  .plat-attention { grid-template-columns: 1fr; }
+@media (max-width: 26.99rem) {
+  .opband-grid { grid-template-columns: 1fr; }
 }
 
 /* ── field-officer media capture (FR-5.5) ────────────────────────────── */
@@ -4251,29 +4454,33 @@ a.card-link:hover .card-title {
   color: #ffffff;
 }
 
-/* Platform data tiles inherit the card language (they previously rolled
-   their own radius/vars). */
+/* Platform data tiles: the compact member of the stat language — used by
+   the KYC queue, transactions and system pages (never on the overview,
+   which carries its figures in the operator band instead). */
 .plat-stat {
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: var(--radius-xl);
-  padding: 1.2rem 1.3rem;
-  box-shadow: var(--shadow-card);
+  border-radius: var(--radius-lg);
+  padding: 1.05rem 1.15rem;
+  box-shadow: var(--shadow-sm);
   display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
+  flex-direction: column-reverse;
+  gap: 0.3rem;
   position: relative;
 }
 .plat-stat-value {
-  font-size: 1.9rem;
+  font-size: 1.7rem;
   font-weight: 750;
   letter-spacing: -0.03em;
   font-variant-numeric: tabular-nums;
+  line-height: 1.1;
 }
 .plat-stat-label {
-  color: var(--ink-soft);
-  font-size: 0.875rem;
-  font-weight: 580;
+  color: var(--ink-faint);
+  font-size: 0.71875rem;
+  font-weight: 680;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 .plat-stat a {
   text-decoration: none;
@@ -4367,7 +4574,7 @@ a.card-link:hover .card-title {
 }
 .plat-evidence-grid {
   display: grid;
-  gap: 1rem;
+  gap: 0.85rem;
   grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
 }
 .plat-evidence {
@@ -4378,11 +4585,24 @@ a.card-link:hover .card-title {
   display: flex;
   flex-direction: column;
   box-shadow: var(--shadow-sm);
+  transition: box-shadow 160ms ease, border-color 160ms ease;
 }
+.plat-evidence:hover { border-color: var(--line-strong); box-shadow: var(--shadow-card); }
 .plat-evidence .plat-evidence-media {
   aspect-ratio: 4 / 3;
   background: var(--bg-sunk);
   overflow: hidden;
+}
+/* The documented "not submitted" tile: hatched, not blank, so a missing
+   document reads as an absence, not a rendering failure. */
+.plat-evidence.is-missing .plat-evidence-media {
+  background: repeating-linear-gradient(
+    45deg,
+    var(--bg-soft),
+    var(--bg-soft) 7px,
+    var(--bg-sunk) 7px,
+    var(--bg-sunk) 14px
+  );
 }
 .plat-evidence .plat-evidence-media img {
   width: 100%;
@@ -4399,4 +4619,142 @@ a.card-link:hover .card-title {
   padding: 0.5rem 0.65rem;
   border-top: 1px solid var(--line);
   background: var(--bg-soft);
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+ * ── The forest console frame (platform center only) ──
+ * The platform center is the owner's register: one deep-forest chrome —
+ * sidebar AND topbar in the same dark frame — wrapped around the light
+ * work area. Every rule here is scoped under `.shell--forest` (applied by
+ * the shared AppShell when variant="forest"), so the portal and the ops
+ * console keep their white-shell register untouched: same geometry, one
+ * palette, a different presence.
+ * ════════════════════════════════════════════════════════════════════ */
+
+.shell--forest .shell-side {
+  background: linear-gradient(178deg, #0e3121 0%, #0a2a1c 62%, #081f14 100%);
+  border-right-color: rgba(255, 255, 255, 0.07);
+}
+.shell--forest .shell-side-brand {
+  color: #ffffff;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+.shell--forest .shell-side-brand .brand {
+  color: #ffffff;
+  font-weight: 700;
+}
+.shell--forest .shell-side-brand .brand-sub { color: rgba(255, 255, 255, 0.55); }
+.shell--forest .shell-side-brand .brand-mark {
+  background: #ffffff;
+  border-radius: 7px;
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.14);
+}
+.shell--forest .shell-nav-label { color: rgba(255, 255, 255, 0.42); }
+/* Group separation: a hairline above the second group reads as a new
+   register inside the console (platform vs staffing). */
+.shell--forest .shell-nav-group + .shell-nav-group {
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 0.95rem;
+}
+.shell--forest .shell-nav a {
+  position: relative;
+  color: rgba(236, 244, 239, 0.78);
+  border-radius: 10px;
+  padding: 0.55rem 0.7rem;
+}
+.shell--forest .shell-nav a svg { color: rgba(236, 244, 239, 0.52); }
+.shell--forest .shell-nav a:hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: #ffffff;
+}
+.shell--forest .shell-nav a:hover svg { color: rgba(255, 255, 255, 0.85); }
+/* The active route: a green-tinted glass panel with a bright notch at the
+   sidebar's edge — quieter than a solid pill, impossible to miss. */
+.shell--forest .shell-nav a[aria-current='page'] {
+  background: linear-gradient(90deg, rgba(34, 197, 94, 0.22), rgba(34, 197, 94, 0.08));
+  box-shadow: inset 0 0 0 1px rgba(74, 222, 128, 0.3);
+  color: #ffffff;
+  font-weight: 660;
+}
+.shell--forest .shell-nav a[aria-current='page'] svg { color: #86efac; }
+.shell--forest .shell-nav a[aria-current='page']::before {
+  content: '';
+  position: absolute;
+  left: -0.85rem;
+  top: 22%;
+  bottom: 22%;
+  width: 3px;
+  border-radius: 0 2px 2px 0;
+  background: #22c55e;
+}
+.shell--forest .shell-nav-count {
+  background: rgba(34, 197, 94, 0.2);
+  color: #b9f4cd;
+  box-shadow: inset 0 0 0 1px rgba(74, 222, 128, 0.28);
+}
+.shell--forest .shell-nav a[aria-current='page'] .shell-nav-count {
+  background: #22c55e;
+  color: #062413;
+  box-shadow: none;
+}
+.shell--forest .shell-side-foot { border-top-color: rgba(255, 255, 255, 0.08); }
+.shell--forest .shell-side-foot .who-name { color: #ffffff; }
+.shell--forest .shell-side-foot .who-role { color: rgba(255, 255, 255, 0.45); }
+.shell--forest .shell-side-foot .avatar {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.2);
+}
+.shell--forest .shell-side-foot .btn-ghost {
+  color: rgba(255, 255, 255, 0.78);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+.shell--forest .shell-side-foot .btn-ghost:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.32);
+}
+/* The topbar joins the frame: one dark console chrome around a light
+   work area. */
+.shell--forest .shell-topbar {
+  background: linear-gradient(90deg, #0e3121, #0b2c1d);
+  border-bottom-color: rgba(255, 255, 255, 0.07);
+}
+.shell--forest .shell-topbar-title { color: rgba(255, 255, 255, 0.88); }
+.shell--forest .shell-burger { color: rgba(255, 255, 255, 0.82); }
+.shell--forest .shell-burger:hover { background: rgba(255, 255, 255, 0.1); color: #ffffff; }
+.shell--forest .shell-topbar-actions .plat-btn-ghost {
+  border-color: rgba(255, 255, 255, 0.24);
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.04);
+}
+.shell--forest .shell-topbar-actions .plat-btn-ghost:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.42);
+}
+.shell--forest .shell-foot { border-top-color: rgba(255, 255, 255, 0.07); }
+
+/* ── Console motion: one entrance, staggered by section, CSS-only ──
+   Server-rendered pages get the rhythm without shipping any JavaScript;
+   reduced-motion preferences skip it entirely. */
+@media (prefers-reduced-motion: no-preference) {
+  .shell--forest .shell-content > .stack-lg > * {
+    animation: plat-enter 360ms cubic-bezier(0.2, 0.7, 0.3, 1) both;
+  }
+  .shell--forest .shell-content > .stack-lg > *:nth-child(2) { animation-delay: 45ms; }
+  .shell--forest .shell-content > .stack-lg > *:nth-child(3) { animation-delay: 90ms; }
+  .shell--forest .shell-content > .stack-lg > *:nth-child(4) { animation-delay: 135ms; }
+  .shell--forest .shell-content > .stack-lg > *:nth-child(5) { animation-delay: 180ms; }
+  .shell--forest .shell-content > .stack-lg > *:nth-child(6) { animation-delay: 225ms; }
+  .shell--forest .shell-content > .stack-lg > *:nth-child(n + 7) { animation-delay: 260ms; }
+}
+@keyframes plat-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }

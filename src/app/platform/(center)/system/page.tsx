@@ -1,5 +1,5 @@
 import { db } from '@/lib/db';
-import { DegradedPanel, SectionCard, loadPlatformData } from '../data';
+import { DegradedPanel, PlatPageHead, SectionCard, loadPlatformData } from '../data';
 
 /**
  * System status: is the database reachable, how many sessions are alive,
@@ -40,15 +40,11 @@ export default async function PlatformSystemPage() {
 
   return (
     <div className="stack-lg">
-      <header className="plat-page-head">
-        <div className="stack-sm">
-          <h1 className="h1">System</h1>
-          <p className="muted">
-            Platform plumbing and configuration - the things that are either
-            true or false, never opinions.
-          </p>
-        </div>
-      </header>
+      <PlatPageHead
+        eyebrow="Platform health"
+        title="System"
+        lede="Platform plumbing and configuration - the things that are either true or false, never opinions."
+      />
 
       <div className="plat-stats">
         <div className="plat-stat">
@@ -66,7 +62,7 @@ export default async function PlatformSystemPage() {
       </div>
 
       <div className="plat-grid-2">
-        <SectionCard title="Current commission rate">
+        <SectionCard title="Current commission rate" eyebrow="Money">
           {latestRate ? (
             <p className="prose">
               <strong>{latestRate.rateBpOfMonth.toLocaleString('en-UG')} bp</strong> of one
@@ -83,7 +79,7 @@ export default async function PlatformSystemPage() {
           </p>
         </SectionCard>
 
-        <SectionCard title="Listing freshness">
+        <SectionCard title="Listing freshness" eyebrow="Availability">
           {freshestListing?.availabilityConfirmedAt ? (
             <p className="prose">
               Freshest availability confirmation:{' '}
@@ -99,14 +95,19 @@ export default async function PlatformSystemPage() {
         </SectionCard>
       </div>
 
-      <SectionCard title="Platform configuration (latest versions)" href="/ops/config">
+      <SectionCard
+        title="Platform configuration (latest versions)"
+        eyebrow="Immutable by version"
+        href="/ops/config"
+        count={latestConfig.length}
+      >
         <div className="plat-table-wrap">
           <table className="plat-table">
             <thead>
               <tr>
                 <th scope="col">Parameter</th>
                 <th scope="col">Value</th>
-                <th scope="col">Effective from</th>
+                <th scope="col" className="is-num">Effective from</th>
               </tr>
             </thead>
             <tbody>
@@ -119,11 +120,13 @@ export default async function PlatformSystemPage() {
               ) : null}
               {latestConfig.map((v) => (
                 <tr key={v.id}>
-                  <td>{v.parameter.key}</td>
+                  <td>
+                    <code className="plat-code">{v.parameter.key}</code>
+                  </td>
                   <td>
                     <code className="plat-code">{JSON.stringify(v.value).slice(0, 80)}</code>
                   </td>
-                  <td>{v.effectiveFrom.toISOString().slice(0, 10)}</td>
+                  <td className="is-num plat-table-muted">{v.effectiveFrom.toISOString().slice(0, 10)}</td>
                 </tr>
               ))}
             </tbody>

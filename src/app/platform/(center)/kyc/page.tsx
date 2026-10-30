@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { loadPlatformData } from '../data';
+import { PlatPageHead, SectionCard, loadPlatformData } from '../data';
 import { onDayShort } from '@/app/ui';
 
 export const metadata = {
@@ -98,33 +98,26 @@ export default async function KycQueuePage() {
 
   return (
     <div className="stack-lg">
-      <header className="plat-page-head">
-        <div className="stack-sm">
-          <h1 className="h1">Landlord verification</h1>
-          <p className="muted">
-            Applications from landlords: identity documents, declared
-            relationship with the property, and payout details. Three reviews
-            per application, decided independently — approving one never
-            approves the others, and nothing here verifies a property or
-            publishes a listing.
-          </p>
-        </div>
-      </header>
+      <PlatPageHead
+        eyebrow="Verification"
+        title="Landlord verification"
+        lede="Applications from landlords: identity documents, declared relationship with the property, and payout details. Three reviews per application, decided independently — approving one never approves the others, and nothing here verifies a property or publishes a listing."
+      />
 
       <div className="plat-stats">
         <div className="plat-stat">
+          <span className="plat-stat-value">{open.length.toLocaleString('en-UG')}</span>
           <span className="plat-stat-label">Open applications</span>
-          <span className="plat-stat-value">{open.length}</span>
         </div>
         <div className="plat-stat">
+          <span className="plat-stat-value">{data.total.toLocaleString('en-UG')}</span>
           <span className="plat-stat-label">All applications</span>
-          <span className="plat-stat-value">{data.total}</span>
         </div>
         <div className="plat-stat">
-          <span className="plat-stat-label">Non-standard documents</span>
           <span className="plat-stat-value">
-            {data.rows.filter((r) => r.idDocumentType === 'other_document').length}
+            {data.rows.filter((r) => r.idDocumentType === 'other_document').length.toLocaleString('en-UG')}
           </span>
+          <span className="plat-stat-label">Non-standard documents</span>
         </div>
       </div>
 
@@ -138,49 +131,53 @@ export default async function KycQueuePage() {
           </p>
         </div>
       ) : (
-        <div className="plat-table-wrap">
-          <table className="plat-table">
-            <thead>
-              <tr>
-                <th>Applicant</th>
-                <th>Submitted</th>
-                <th>Identity</th>
-                <th>Authority</th>
-                <th>Payout</th>
-                <th>Flags</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.rows.map((r) => (
-                <tr key={r.id}>
-                  <td>
-                    <Link href={`/platform/kyc/${r.id}`}>
-                      <strong>{r.applicant.displayName}</strong>
-                    </Link>
-                    <div className="muted" style={{ fontSize: '0.8125rem' }}>
-                      {r.applicant.primaryPhone} · as {r.relationship.replace(/_/g, ' ')}
-                    </div>
-                  </td>
-                  <td className="muted">{onDayShort(r.submittedAt)}</td>
-                  <td><Pill state={r.identityState} /></td>
-                  <td><Pill state={r.authorityState} /></td>
-                  <td><Pill state={r.payoutState} /></td>
-                  <td>
-                    {r.flags.length === 0 ? (
-                      <span className="muted" style={{ fontSize: '0.8125rem' }}>—</span>
-                    ) : (
-                      <ul className="plat-flag-list">
-                        {r.flags.map((f) => (
-                          <li key={f}>{f}</li>
-                        ))}
-                      </ul>
-                    )}
-                  </td>
+        <SectionCard title="Applications" eyebrow="Case files" count={data.total}>
+          <div className="plat-table-wrap">
+            <table className="plat-table">
+              <thead>
+                <tr>
+                  <th>Applicant</th>
+                  <th className="is-num">Submitted</th>
+                  <th>Identity</th>
+                  <th>Authority</th>
+                  <th>Payout</th>
+                  <th>Flags</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {data.rows.map((r) => (
+                  <tr key={r.id}>
+                    <td>
+                      <span className="plat-table-main">
+                        <Link href={`/platform/kyc/${r.id}`} className="plat-name plat-action">
+                          {r.applicant.displayName}
+                        </Link>
+                        <span className="plat-sub">
+                          {r.applicant.primaryPhone} · as {r.relationship.replace(/_/g, ' ')}
+                        </span>
+                      </span>
+                    </td>
+                    <td className="is-num plat-table-muted">{onDayShort(r.submittedAt)}</td>
+                    <td><Pill state={r.identityState} /></td>
+                    <td><Pill state={r.authorityState} /></td>
+                    <td><Pill state={r.payoutState} /></td>
+                    <td>
+                      {r.flags.length === 0 ? (
+                        <span className="muted" style={{ fontSize: '0.8125rem' }}>—</span>
+                      ) : (
+                        <ul className="plat-flag-list">
+                          {r.flags.map((f) => (
+                            <li key={f}>{f}</li>
+                          ))}
+                        </ul>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </SectionCard>
       )}
     </div>
   );

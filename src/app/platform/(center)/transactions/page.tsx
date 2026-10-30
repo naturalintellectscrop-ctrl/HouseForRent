@@ -1,5 +1,5 @@
 import { db } from '@/lib/db';
-import { DegradedPanel, SectionCard, loadPlatformData, fmtUGX, humanize } from '../data';
+import { DegradedPanel, PlatPageHead, SectionCard, loadPlatformData, fmtUGX, humanize } from '../data';
 
 /**
  * Money movement at platform level. The ledger is the single financial
@@ -34,15 +34,11 @@ export default async function PlatformTransactionsPage() {
 
   return (
     <div className="stack-lg">
-      <header className="plat-page-head">
-        <div className="stack-sm">
-          <h1 className="h1">Transactions</h1>
-          <p className="muted">
-            Escrow, commission and settlement across the whole platform - the
-            immutable ledger and the payment-provider boundary.
-          </p>
-        </div>
-      </header>
+      <PlatPageHead
+        eyebrow="Money"
+        title="Transactions"
+        lede="Escrow, commission and settlement across the whole platform - the immutable ledger and the payment-provider boundary."
+      />
 
       <div className="plat-stats">
         <div className="plat-stat">
@@ -62,19 +58,19 @@ export default async function PlatformTransactionsPage() {
       </div>
 
       <div className="plat-grid-2">
-        <SectionCard title="Instructions by kind">
+        <SectionCard title="Instructions by kind" eyebrow="PSP boundary">
           <ul className="plat-kv">
             {instructionKinds.length === 0 ? <li className="muted">None yet.</li> : null}
             {instructionKinds.map((k) => (
               <li key={k.kind}>
                 <span>{humanize(k.kind)}</span>
-                <strong>{k._count._all}</strong>
+                <strong>{k._count._all.toLocaleString('en-UG')}</strong>
               </li>
             ))}
           </ul>
         </SectionCard>
 
-        <SectionCard title="What this surface does not show (yet)">
+        <SectionCard title="What this surface does not show (yet)" eyebrow="Honest limits">
           <p className="muted">
             Instruction lifecycle states are derived from append-only event
             rows, and reconciliations run against the PSP balance. Those views
@@ -84,16 +80,16 @@ export default async function PlatformTransactionsPage() {
         </SectionCard>
       </div>
 
-      <SectionCard title="Most recent PSP instructions">
+      <SectionCard title="Most recent PSP instructions" count={recentInstructions.length}>
         <div className="plat-table-wrap">
           <table className="plat-table">
             <thead>
               <tr>
                 <th scope="col">Issued</th>
                 <th scope="col">Kind</th>
-                <th scope="col">Amount</th>
+                <th scope="col" className="is-num">Amount</th>
                 <th scope="col">Deal status</th>
-                <th scope="col">Lifecycle events</th>
+                <th scope="col" className="is-num">Lifecycle events</th>
               </tr>
             </thead>
             <tbody>
@@ -106,11 +102,13 @@ export default async function PlatformTransactionsPage() {
               ) : null}
               {recentInstructions.map((i) => (
                 <tr key={i.id}>
-                  <td>{i.createdAt.toISOString().replace('T', ' ').slice(0, 16)} UTC</td>
+                  <td className="plat-table-muted">{i.createdAt.toISOString().replace('T', ' ').slice(0, 16)} UTC</td>
                   <td>{humanize(i.kind)}</td>
-                  <td>{fmtUGX(i.amount)}</td>
-                  <td>{humanize(i.deal.status)}</td>
-                  <td>{i._count.events}</td>
+                  <td className="is-num">{fmtUGX(i.amount)}</td>
+                  <td>
+                    <span className="plat-pill">{humanize(i.deal.status)}</span>
+                  </td>
+                  <td className="is-num">{i._count.events}</td>
                 </tr>
               ))}
             </tbody>

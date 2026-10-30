@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { db } from '@/lib/db';
-import { DegradedPanel, SectionCard, loadPlatformData, humanize } from '../data';
+import { DegradedPanel, PlatPageHead, SectionCard, loadPlatformData, humanize } from '../data';
 
 /**
  * Every account on the platform, most recent first, with its party status
@@ -31,77 +31,78 @@ export default async function PlatformUsersPage() {
 
   return (
     <div className="stack-lg">
-      <header className="plat-page-head">
-        <div className="stack-sm">
-          <h1 className="h1">Users</h1>
-          <p className="muted">
-            Accounts across the whole platform - tenants, landlords, field
-            officers and platform staff - most recent first.
-          </p>
-        </div>
-      </header>
+      <PlatPageHead
+        eyebrow="Directory"
+        title="Users"
+        lede="Accounts across the whole platform - tenants, landlords, field officers and platform staff - most recent first."
+      />
 
       <div className="plat-grid-2">
-        <SectionCard title="By platform role">
+        <SectionCard title="By platform role" eyebrow="Who exists">
           <ul className="plat-kv">
             {roleCounts.map((r) => (
               <li key={r.authRole}>
                 <span>{humanize(r.authRole)}</span>
-                <strong>{r._count._all}</strong>
+                <strong>{r._count._all.toLocaleString('en-UG')}</strong>
               </li>
             ))}
           </ul>
         </SectionCard>
 
-        <SectionCard title="By account status">
+        <SectionCard title="By account status" eyebrow="Standing">
           <ul className="plat-kv">
             {statusCounts.map((s) => (
               <li key={s.status}>
                 <span>{humanize(s.status)}</span>
-                <strong>{s._count._all}</strong>
+                <strong>{s._count._all.toLocaleString('en-UG')}</strong>
               </li>
             ))}
           </ul>
         </SectionCard>
       </div>
 
-      <SectionCard title="Most recent accounts" href="/ops/users">
+      <SectionCard title="Most recent accounts" href="/ops/users" count={accounts.length}>
         <div className="plat-table-wrap">
           <table className="plat-table">
             <thead>
               <tr>
                 <th scope="col">Name</th>
-                <th scope="col">Phone</th>
                 <th scope="col">Email</th>
                 <th scope="col">Role</th>
                 <th scope="col">Status</th>
-                <th scope="col">Last sign-in</th>
+                <th scope="col" className="is-num">Last sign-in</th>
               </tr>
             </thead>
             <tbody>
               {accounts.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="muted">
+                  <td colSpan={5} className="muted">
                     No accounts yet.
                   </td>
                 </tr>
               ) : null}
               {accounts.map((a) => (
                 <tr key={a.id}>
-                  <td>{a.party.displayName}</td>
-                  <td>{a.party.primaryPhone}</td>
-                  <td>{a.party.email ?? '—'}</td>
+                  <td>
+                    <span className="plat-table-main">
+                      <span className="plat-name">{a.party.displayName}</span>
+                      <span className="plat-sub">{a.party.primaryPhone}</span>
+                    </span>
+                  </td>
+                  <td className="plat-table-muted">{a.party.email ?? '—'}</td>
                   <td>{humanize(a.authRole)}</td>
                   <td>
                     {a.party.status === 'pending_verification' ? (
                       <Link href={`/platform/approvals/${a.partyId}`} className="plat-action">
                         {humanize(a.party.status)} →
                       </Link>
+                    ) : a.party.status === 'active' ? (
+                      <span className="plat-pill plat-pill-ok">active</span>
                     ) : (
-                      humanize(a.party.status)
+                      <span className="plat-pill">{humanize(a.party.status)}</span>
                     )}
                   </td>
-                  <td>
+                  <td className="is-num plat-table-muted">
                     {a.lastLoginAt
                       ? a.lastLoginAt.toISOString().replace('T', ' ').slice(0, 16) + ' UTC'
                       : 'never'}
