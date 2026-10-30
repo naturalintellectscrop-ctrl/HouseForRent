@@ -1,0 +1,44 @@
+{
+  "listingId": "2fc17b30-32e7-4090-ace8-0281ed40c519",
+  "listing": {
+    "area": "Naalya (Wakiso)",
+    "landmarkText": "Off Naalya road, 300m from the shopping centre, opposite the green compound",
+    "propertyType": "apartment",
+    "bedrooms": 2,
+    "bathrooms": 1,
+    "furnished": "semi_furnished",
+    "monthlyRentUgx": 900000
+  },
+  "instruction": "owner asked the operator to supply replacement photographs from online sources matching the listing information (original bytes lost in the round-56 media loss)",
+  "files": [
+    {
+      "file": "1-exterior.jpg",
+      "slot": "cover / apartment block exterior",
+      "sourceSite": "Uganda Broadcasting Corporation (via image search)",
+      "sourceUrl": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/4c09980753d9.jpeg",
+      "originalDescription": "mid-rise residential apartment block with fenced compound, Kampala"
+    },
+    {
+      "file": "2-living.jpg",
+      "slot": "living / dining room",
+      "sourceSite": "Airbnb Uganda listing (via image search)",
+      "sourceUrl": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/92edbabc612b.jpeg",
+      "originalDescription": "open-plan living and dining area, part-furnished, East African apartment"
+    },
+    {
+      "file": "3-bedroom.jpg",
+      "slot": "bedroom",
+      "sourceSite": "Expedia property listing (via image search)",
+      "sourceUrl": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/7a6d852a4e04.jpg",
+      "originalDescription": "double bedroom with wardrobe and en-suite, East African home"
+    },
+    {
+      "file": "4-kitchen.jpg",
+      "slot": "kitchen",
+      "sourceSite": "Mixta Africa property listing (via image search)",
+      "sourceUrl": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/2c05a4f3fed6.jpg",
+      "originalDescription": "compact tiled kitchen with counter seating, African residential development"
+    }
+  ],
+  "note": "representative photography sourced from public property listings; not photographs of the specific unit — recorded here and in the repair audit event so the provenance is never lost"
+}
