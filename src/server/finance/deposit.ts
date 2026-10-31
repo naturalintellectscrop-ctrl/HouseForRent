@@ -402,6 +402,13 @@ export async function refundDeposit(params: { dealId: string; actorPartyId: stri
   await db.refundRecord.update({ where: { id: record.id }, data: { instructionId: instruction.id } });
 
   const pspState = ledger.derivedPspState(instruction);
+  if (pspState === 'failed') {
+    await db.refundRecord.update({
+      where: { id: record.id },
+      data: { state: 'failed', failureReason: 'the payout instruction failed at issue time - nothing moved' },
+    });
+    throw new ApiError(502, 'PSP_INSTRUCTION_FAILED', 'the provider refused the deposit-release instruction; nothing moved - retry it from the finance console');
+  }
   if (pspState === 'pending') {
     await db.auditEvent.create({
       data: {

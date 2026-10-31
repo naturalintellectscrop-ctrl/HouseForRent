@@ -64,6 +64,7 @@ export default async function OpsLayout({
       { href: '/ops/areas', label: 'Areas', icon: 'eye' },
       { href: '/ops/users', label: 'Users', icon: 'users' },
       { href: '/ops/config', label: 'Config', icon: 'gear' },
+      { href: '/ops/finance', label: 'Finance', icon: 'chart' },
       { href: '/ops/audit', label: 'Audit', icon: 'pulse' },
       { href: '/ops/reconciliation', label: 'Reconciliation', icon: 'coins' },
     ],

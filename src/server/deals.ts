@@ -27,6 +27,7 @@ import {
   type DealStatus,
 } from './domain';
 import * as ledger from './ledger';
+import { ApiError } from './http';
 import { nylonPayLive, nylonPayMode } from './nylonpay';
 import { depositCustodyConfirmed, policySnapshotValue } from './finance/policy';
 
@@ -679,8 +680,13 @@ export async function settle(params: { dealId: string; actorPartyId: string; rea
 
   // LIVE PSP: the payout is not dispatched yet - the deal parks
   // settlement_pending rather than pretending the landlord was paid. The
-  // verified webhook completes it.
+  // verified webhook completes it. A FAILED instruction books nothing - the
+  // provider refused the payout; the deal reverts through the webhook and a
+  // retry issues a fresh instruction.
   const pspState = ledger.derivedPspState(instruction);
+  if (pspState === 'failed') {
+    throw new ApiError(502, 'PSP_INSTRUCTION_FAILED', 'the provider refused the payout instruction; nothing moved - retry the action');
+  }
   if (pspState === 'pending') {
     return transactional(async (tx) => {
       const deal = await requireDeal(params.dealId, tx);
@@ -810,8 +816,12 @@ export async function refund(params: { dealId: string; actorPartyId: string; rea
 
   // LIVE PSP: same honesty as settlement - the deal parks refund_pending
   // until the provider confirms the payout, and only then does the ledger
-  // release the rent liability back to the tenant.
+  // release the rent liability back to the tenant. A FAILED instruction
+  // books nothing and throws.
   const pspState = ledger.derivedPspState(instruction);
+  if (pspState === 'failed') {
+    throw new ApiError(502, 'PSP_INSTRUCTION_FAILED', 'the provider refused the refund instruction; nothing moved and nothing is booked - retry the action');
+  }
   if (pspState === 'pending') {
     return transactional(async (tx) => {
       const deal = await requireDeal(params.dealId, tx);
@@ -1565,6 +1575,16 @@ export async function applyPspWebhookOutcome(payload: {
         });
         return { matched: true as const, action: 'settlement_reverted' as const };
       }
+      // A failed payout must fail its refund RECORD wherever one is linked -
+      // a duplicate-payment refund does not park the deal in refund_pending,
+      // and its record still has to fail honestly. Marked BEFORE the deal
+      // reverts so both paths (parked and non-parked deals) get it.
+      if (instruction.kind === 'refund') {
+        await db.refundRecord.updateMany({
+          where: { instructionId: instruction.id, state: 'pending' },
+          data: { state: 'failed', failureReason: providerBits || 'provider reported failure' },
+        });
+      }
       if (instruction.kind === 'refund' && deal.status === 'refund_pending') {
         await transactional(async (tx) => {
           await revertToPrePendingStatus(
@@ -1573,12 +1593,6 @@ export async function applyPspWebhookOutcome(payload: {
             tx,
           );
         });
-        if (instruction.id) {
-          await db.refundRecord.updateMany({
-            where: { instructionId: instruction.id, state: 'pending' },
-            data: { state: 'failed', failureReason: providerBits || 'provider reported failure' },
-          });
-        }
         return { matched: true as const, action: 'refund_reverted' as const };
       }
       return { matched: true as const, action: 'instruction_not_taken' as const };
@@ -1686,28 +1700,25 @@ export async function applyPspWebhookOutcome(payload: {
           }
           return { matched: true as const, action: 'already_applied' as const };
         }
-        // kind === 'refund' - dispatch by the refund record's KIND.
+        // kind === 'refund' - dispatch by the refund record's KIND through
+        // the ONE shared dispatcher (the same one the retry path uses), so
+        // the webhook and an admin retry can never disagree about what a
+        // completed refund means. duplicate_payment records book NOTHING -
+        // the duplicate was never a booked liability.
         const record = instruction.id
           ? await db.refundRecord.findFirst({ where: { instructionId: instruction.id } })
           : null;
-        if (record?.kind === 'deposit_refund') {
-          const { applyDepositRefundCompletion } = await import('./finance/deposit');
-          await applyDepositRefundCompletion({ recordId: record.id, actorRole: 'psp_webhook' });
-          return { matched: true as const, action: 'deposit_refunded' as const };
-        }
-        if (record?.kind === 'commission_reversal_payout') {
-          const { applyCommissionReversalPayout } = await import('./finance/refunds');
-          await applyCommissionReversalPayout({ recordId: record.id, actorRole: 'psp_webhook' });
-          return { matched: true as const, action: 'commission_reversal_paid' as const };
+        if (record) {
+          const { completeRefundRecordByKind } = await import('./finance/refunds');
+          await completeRefundRecordByKind({ recordId: record.id, actorRole: 'psp_webhook' });
+          return { matched: true as const, action: `${record.kind}_completed` as const };
         }
         if (deal.status !== 'refunded') {
           await applyRefundCompletion({
             dealId: deal.id,
             actorRole: 'psp_webhook',
             reason: 'Nylon Pay webhook confirmed the refund.',
-            refundRecordId: record?.id,
             instructionId: instruction.id,
-            amountOverride: record ? record.amount : undefined,
           });
           return { matched: true as const, action: 'refunded' as const };
         }
