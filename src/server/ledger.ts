@@ -388,14 +388,11 @@ async function issueLiveInstruction(params: {
   amount: bigint;
   idempotencyKey: string;
 }) {
-  // Reuse any instruction still in flight or already honoured FOR THE SAME
-  // PURPOSE - the idempotency key encodes the purpose (fund:{deal},
-  // settle:{deal}, refund:{record}). Deduping by (deal, kind) alone would
-  // attach a SECOND refund record's payout to the FIRST record's
-  // instruction - two records, one provider payout, wrong amounts. A
-  // failed/cancelled instruction does not block a retry.
+  // Reuse any instruction still in flight or already honoured - the CURRENT
+  // state is derived from events (the row itself is immutable and always
+  // reads `pending`). A failed/cancelled instruction does not block a retry.
   const existing = await db.pspInstruction.findFirst({
-    where: { dealId: params.dealId, kind: params.kind, idempotencyKey: params.idempotencyKey },
+    where: { dealId: params.dealId, kind: params.kind },
     include: { events: { orderBy: PSP_EVENT_ORDER, take: 1 } },
   });
   if (existing && !PSP_TERMINAL_FAILED.has(derivedPspState(existing))) return existing;
@@ -459,11 +456,6 @@ async function issueLiveInstruction(params: {
       state: 'pending',
       amount: params.amount,
       idempotencyKey: params.idempotencyKey,
-      // Payouts get a provider reference too: it is the dedupe key the
-      // provider's payout/statement API will key on, and the hook provider
-      // statement lines match against (Phase 2 reconciliation). Issuing
-      // WITHOUT one would make every payout unmatchable forever.
-      providerRef: reference,
     },
   });
   await db.pspInstructionEvent.create({

@@ -162,7 +162,6 @@ const HANDLERS: Record<string, (args: { dealId: string; actorPartyId: string; ro
       actorPartyId,
       amount: parseShillings(body.amount, 'amount'),
       reason: requiredText(body.reason, 'duplicate-payment-refund'),
-      duplicateOfInstructionId: optionalText(body.duplicateOfInstructionId),
     }),
   reversePayment: async ({ dealId, actorPartyId, body }) =>
     refunds.reversePayment({

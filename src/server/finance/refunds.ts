@@ -25,8 +25,6 @@ import * as ledger from '../ledger';
 import { APPROVED_COMMISSION_REVERSAL_CATEGORIES, type DealStatus } from '../domain';
 import { ApiError } from '../http';
 
-const depositService = () => import('./deposit');
-
 type Tx = Parameters<Parameters<typeof db.$transaction>[0]>[0];
 
 const REVERSIBLE_STATUSES: readonly DealStatus[] = [
@@ -92,13 +90,6 @@ export async function partialRefund(params: {
   await db.refundRecord.update({ where: { id: record.id }, data: { instructionId: instruction.id } });
 
   const pspState = ledger.derivedPspState(instruction);
-  if (pspState === 'failed') {
-    await db.refundRecord.update({
-      where: { id: record.id },
-      data: { state: 'failed', failureReason: 'the payout instruction failed at issue time - nothing moved' },
-    });
-    throw new ApiError(502, 'PSP_INSTRUCTION_FAILED', 'the provider refused the refund instruction; nothing moved - retry it from the finance console');
-  }
   if (pspState === 'pending') {
     return transactional(async (tx) => {
       const deal = await requireDeal(params.dealId, tx);
@@ -129,36 +120,21 @@ export async function partialRefund(params: {
 }
 
 /**
- * Admin: record a DUPLICATE-PAYMENT refund and instruct its payout.
- *
- * The ledger booked the payment ONCE; the duplicate is a provider-side
- * collection that never entered our books, so its return makes NO ledger
- * posting anywhere in this workflow. What this does, in order:
- *
- *  1. bounds the amount by what the deal's funding postings actually
- *     collected (a duplicate cannot exceed the real payment);
- *  2. links the record to the COLLECT instruction the provider
- *     double-collected under (`duplicateOfInstructionId`), when named;
- *  3. refuses to open a SECOND open record for the same source payment
- *     (duplicate instruction prevention - a failed one is retried, not
- *     re-created);
- *  4. instructs the payout through the SAME PSP seam as every other refund
- *     (idempotency key `refund:{recordId}`) - the mock settles instantly;
- *     live parks pending until the provider confirms the money left;
- *  5. marks the record CONFIRMED only on provider confirmation - never
- *     merely because an administrator asked.
+ * Admin: record a DUPLICATE-PAYMENT refund. The ledger booked the payment
+ * once; the duplicate is a provider-side collection that must be returned to
+ * the tenant. No second booking is made - the decision is recorded, the
+ * amount is bounded by what was actually collected, and the payout follows
+ * the provider's payout path (unwired in live mode; the record stays pending
+ * honestly).
  */
 export async function duplicatePaymentRefund(params: {
   dealId: string;
   actorPartyId: string;
   amount: bigint;
   reason: string;
-  /** The collect instruction the provider double-collected under (optional but expected). */
-  duplicateOfInstructionId?: string;
 }) {
   if (params.amount <= 0n) throw new ApiError(422, 'VALIDATION', 'the duplicate amount must be positive');
-
-  const staged = await transactional(async (tx) => {
+  return transactional(async (tx) => {
     const deal = await requireDeal(params.dealId, tx);
 
     const entries = await tx.ledgerEntry.findMany({
@@ -166,60 +142,11 @@ export async function duplicatePaymentRefund(params: {
       select: { amount: true },
     });
     const collected = entries.reduce((acc, e) => acc + e.amount, 0n);
-    if (collected <= 0n) {
-      throw new ApiError(409, 'NOTHING_COLLECTED', 'no confirmed collection is booked for this deal - there is nothing the provider could have duplicated');
-    }
     if (params.amount > collected) {
       throw new ApiError(
         422,
         'AMOUNT_EXCEEDS_COLLECTED',
         `the duplicate (${params.amount}) exceeds what was ever collected for this deal (${collected})`,
-      );
-    }
-
-    // Cumulative bound: pending + confirmed duplicate refunds must never
-    // total more than what was actually collected - otherwise "record the
-    // duplicate" twice would pay the tenant twice for one extra collection.
-    const priorDuplicate = await tx.refundRecord.aggregate({
-      where: { dealId: params.dealId, kind: 'duplicate_payment', state: { in: ['pending', 'confirmed'] } },
-      _sum: { amount: true },
-    });
-    const alreadyInstructed = priorDuplicate._sum.amount ?? 0n;
-    if (alreadyInstructed + params.amount > collected) {
-      throw new ApiError(
-        422,
-        'DUPLICATE_REFUND_EXCEEDS_COLLECTION',
-        `duplicate refunds already instructed for this deal total ${alreadyInstructed}; ${params.amount} more would exceed what was ever collected (${collected})`,
-      );
-    }
-
-    // The source payment, when the caller names it, must be THIS deal's
-    // collection - the link is what reconciliation and the audit trail read.
-    let duplicateOfInstructionId: string | null = null;
-    if (params.duplicateOfInstructionId) {
-      const source = await tx.pspInstruction.findUnique({ where: { id: params.duplicateOfInstructionId } });
-      if (!source || source.dealId !== params.dealId || source.kind !== 'collect') {
-        throw new ApiError(422, 'VALIDATION', 'duplicateOfInstructionId must name a collection instruction of this deal');
-      }
-      duplicateOfInstructionId = source.id;
-    }
-
-    // Duplicate-instruction prevention: an OPEN record for the same source
-    // payment means a payout is already in flight - a second record would
-    // pay the tenant twice. A FAILED record is retried, never re-created.
-    const open = await tx.refundRecord.findFirst({
-      where: {
-        dealId: params.dealId,
-        kind: 'duplicate_payment',
-        state: 'pending',
-        ...(duplicateOfInstructionId ? { duplicateOfInstructionId } : {}),
-      },
-    });
-    if (open) {
-      throw new ApiError(
-        409,
-        'DUPLICATE_REFUND_ALREADY_PENDING',
-        `a duplicate-payment refund (${open.id}) is already open for this payment; retry it from the finance console only if it failed`,
       );
     }
 
@@ -230,7 +157,8 @@ export async function duplicatePaymentRefund(params: {
         amount: params.amount,
         reason: params.reason,
         requestedByPartyId: params.actorPartyId,
-        duplicateOfInstructionId,
+        // No PSP instruction: the payout dispatch is provider-side. Pending
+        // until the provider actually returns the money - never pre-marked.
       },
     });
     await tx.financialAdjustment.create({
@@ -248,173 +176,9 @@ export async function duplicatePaymentRefund(params: {
       recordId: record.id,
       amount: params.amount.toString(),
       reason: params.reason,
-      duplicateOfInstructionId,
       note: 'No ledger booking: the payment was booked once. The duplicate returns through the provider payout path.',
     });
-    return { recordId: record.id, amount: params.amount };
-  });
-
-  const instruction = await ledger.issuePspInstruction({
-    dealId: params.dealId,
-    kind: 'refund',
-    amount: staged.amount,
-    idempotencyKey: `refund:${staged.recordId}`,
-  });
-  await db.refundRecord.update({
-    where: { id: staged.recordId },
-    data: { instructionId: instruction.id },
-  });
-
-  const pspState = ledger.derivedPspState(instruction);
-  if (pspState === 'pending') {
-    return { recordId: staged.recordId, state: 'pending', instructionId: instruction.id };
-  }
-  if (pspState === 'failed') {
-    await db.refundRecord.update({
-      where: { id: staged.recordId },
-      data: { state: 'failed', failureReason: 'the payout instruction failed at issue time - nothing moved' },
-    });
-    throw new ApiError(502, 'PSP_INSTRUCTION_FAILED', 'the duplicate-payment payout instruction failed at the provider; retry it from the finance console');
-  }
-  await applyDuplicateRefundCompletion({ recordId: staged.recordId, actorRole: 'admin' });
-  return { recordId: staged.recordId, state: 'confirmed', instructionId: instruction.id };
-}
-
-/**
- * Provider-confirmed completion of a duplicate-payment refund. The books
- * need NOTHING here - the duplicate was never booked as a liability - so
- * the completion records the confirmed return of the provider-side excess
- * and nothing else. Idempotent: a confirmed record re-completes as a no-op
- * (at-least-once webhook deliveries). Never called without a provider
- * confirmation upstream (the mock's instant settle is a labelled rehearsal,
- * recorded as MOCK in the instruction row itself).
- */
-export async function applyDuplicateRefundCompletion(params: { recordId: string; actorRole?: string }) {
-  return transactional(async (tx) => {
-    const record = await tx.refundRecord.findUnique({ where: { id: params.recordId } });
-    if (!record) throw new ApiError(404, 'REFUND_RECORD_NOT_FOUND', 'refund record not found');
-    if (record.kind !== 'duplicate_payment') {
-      throw new ApiError(422, 'REFUND_KIND_MISMATCH', 'this completion path is only for duplicate_payment records');
-    }
-    if (record.state !== 'pending') return record; // already decided - no second completion
-
-    await tx.refundRecord.update({
-      where: { id: record.id },
-      data: { state: 'confirmed', confirmedAt: new Date() },
-    });
-    await audit(tx, await systemPartyId(tx), 'duplicate_refund_completed', record.dealId, {
-      recordId: record.id,
-      amount: record.amount.toString(),
-      duplicateOfInstructionId: record.duplicateOfInstructionId,
-      instructionId: record.instructionId,
-      byRole: params.actorRole ?? null,
-      note: 'Provider confirmed the return of the duplicate collection. No ledger posting: the duplicate was never booked.',
-    });
-    return record;
-  });
-}
-
-/**
- * Admin: RETRY a FAILED refund record - any kind. A failed payout moved
- * nothing (the provider refused the instruction), so a retry issues a FRESH
- * instruction under an attempt-suffixed idempotency key; the failed one can
- * never be confirmed afterwards (first terminal outcome stands). Pending
- * records are NOT retryable - the provider has not answered yet, and a
- * second instruction would risk a double payout.
- */
-export async function retryRefundRecord(params: { recordId: string; actorPartyId: string }) {
-  const record = await db.refundRecord.findUnique({ where: { id: params.recordId } });
-  if (!record) throw new ApiError(404, 'REFUND_RECORD_NOT_FOUND', 'refund record not found');
-  if (record.state === 'confirmed') {
-    throw new ApiError(409, 'REFUND_ALREADY_CONFIRMED', 'this refund already completed - it cannot be retried');
-  }
-  if (record.state !== 'failed') {
-    throw new ApiError(409, 'REFUND_STILL_PENDING', 'the provider has not answered the payout instruction yet; retrying now would risk a double payout');
-  }
-
-  // Attempt-suffixed key: the first attempt's FAILED instruction must never
-  // be silently reused (its terminal state would block completion), and a
-  // second retry must not collide with the first.
-  const priorAttempts = await db.pspInstruction.count({
-    where: { idempotencyKey: { startsWith: `refund:${record.id}` } },
-  });
-  const key = priorAttempts === 0 ? `refund:${record.id}` : `refund:${record.id}:r${priorAttempts + 1}`;
-
-  const instruction = await ledger.issuePspInstruction({
-    dealId: record.dealId,
-    kind: 'refund',
-    amount: record.amount,
-    idempotencyKey: key,
-  });
-
-  const pspState = ledger.derivedPspState(instruction);
-  if (pspState === 'failed') {
-    await db.refundRecord.update({
-      where: { id: record.id },
-      data: { failureReason: `retry ${priorAttempts + 1}: the payout instruction failed at issue time - nothing moved` },
-    });
-    throw new ApiError(502, 'PSP_INSTRUCTION_FAILED', 'the provider refused the payout instruction again; the record stays failed');
-  }
-
-  await db.refundRecord.update({
-    where: { id: record.id },
-    data: { instructionId: instruction.id, state: 'pending', failureReason: null },
-  });
-  await db.auditEvent.create({
-    data: {
-      actorPartyId: params.actorPartyId,
-      eventType: 'refund_retry_issued',
-      subjectRef: record.dealId,
-      payload: {
-        recordId: record.id,
-        kind: record.kind,
-        attempt: priorAttempts + 1,
-        instructionId: instruction.id,
-      },
-      occurredAt: new Date(),
-    },
-  });
-
-  if (pspState === 'pending') {
-    return { recordId: record.id, state: 'pending', attempt: priorAttempts + 1 };
-  }
-  await completeRefundRecordByKind({ recordId: record.id, actorRole: 'admin' });
-  return { recordId: record.id, state: 'confirmed', attempt: priorAttempts + 1 };
-}
-
-/**
- * One dispatch point for completing a refund record once the PSP has
- * confirmed its payout instruction - used by the webhook AND the retry
- * path, so the two can never disagree about what a completed refund means.
- * duplicate_payment records book NOTHING (never a liability); deposit
- * refunds discharge the deposit liability; commission-reversal payouts
- * discharge the restored rent liability; rent refunds discharge the rent
- * liability, bounded by what is still held.
- */
-export async function completeRefundRecordByKind(params: { recordId: string; actorRole?: string }) {
-  const record = await db.refundRecord.findUnique({ where: { id: params.recordId } });
-  if (!record) throw new ApiError(404, 'REFUND_RECORD_NOT_FOUND', 'refund record not found');
-  // Idempotency: a decided record NEVER re-executes. At-least-once webhook
-  // redeliveries (and a retry racing its own webhook) land here as no-ops.
-  if (record.state !== 'pending') return record;
-  if (record.kind === 'duplicate_payment') {
-    return applyDuplicateRefundCompletion({ recordId: record.id, actorRole: params.actorRole });
-  }
-  if (record.kind === 'deposit_refund') {
-    const { applyDepositRefundCompletion } = await depositService();
-    return applyDepositRefundCompletion({ recordId: record.id, actorRole: params.actorRole });
-  }
-  if (record.kind === 'commission_reversal_payout') {
-    return applyCommissionReversalPayout({ recordId: record.id, actorRole: params.actorRole });
-  }
-  // full_pre_settlement / partial_pre_settlement: the amount is the
-  // record's authorized figure, still bounded by what the ledger holds.
-  return applyRefundCompletion({
-    dealId: record.dealId,
-    actorRole: params.actorRole,
-    refundRecordId: record.id,
-    instructionId: record.instructionId ?? undefined,
-    amountOverride: record.amount,
+    return { recordId: record.id, state: 'pending' };
   });
 }
 
@@ -615,15 +379,7 @@ export async function reverseCommission(params: {
     data: { instructionId: instruction.id },
   });
 
-  const payoutState = ledger.derivedPspState(instruction);
-  if (payoutState === 'failed') {
-    await db.refundRecord.update({
-      where: { id: staged.recordId },
-      data: { state: 'failed', failureReason: 'the payout instruction failed at issue time - nothing moved' },
-    });
-    throw new ApiError(502, 'PSP_INSTRUCTION_FAILED', 'the provider refused the commission-reversal payout instruction; nothing moved - retry it from the finance console');
-  }
-  if (payoutState !== 'pending') {
+  if (ledger.derivedPspState(instruction) !== 'pending') {
     // Mock PSP: the payout completes immediately.
     await applyCommissionReversalPayout({ recordId: staged.recordId, actorRole: 'admin' });
   }

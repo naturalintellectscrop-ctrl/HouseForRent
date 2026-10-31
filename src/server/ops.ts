@@ -271,12 +271,8 @@ export async function markListingAwaitingVerification(listingId: string) {
  *     what the split funding postings credited (the deposit is never allowed
  *     to dissolve into a generic escrow figure);
  *  4. payout honesty: succeeded release/refund instructions are matched
- *     against the ledger's payout credits - EXCEPT duplicate-payment
- *     payouts, which by design have no ledger side (the duplicate was
- *     never booked as a liability, so its return books nothing). Those are
- *     reconciled on the PROVIDER side, through imported statements
- *     (finance/provider-statement.ts) - an internal check must not demand
- *     a ledger row that policy says must not exist.
+ *     against the ledger's payout credits (both zero while payout dispatch
+ *     is unwired - they earn their keep the day it goes live).
  */
 export async function runReconciliation() {
   const postingsBalance = await everyPostingBalances();
@@ -292,24 +288,7 @@ export async function runReconciliation() {
       .filter((i) => i.kind === kind && derivedPspState(i) === 'succeeded')
       .reduce((sum, i) => sum + i.amount, 0n);
   const pspBalance = succeeded('collect');
-  // Duplicate-payment payouts are the deliberate exception to the ledger
-  // mirror: their refund records name the provider-side return of a
-  // collection that was never booked. Excluded HERE, explicitly - never by
-  // loosening the ledger side.
-  const succeededRefunds = instructions.filter((i) => i.kind === 'refund' && derivedPspState(i) === 'succeeded');
-  const duplicatePayoutInstructionIds = new Set(
-    succeededRefunds.length
-      ? (
-          await db.refundRecord.findMany({
-            where: { instructionId: { in: succeededRefunds.map((i) => i.id) }, kind: 'duplicate_payment' },
-            select: { instructionId: true },
-          })
-        ).map((r) => r.instructionId)
-      : [],
-  );
-  const pspPayouts =
-    succeeded('release') +
-    succeededRefunds.filter((i) => !duplicatePayoutInstructionIds.has(i.id)).reduce((sum, i) => sum + i.amount, 0n);
+  const pspPayouts = succeeded('release') + succeeded('refund');
 
   const sumCredits = async (referencePrefix: string) => {
     const agg = await db.ledgerEntry.aggregate({
@@ -361,9 +340,7 @@ export async function runReconciliation() {
         postingsBalance ? null : 'ledger postings unbalanced',
         ledgerBalance === pspBalance ? null : 'PSP/ledger inflow mismatch',
         classificationConsistent ? null : 'rent/deposit classification inconsistent',
-        ledgerPayouts === pspPayouts
-          ? null
-          : 'PSP/ledger payout mismatch (release+refund, duplicate-payment payouts excluded by design)',
+        ledgerPayouts === pspPayouts ? null : 'PSP/ledger payout mismatch (release+refund)',
       ]
         .filter(Boolean)
         .join('; ');
