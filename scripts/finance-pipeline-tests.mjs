@@ -586,6 +586,148 @@ seq++;
     d.financials.monthlyRentSnapshot === '1000000' && d.financials.advanceMonthsSnapshot === 2 && d.financials.depositAmountSnapshot === '1000000');
 }
 
+// ═══════ ADVERSARIAL REGRESSIONS — review round 2026-10-30 ═══════
+// Targeted repairs under test (each maps to a defect fixed in the review):
+//   R1 silence never confirms and never unlocks settlement
+//   R2 duplicate confirm events are refused (no duplicate verification)
+//   R3 officers submit evidence but hold NO settlement/decision authority
+//   R4 a decision reason is mandatory for the authorized review
+//   R5 the landlord confirm is available exactly when the verification is open
+//   R6 an authorized NOT-verified decision is final (no re-open, no 500)
+//   R7 disputed deposit deductions: cannot apply while disputed; admin can
+//      still approve a disputed deduction; wear-and-tear rejections recorded
+//   R8 duplicate deposit release requests refused
+//   R9 provider reversal from move_in_disputed ends the deal REVERSED
+//   R10 six-months-upfront: post-settlement unearned rent is a LANDLORD
+//       responsibility (no platform balance, no false receipt, refusal→escalated)
+//   R11 concurrent settlement attempts book at most one payout
+console.log('\n── R: adversarial regressions (review round) ──');
+
+// R1–R5: verification discipline (Deal I)
+const I = await createDeal();
+r = await action(I.T, I.dealId, 'confirm-move-in', { note: 'Moved in with keys.' });
+check('R1. tenant confirmation opens the verification', r.status === 200 && r.body.status === 'move_in_awaiting_verification', `status ${r.status}`);
+r = await action(I.T, I.dealId, 'confirm-move-in', { note: 'duplicate event' });
+check('R2. duplicate tenant confirmation is refused (409)', r.status === 409, `status ${r.status}`);
+r = await action(admin, I.dealId, 'settle');
+check('R1. settlement while the landlord is silent is refused (409)', r.status === 409, `status ${r.status}`);
+d = (await getDeal(I.L, I.dealId)).body;
+check('R1. silence does NOT confirm the handover or complete the verification',
+  d.status === 'move_in_awaiting_verification' && d.moveInVerification?.landlordConfirmedAt == null && d.moveInVerification?.state === 'tenant_confirmed',
+  `status ${d.status} state ${d.moveInVerification?.state}`);
+r = await action(officer.client, I.dealId, 'verify-move-in', { reason: 'officer self-authorizing' });
+check('R3. officer has NO verification-decision authority (403)', r.status === 403, `status ${r.status}`);
+r = await action(officer.client, I.dealId, 'settle');
+check('R3. officer cannot authorize settlement (403)', r.status === 403, `status ${r.status}`);
+r = await action(admin, I.dealId, 'verify-move-in', { reason: '   ' });
+check('R4. an authorized verify decision WITHOUT a reason is refused (400)', r.status === 400, `status ${r.status}`);
+r = await action(I.L, I.dealId, 'confirm-move-in-landlord', { note: 'Handed over as agreed.' });
+check('R5. landlord confirmation on the open verification completes it (dual confirm)',
+  r.status === 200 && r.body.status === 'move_in_confirmed', `status ${r.status}`);
+d = (await getDeal(I.L, I.dealId)).body;
+check('R5. the completed verification records the reviewer decision', d.moveInVerification?.state === 'verified', `state ${d.moveInVerification?.state}`);
+r = await action(I.L, I.dealId, 'confirm-move-in-landlord', { note: 'second time' });
+check('R2. duplicate landlord confirmation is refused (409)', r.status === 409, `status ${r.status}`);
+
+// R6: the NOT-verified decision is final (Deal K)
+const K = await createDeal();
+await action(K.T, K.dealId, 'confirm-move-in', { note: 'claims moved in' });
+await action(K.L, K.dealId, 'dispute-move-in', { reason: 'Property still vacant; no keys collected.', evidenceRef: 'vacant-11' });
+r = await action(admin, K.dealId, 'reject-move-in', { reason: 'Evidence contradicts the tenant claim: no handover.' });
+check('R6. review decides NOT verified → escrow_funded', r.status === 200 && r.body.status === 'escrow_funded', `status ${r.status}`);
+r = await action(K.T, K.dealId, 'confirm-move-in', { note: 'try to re-open' });
+check('R6. re-opening after a NOT-verified decision refuses cleanly (409, not 500)',
+  r.status === 409 && r.body?.error?.code === 'MOVEIN_DECISION_FINAL', `status ${r.status} ${JSON.stringify(r.body).slice(0, 80)}`);
+r = await action(admin, K.dealId, 'refund', { reason: 'No verified handover; rent returned.' });
+check('R6. only a refund releases the held rent after the final decision', r.status === 200 && r.body.status === 'refunded', `status ${r.status}`);
+
+// R7+R8: deposit adversarials (Deal L)
+const L2 = await createDeal();
+r = await action(L2.L, L2.dealId, 'propose-deduction', { amount: '400,000', reason: 'Damaged door panel - invoice INV-31.', evidenceRef: 'door-31' });
+check('R7. landlord proposes a deduction', r.status === 200, `status ${r.status}`);
+const disputedDeduction = r.body.id;
+r = await action(L2.T, L2.dealId, 'dispute-deduction', { deductionId: disputedDeduction, reason: 'That door was damaged before I moved in - pre-existing.' });
+check('R7. tenant disputes the deduction', r.status === 200, `status ${r.status}`);
+r = await action(admin, L2.dealId, 'apply-deduction', { deductionId: disputedDeduction });
+check('R7. a DISPUTED deduction cannot be applied (409)', r.status === 409, `status ${r.status}`);
+r = await action(admin, L2.dealId, 'approve-deduction', { deductionId: disputedDeduction, reason: 'Admin dispute resolution: officer visit notes record pre-existing damage - but tenant accepts reviewed scope.' });
+check('R7. the authorized review CAN approve a disputed deduction (recorded decision)', r.status === 200, `status ${r.status}`);
+r = await action(L2.T, L2.dealId, 'accept-deduction', { deductionId: disputedDeduction, note: 'Accepted after the review note.' });
+check('R7. tenant accepts the reviewed deduction', r.status === 200, `status ${r.status}`);
+r = await action(admin, L2.dealId, 'apply-deduction', { deductionId: disputedDeduction });
+check('R7. the resolved deduction applies (deposit pays landlord)', r.status === 200, `status ${r.status}`);
+r = await action(L2.L, L2.dealId, 'propose-deduction', { amount: '50,000', reason: 'Repainting scuffed walls.' });
+const wearDeduction = r.body.id;
+r = await action(admin, L2.dealId, 'reject-deduction', { deductionId: wearDeduction, reason: 'Normal wear and tear is never charged to the tenant - recorded rejection.' });
+check('R7. a wear-and-tear deduction is rejected with the reason recorded', r.status === 200, `status ${r.status}`);
+d = (await getDeal(L2.L, L2.dealId)).body;
+check('R7. only the accepted deduction left the deposit (1,600,000 − 400,000 held)',
+  d.financials.depositHeld === '1200000' && d.depositCase?.state !== 'closed', `dep ${d.financials.depositHeld} case ${d.depositCase?.state}`);
+r = await action(admin, L2.dealId, 'refund-deposit', { reason: 'Tenancy ended; remaining deposit released.' });
+check('R8. deposit release executes', r.status === 200, `status ${r.status}`);
+r = await action(admin, L2.dealId, 'refund-deposit', { reason: 'duplicate release request' });
+check('R8. duplicate release request refused (nothing left to release, 409)', r.status === 409, `status ${r.status}`);
+r = await action(admin, L2.dealId, 'close-deposit-case', { reason: 'Every shilling accounted for.' });
+d = (await getDeal(L2.L, L2.dealId)).body;
+check('R8. deposit case closed at zero balance', r.status === 200 || d.depositCase?.state === 'closed', `status ${r.status} case ${d.depositCase?.state}`);
+
+// R9: provider reversal from move_in_disputed (Deal M)
+const M = await createDeal();
+await action(M.T, M.dealId, 'confirm-move-in', { note: 'Moved in.' });
+await action(M.L, M.dealId, 'dispute-move-in', { reason: 'Handover contested.' });
+r = await action(admin, M.dealId, 'reverse-payment', { reason: 'Provider clawback REF-7722 while the handover is disputed.', evidenceRef: 'psp-7722' });
+check('R9. reversal executes from move_in_disputed → REVERSED', r.status === 200 && r.body.status === 'reversed', `status ${r.status}`);
+d = (await getDeal(M.L, M.dealId)).body;
+check('R9. custody and commission fully reversed from the disputed state',
+  d.financials.heldInEscrow === '0' && d.financials.commissionRecognised === '0', `held ${d.financials.heldInEscrow}`);
+
+// R10: six months upfront → post-settlement landlord responsibility (Deal N)
+const N = await createDeal({ months: 6, mutualRef: 'Written mutual agreement: six months upfront agreed by both parties for the fixed rate.' });
+const RENT6 = 800000n, ADV6 = RENT6 * 6n, DEP6 = 1600000n, COM6 = RENT6; // 10% of ONE month
+r = await action(N.T, N.dealId, 'confirm-move-in', {});
+r = await action(N.L, N.dealId, 'confirm-move-in-landlord', {});
+r = await action(admin, N.dealId, 'settle');
+check('R10. six-month deal settles after verified move-in', r.status === 200 && r.body.status === 'settled', `status ${r.status}`);
+d = (await getDeal(N.L, N.dealId)).body;
+check('R10. landlord received advance − commission (4,000,000); commission is 10% of ONE month (800,000, not 480,000)',
+  d.financials.releasedToLandlord === shs(ADV6 - COM6) && d.financials.commissionRecognised === shs(COM6),
+  `released ${d.financials.releasedToLandlord} commission ${d.financials.commissionRecognised}`);
+const heldAfterSettleN = d.financials.heldInEscrow;
+r = await action(N.T, N.dealId, 'record-post-settlement-refund', { amount: '3,200,000', reason: 'Tenancy lawfully ended after two months - four paid months unearned (4 × 800,000).' });
+check('R10. tenant records the four unearned months (3,200,000)', r.status === 200, `status ${r.status}`);
+const psrN = r.body.recordId;
+d = (await getDeal(N.L, N.dealId)).body;
+check('R10. the claim created NO platform balance and NO false tenant refund receipt',
+  d.financials.heldInEscrow === heldAfterSettleN && !d.refunds.some((x) => x.kind !== 'duplicate_payment' && x.state === 'confirmed'),
+  `held ${d.financials.heldInEscrow} refunds ${JSON.stringify(d.refunds.map((x) => x.kind))}`);
+r = await action(N.L, N.dealId, 'progress-post-settlement-refund', { refundId: psrN, outcome: 'resolved_paid_by_landlord' });
+check('R10. the landlord cannot self-resolve the coordination (403)', r.status === 403, `status ${r.status}`);
+r = await action(admin, N.dealId, 'progress-post-settlement-refund', { refundId: psrN, outcome: 'escalated', note: 'Landlord refuses to refund the unearned months - escalated for review.' });
+check('R10. a REFUSING landlord ends in escalated (an honest terminal, never a platform promise)', r.status === 200, `status ${r.status}`);
+d = (await getDeal(N.L, N.dealId)).body;
+check('R10. refusal changed no money: balances identical, nothing refunded by the platform',
+  d.financials.heldInEscrow === heldAfterSettleN && d.financials.owedToLandlord === '0' && d.financials.refunded === '0',
+  `held ${d.financials.heldInEscrow} refunded ${d.financials.refunded}`);
+r = await action(admin, N.dealId, 'refund-deposit', { reason: 'Deposit returned; the unearned-rent claim stays a landlord coordination record, not platform money.' });
+check('R10. the deposit lifecycle still discharges independently', r.status === 200, `status ${r.status}`);
+
+// R11: concurrent settlement attempts book at most one payout (Deal O)
+const O = await createDeal();
+await action(O.T, O.dealId, 'confirm-move-in', {});
+await action(O.L, O.dealId, 'confirm-move-in-landlord', {});
+const [s1, s2] = await Promise.allSettled([
+  action(admin, O.dealId, 'settle'),
+  action(admin, O.dealId, 'settle'),
+]);
+const statuses = [s1, s2].map((x) => (x.status === 'fulfilled' ? x.value.status : 0));
+check('R11. exactly one of two concurrent settlements succeeds',
+  statuses.filter((x) => x === 200).length === 1 && statuses.some((x) => x >= 400),
+  `statuses ${JSON.stringify(statuses)}`);
+d = (await getDeal(O.L, O.dealId)).body;
+check('R11. the landlord was paid exactly once (800,000, no double release)',
+  d.financials.releasedToLandlord === '800000' && d.financials.rentHeld === '0',
+  `released ${d.financials.releasedToLandlord} rent ${d.financials.rentHeld}`);
+
 // ═══════════════════ 18. ledger integrity + reconciliation ═══════════════════
 console.log('\n── Ledger integrity + reconciliation + finance overview ──');
 r = await admin('POST', '/ops/reconciliation', {});

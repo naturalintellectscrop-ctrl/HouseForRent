@@ -48,6 +48,8 @@ export function jsonError(err: unknown): NextResponse {
     SnapshotImmutableError: { status: 409, code: 'SNAPSHOT_IMMUTABLE' },
     ListingTermsChangedError: { status: 422, code: 'LISTING_TERMS_CHANGED' },
     AmountNotAuthoritativeError: { status: 422, code: 'AMOUNT_NOT_AUTHORITATIVE' },
+    ConcurrentDealUpdateError: { status: 409, code: 'CONCURRENT_MODIFICATION' },
+    DepositCustodyUnconfirmedError: { status: 409, code: 'DEPOSIT_CUSTODY_UNCONFIRMED' },
     NothingHeldError: { status: 409, code: 'NOTHING_HELD' },
     CommissionNotEarnedError: { status: 409, code: 'COMMISSION_NOT_EARNED' },
     CommissionAlreadyRecognisedError: { status: 409, code: 'COMMISSION_ALREADY_RECOGNISED' },

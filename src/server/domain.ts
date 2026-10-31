@@ -175,6 +175,9 @@ export const ALLOWED_TRANSITIONS: Readonly<
     'refunded',
     'dispute_hold',
     'financial_review_required',
+    // a provider clawback of the confirmed payment ends the deal REVERSED,
+    // same as from escrow_funded / awaiting verification / partially refunded
+    'reversed',
   ],
   move_in_confirmed: ['settlement_pending', 'settled', 'commission_earned', 'dispute_hold'],
   commission_earned: ['settled', 'settlement_pending', 'dispute_hold'],
@@ -474,7 +477,14 @@ export const DEAL_ACTIONS: readonly (DealActionSpec & {
   {
     action: 'confirm-move-in-landlord',
     handler: 'confirmMoveInByLandlord',
-    to: 'move_in_awaiting_verification',
+    // to:null + offeredIn (not `to:`): the landlord confirms on an OPEN
+    // verification only - the tenant (or an officer with evidence) opens it.
+    // With `to: move_in_awaiting_verification` the catalogue's reachability
+    // math offered this action in escrow_funded (where the handler refuses)
+    // and hid it exactly where it works, so the dual-confirm completion was
+    // invisible to the people it exists for.
+    to: null,
+    offeredIn: ['move_in_awaiting_verification'],
     label: 'Confirm handover (landlord)',
     consequence:
       'Records the landlord\'s independent confirmation of the handover, with an optional note and evidence reference. When the tenant has confirmed too, the verification completes and the deal moves to move-in confirmed - the only state from which settlement can run.',
@@ -507,7 +517,7 @@ export const DEAL_ACTIONS: readonly (DealActionSpec & {
     action: 'add-move-in-evidence',
     handler: 'addMoveInEvidence',
     to: 'move_in_awaiting_verification',
-    alsoReachableFrom: ['move_in_disputed', 'escrow_funded'],
+    alsoReachableFrom: ['move_in_awaiting_verification', 'move_in_disputed', 'escrow_funded'],
     label: 'Attach verification evidence',
     consequence:
       'Attaches field evidence (note + reference) to the open move-in verification. Officers may submit evidence; the verification decision and every settlement authority remain with the administrator.',

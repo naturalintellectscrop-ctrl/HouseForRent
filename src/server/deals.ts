@@ -27,8 +27,8 @@ import {
   type DealStatus,
 } from './domain';
 import * as ledger from './ledger';
-import { nylonPayLive } from './nylonpay';
-import { policySnapshotValue } from './finance/policy';
+import { nylonPayLive, nylonPayMode } from './nylonpay';
+import { depositCustodyConfirmed, policySnapshotValue } from './finance/policy';
 
 type Tx = Parameters<Parameters<typeof db.$transaction>[0]>[0];
 
@@ -144,6 +144,43 @@ export class ViewingNotConductedError extends Error {
     this.name = 'ViewingNotConductedError';
   }
 }
+/**
+ * The status-write compare-and-swap failed: between reading the deal and
+ * writing its new status, a concurrent transaction changed the status. The
+ * whole transaction (including any ledger posting) rolls back - two
+ * concurrent settlements, refunds or fundings can book at most one of
+ * themselves. This is the Postgres counterpart of the SQLite
+ * writers-serialise guarantee the module header describes.
+ */
+export class ConcurrentDealUpdateError extends Error {
+  constructor(dealId: string) {
+    super(
+      `deal ${dealId} changed status concurrently - the action raced another ` +
+        'confirmed money effect and was rolled back; retry to see the current state.',
+    );
+    this.name = 'ConcurrentDealUpdateError';
+  }
+}
+
+/**
+ * Live-mode funding refuses to collect a DEPOSIT while the provider's
+ * custody capability is unverified (deposit_custody_provider_confirmed,
+ * default false). The sandbox mock is unaffected - it is a labelled
+ * rehearsal, not real money. Fail-closed: no real deposit custody claim
+ * exists until the business verifies the capability (docs §8).
+ */
+export class DepositCustodyUnconfirmedError extends Error {
+  constructor(dealId: string) {
+    super(
+      `deal ${dealId} cannot be funded with a deposit in live payment mode: the ` +
+        "provider's custody and release capability is not verified " +
+        '(deposit_custody_provider_confirmed is unset/false). Rent-only funding ' +
+        'or sandbox rehearsal remains available; no real deposit custody claim is permitted.',
+    );
+    this.name = 'DepositCustodyUnconfirmedError';
+  }
+}
+
 export class DealAlreadyExistsError extends Error {
   constructor(
     introductionRecordId: string,
@@ -340,6 +377,17 @@ export async function fundEscrow(params: {
   if (params.expectedAmount !== undefined && params.expectedAmount !== derived.amount) {
     throw new AmountNotAuthoritativeError(params.expectedAmount, derived.amount);
   }
+  // Custody gate (docs §8): a LIVE collection that includes the deposit is a
+  // real deposit-custody claim - refused while the provider's custody
+  // capability is unverified. The sandbox mock is a labelled rehearsal and
+  // stays open. Deposit-free funding (depositAmount 0) is unaffected.
+  if (
+    derived.depositAmount > 0n &&
+    nylonPayMode() === 'live' &&
+    !(await depositCustodyConfirmed())
+  ) {
+    throw new DepositCustodyUnconfirmedError(preflight.id);
+  }
   const instruction = await ledger.issuePspInstruction({
     dealId: preflight.id,
     kind: 'collect',
@@ -447,6 +495,17 @@ export async function applyEscrowFunding(params: {
     const derived = await deriveFundingAmount(deal);
     if (params.expectedAmount !== undefined && params.expectedAmount !== derived.amount) {
       throw new AmountNotAuthoritativeError(params.expectedAmount, derived.amount);
+    }
+
+    // Webhook-side custody gate: the booking path refuses a LIVE deposit
+    // custody claim exactly like the action path, so no instruction issued
+    // before this rule can ever land custody for an unverified capability.
+    if (
+      derived.depositAmount > 0n &&
+      nylonPayMode() === 'live' &&
+      !(await depositCustodyConfirmed())
+    ) {
+      throw new DepositCustodyUnconfirmedError(deal.id);
     }
 
     if (derived.newShape) {
@@ -1340,10 +1399,22 @@ export async function applyTransition(
     },
   });
 
-  const updated = await tx.deal.update({
-    where: { id: params.deal.id },
+  // COMPARE-AND-SWAP on the status this transition was validated against.
+  // Under Postgres READ COMMITTED two concurrent transactions can both read
+  // the same prior status; the conditional update re-checks the predicate on
+  // the committed row after taking the row lock, so the loser matches ZERO
+  // rows and its whole transaction - ledger posting included - rolls back.
+  // (SQLite/PGlite serialise writers, so the predicate there is trivially
+  // true; the guard is what makes the no-double-release claim true on the
+  // production database.)
+  const cas = await tx.deal.updateMany({
+    where: { id: params.deal.id, status: params.deal.status as DealStatus },
     data: { ...(params.data as object), status: params.to },
   });
+  if (cas.count !== 1) {
+    throw new ConcurrentDealUpdateError(params.deal.id);
+  }
+  const updated = await tx.deal.findUniqueOrThrow({ where: { id: params.deal.id } });
 
   const auditType = AUDITED_STATUSES[params.to];
   if (auditType) {

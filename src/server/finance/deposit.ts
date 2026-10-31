@@ -297,6 +297,19 @@ export async function applyDeduction(params: {
       if (fresh.state !== 'accepted_by_tenant') {
         throw new ApiError(409, 'DEDUCTION_NOT_APPLICABLE', 'the deduction is no longer applicable');
       }
+      // RE-CHECK the held balance inside the transaction that posts. The
+      // earlier check ran in a different transaction, before the PSP
+      // instruction was issued - a release, refund or second deduction that
+      // completed in between must not be able to drive deposit_liability
+      // negative. This read-and-post pair is the no-double-spend guard.
+      const heldNow = await ledger.outstandingLiability(params.dealId, 'deposit_liability', tx);
+      if (fresh.amount > heldNow) {
+        throw new ApiError(
+          409,
+          'AMOUNT_EXCEEDS_DEPOSIT',
+          `the deposit no longer covers this deduction (${fresh.amount} > ${heldNow}) - reconcile first`,
+        );
+      }
       const postingId = await ledger.payDeductionToLandlord({ dealId: params.dealId, amount: fresh.amount }, tx);
       await ledger.releaseToLandlord({ dealId: params.dealId, amount: fresh.amount }, tx);
 
@@ -352,6 +365,24 @@ export async function withdrawDeduction(params: {
 export async function refundDeposit(params: { dealId: string; actorPartyId: string; reason: string }) {
   const held = await ledger.outstandingLiability(params.dealId, 'deposit_liability');
   if (held <= 0n) throw new ApiError(409, 'NOTHING_HELD', 'no deposit balance is held for this deal');
+
+  // Duplicate release request: one deposit release may be in flight at a
+  // time. In live mode an instructed release stays pending until the
+  // provider confirms, so stacking a second full-balance instruction would
+  // instruct the provider twice for the same money. (The completion path's
+  // ledger-balance check remains the hard guard; this keeps the record set
+  // honest so the provider is never instructed twice.)
+  const pendingRelease = await db.refundRecord.findFirst({
+    where: { dealId: params.dealId, kind: 'deposit_refund', state: 'pending' },
+    select: { id: true },
+  });
+  if (pendingRelease) {
+    throw new ApiError(
+      409,
+      'RELEASE_ALREADY_PENDING',
+      `a deposit release for this deal is already pending (record ${pendingRelease.id}) - wait for the provider's confirmation instead of instructing a second payout`,
+    );
+  }
 
   const record = await db.refundRecord.create({
     data: {

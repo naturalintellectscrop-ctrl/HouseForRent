@@ -64,6 +64,20 @@ export async function confirmMoveIn(params: {
     const deal = await requireDeal(params.dealId, tx);
 
     if (deal.status === 'escrow_funded') {
+      // A verification row can still exist here after an authorized review
+      // decided the handover NOT verified (rejectMoveIn returns the deal to
+      // escrow_funded with the record kept). That decision is final - money
+      // stays held and only a refund can release it - so a re-open attempt
+      // must refuse with that reason, not die on the (deal_id) unique
+      // constraint. Silence and retries never resurrect a decided handover.
+      const existing = await tx.moveInVerification.findUnique({ where: { dealId: deal.id } });
+      if (existing) {
+        throw new ApiError(
+          409,
+          'MOVEIN_DECISION_FINAL',
+          'an authorized review already decided this handover was NOT verified - the decision is final and only a refund can release the held rent',
+        );
+      }
       const verification = await tx.moveInVerification.create({
         data: {
           dealId: deal.id,
@@ -104,7 +118,9 @@ export async function confirmMoveIn(params: {
       await tx.moveInVerification.update({
         where: { id: verification.id },
         data: {
-          state: 'landlord_confirmed',
+          // State convention = the party who confirmed most recently (the
+          // opener writes 'tenant_confirmed'); this entry is the TENANT's.
+          state: 'tenant_confirmed',
           tenantConfirmedAt: new Date(),
           tenantNote: params.note ?? null,
           tenantEvidenceRef: params.evidenceRef ?? null,
@@ -156,7 +172,9 @@ export async function confirmMoveInByLandlord(params: {
     await tx.moveInVerification.update({
       where: { id: verification.id },
       data: {
-        state: 'tenant_confirmed',
+        // State convention = the party who confirmed most recently; this
+        // entry is the LANDLORD's independent confirmation.
+        state: 'landlord_confirmed',
         landlordConfirmedAt: new Date(),
         landlordNote: params.note ?? null,
         landlordEvidenceRef: params.evidenceRef ?? null,
