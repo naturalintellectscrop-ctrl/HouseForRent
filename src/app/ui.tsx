@@ -105,6 +105,33 @@ export const Icon = {
       <path d="M12 2.8v2.4M12 18.8v2.4M2.8 12h2.4M18.8 12h2.4M5.5 5.5l1.7 1.7M16.8 16.8l1.7 1.7M18.5 5.5l-1.7 1.7M7.2 16.8l-1.7 1.7" />
     </Svg>
   ),
+  /* Settings & appearance: the console's preference vocabulary, drawn in
+     the same register so the Settings entry and the theme controls do not
+     read as a second-hand icon set. */
+  sliders: (p: { size?: number }) => (
+    <Svg {...p}>
+      <path d="M4 8h9M17 8h3M4 16h3M11 16h9" />
+      <circle cx="15" cy="8" r="2.1" />
+      <circle cx="9" cy="16" r="2.1" />
+    </Svg>
+  ),
+  sun: (p: { size?: number }) => (
+    <Svg {...p}>
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.2 5.2l1.4 1.4M17.4 17.4l1.4 1.4M18.8 5.2l-1.4 1.4M6.6 17.4l-1.4 1.4" />
+    </Svg>
+  ),
+  moon: (p: { size?: number }) => (
+    <Svg {...p}>
+      <path d="M20 13.5A8 8 0 0 1 10.5 4a8 8 0 1 0 9.5 9.5z" />
+    </Svg>
+  ),
+  monitor: (p: { size?: number }) => (
+    <Svg {...p}>
+      <rect x="3" y="4.5" width="18" height="12.5" rx="2" />
+      <path d="M9 20.5h6M12 17v3.5" />
+    </Svg>
+  ),
   eye: (p: { size?: number }) => (
     <Svg {...p}>
       <path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z" />

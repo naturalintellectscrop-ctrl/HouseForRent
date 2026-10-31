@@ -43,6 +43,7 @@ export function AppShell({
   who,
   topbar,
   footer,
+  themeToggle,
   children,
 }: {
   /** `light` = portal/ops; `forest` = platform control center. */
@@ -55,6 +56,10 @@ export function AppShell({
   topbar?: React.ReactNode;
   /** Optional footer rail under the content (portal keeps the public one). */
   footer?: React.ReactNode;
+  /** Optional appearance control beside the identity disc (the platform
+      center passes its light/dark quick toggle; other registers keep the
+      footer exactly as it was). */
+  themeToggle?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
@@ -88,12 +93,15 @@ export function AppShell({
                     being found (round-60 owner feedback), and on a phone
                     the sidebar only exists inside the drawer, where an
                     unlabelled glyph was effectively invisible. */}
-                <form action="/api/v1/auth/logout" method="post">
-                  <button type="submit" className="btn btn-ghost btn-sm">
-                    <Icon.signout size={16} />
-                    <span>Sign out</span>
-                  </button>
-                </form>
+                <div className="shell-side-foot-actions">
+                  {themeToggle}
+                  <form action="/api/v1/auth/logout" method="post">
+                    <button type="submit" className="btn btn-ghost btn-sm">
+                      <Icon.signout size={16} />
+                      <span>Sign out</span>
+                    </button>
+                  </form>
+                </div>
               </div>
             </ShellDrawer>
             <span className="shell-topbar-title">

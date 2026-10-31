@@ -66,3 +66,5 @@ server.log
 
 # disaster-recovery exports contain real personal + money data — NEVER commit
 /backups/
+
+/.next-rig/

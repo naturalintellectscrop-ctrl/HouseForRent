@@ -110,6 +110,11 @@ export default function RootLayout({
       lang="en"
       data-scroll-behavior="smooth"
       className={`${geist.variable} ${geistMono.variable}`}
+      // The platform center's pre-paint script may set data-pf-theme /
+      // data-pf-motion on this element before hydration (the stored
+      // appearance preference). React does not own those attributes, so
+      // the diff is expected - the same suppression next-themes uses.
+      suppressHydrationWarning
     >
       <body>
         {/* Site-wide structured data: who operates this marketplace, and

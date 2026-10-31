@@ -90,6 +90,9 @@ const app = spawn('bunx', ['next', 'dev', '-p', String(PORT_APP)], {
   env: {
     ...process.env,
     DATABASE_URL: `postgres://rig:rig@127.0.0.1:${PORT_DB}/postgres?pgbouncer=true&connection_limit=1&pool_timeout=60`,
+    // Own build dir: the main dev server holds .next/dev/lock, so a second
+    // instance in the same repo needs its own (next.config.ts honours this).
+    NEXT_DIST_DIR: '.next-rig',
     MEDIA_STORAGE: 'local',
     MEDIA_ROOT,
     NODE_ENV: 'development',

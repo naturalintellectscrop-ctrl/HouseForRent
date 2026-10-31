@@ -4,6 +4,10 @@ import { db } from '@/lib/db';
 import { resolveSession, homeFor } from '@/server/auth';
 import { AppShell } from '@/app/app-shell';
 import type { ShellNavGroup } from '@/app/app-shell-nav';
+import {
+  PF_THEME_SCRIPT,
+  PlatformThemeQuickToggle,
+} from '@/app/platform/platform-theme';
 
 export const metadata: Metadata = {
   // The control center is internal tooling on live platform data: out of
@@ -86,6 +90,7 @@ export default async function PlatformLayout({
       { href: '/platform/listings', label: 'Listings', icon: 'home' },
       { href: '/platform/transactions', label: 'Transactions', icon: 'coins' },
       { href: '/platform/system', label: 'System', icon: 'gear' },
+      { href: '/platform/settings', label: 'Settings', icon: 'sliders' },
     ],
   };
 
@@ -98,12 +103,16 @@ export default async function PlatformLayout({
   };
 
   return (
-    <AppShell
-      variant="forest"
-      brandSub="Platform Control"
-      brandHref="/platform"
-      nav={[platform, staffing]}
-      who={{ name: session.displayName, role: 'Platform owner' }}
+    <>
+      {/* Appearance preference before first paint - no dark-mode flash. */}
+      <script dangerouslySetInnerHTML={{ __html: PF_THEME_SCRIPT }} />
+      <AppShell
+        variant="forest"
+        brandSub="Platform Control"
+        brandHref="/platform"
+        nav={[platform, staffing]}
+        who={{ name: session.displayName, role: 'Platform owner' }}
+        themeToggle={<PlatformThemeQuickToggle />}
       footer={
         <div className="shell-foot-note page">
           <p>
@@ -116,5 +125,6 @@ export default async function PlatformLayout({
     >
       {children}
     </AppShell>
+    </>
   );
 }

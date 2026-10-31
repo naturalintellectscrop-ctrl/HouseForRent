@@ -1952,8 +1952,33 @@ a.stat:hover {
   width: 1.6rem;
   height: auto;
 }
-.auth-aside .trust-list svg {
-  color: var(--brand-green);
+.auth-aside .trust-list {
+  gap: 1rem;
+  font-size: 1rem;
+}
+.auth-aside .trust-list li {
+  gap: 0.8rem;
+  align-items: flex-start;
+}
+/* The trust points are the four reasons to hand over a phone number, so
+   each icon sits in its own quiet badge instead of floating bare next to
+   the text: one size, one optical centre, a green-tinted plate that reads
+   as a system mark rather than clip-art. */
+.trust-ico {
+  flex: none;
+  width: 1.9rem;
+  height: 1.9rem;
+  display: grid;
+  place-items: center;
+  border-radius: 0.6rem;
+  background: rgba(22, 163, 74, 0.13);
+  border: 1px solid rgba(22, 163, 74, 0.3);
+  color: #2fbf62;
+  margin-top: 0.05rem;
+}
+.trust-ico svg {
+  color: inherit;
+  margin-top: 0;
 }
 .auth-aside .muted {
   color: #a5aeaa;
@@ -2048,22 +2073,24 @@ a.stat:hover {
  * ── The photograph ──
  * The band sits on the corridor photograph from the about page
  * (/site/about-area.jpg, the Kampala/Wakiso panorama) under an ink scrim.
- * The scrim is not decoration: the sky in that photo peaks near-white, and
- * the panel's secondary text only holds WCAG AA over it where the wash is
- * ~0.9 of brand ink. So the wash runs 0.93 where the copy sits (left on
- * wide screens, top on phones) and eases to 0.55 at the far edge, where
- * nothing but the opaque listing card and breathing room live - there the
- * photo shows through at nearly half strength and the place we actually
- * cover is unmistakable. If the image ever fails to load, background-color
- * degrades to the plain ink band this panel has always been.
+ * The scrim is not decoration: the sky in that photo peaks near-white, so
+ * the wash has to keep the copy legible. The owner asked for the overlay
+ * to sit LIGHTER (round 65), so the band runs 0.82 over the copy (left on
+ * wide screens, top on phones), eases to 0.72 mid-band and lets the photo
+ * through at 0.30/0.38 at the far edge, where only the opaque listing
+ * card and breathing room live. To carry the lighter wash, the panel's
+ * secondary inks were stepped one grade brighter (.lede → #dfe6e2,
+ * .faint → #c8d0cb) so they still clear AA where people actually read.
+ * If the image ever fails to load, background-color degrades to the plain
+ * ink band this panel has always been.
  */
 .hero-panel {
   background:
     linear-gradient(
       90deg,
-      rgba(14, 20, 18, 0.93) 0%,
-      rgba(14, 20, 18, 0.9) 55%,
-      rgba(14, 20, 18, 0.55) 100%
+      rgba(14, 20, 18, 0.82) 0%,
+      rgba(14, 20, 18, 0.72) 55%,
+      rgba(14, 20, 18, 0.3) 100%
     ),
     url('/site/about-area.jpg') center 55% / cover no-repeat;
   background-color: var(--brand-ink);
@@ -2079,9 +2106,9 @@ a.stat:hover {
     background:
       linear-gradient(
         180deg,
-        rgba(14, 20, 18, 0.93) 0%,
-        rgba(14, 20, 18, 0.9) 60%,
-        rgba(14, 20, 18, 0.6) 100%
+        rgba(14, 20, 18, 0.82) 0%,
+        rgba(14, 20, 18, 0.74) 60%,
+        rgba(14, 20, 18, 0.38) 100%
       ),
       url('/site/about-area.jpg') center 55% / cover no-repeat;
   }
@@ -2104,13 +2131,13 @@ a.stat:hover {
   color: var(--ink);
 }
 .hero-panel .lede {
-  /* Lifted from the flat-panel grey: over a photograph that carries a
-     near-white sky, the old #a5aeaa could dip below AA. #cfd6d2 clears 4.5:1
-     under the 0.9 wash even against the brightest pixel in the crop. */
-  color: #cfd6d2;
+  /* Stepped one grade brighter with the lighter wash (round 65): over a
+     photograph that carries a near-white sky, the previous #cfd6d2 was
+     tuned to the 0.9 wash; #dfe6e2 keeps the same AA margin under 0.82. */
+  color: #dfe6e2;
 }
 .hero-panel .faint {
-  color: #b5bdb8;
+  color: #c8d0cb;
 }
 .hero-panel .input {
   background: #18211c;
@@ -4101,6 +4128,17 @@ a.card-link:hover .card-title {
   flex: 1;
   line-height: 1.25;
 }
+/* With the appearance toggle beside sign-out, the foot becomes two calm
+   rows - identity, then actions - instead of squeezing the operator's
+   name behind the avatar disc. Shells without the toggle keep the
+   original single row (the :has() guard). */
+.shell-side-foot:has(.shell-side-foot-actions) {
+  flex-wrap: wrap;
+  row-gap: 0.55rem;
+}
+.shell-side-foot:has(.shell-side-foot-actions) .who {
+  padding-right: 0.25rem;
+}
 .shell-side-foot .who-name {
   display: block;
   font-size: 0.875rem;
@@ -4757,4 +4795,183 @@ a.card-link:hover .card-title {
     opacity: 1;
     transform: none;
   }
+}
+
+/* ── Console appearance settings (theme + motion) ─────────────────────
+   The platform center gains a real appearance preference: LIGHT (the
+   working register it has always had), DARK (the night console - the same
+   layout re-based on deep forest ink) and SYSTEM (follows the device and
+   keeps following it). The choice lands on <html> as data-pf-theme before
+   first paint and the tokens are re-declared ONLY inside the platform
+   shell, so the public site, the portals and the ops console keep their
+   fixed registers. The forest sidebar is a brand block: identical in both
+   modes, exactly like the hero panel. */
+
+/* ── The night console: token re-base ── */
+html[data-pf-theme='dark'] .shell--forest {
+  /* The shell inherits its colour from body (light ink), and plenty of
+     descendants carry no explicit colour rule - so the night console must
+     re-state the ink here, not only re-declare the variable. */
+  color: var(--ink);
+  --canvas: #0b120e;
+  --bg: #101a15;
+  --surface: #141f19;
+  --surface-alt: #18261f;
+  --bg-soft: #16221b;
+  --bg-sunk: #0e1712;
+  --ink: #e7efe9;
+  --ink-soft: #b4c1b9;
+  --ink-faint: #8b988f;
+  --line: #263429;
+  --line-strong: #35463b;
+  --accent: #3ecf81;
+  --accent-ink: #06130c;
+  --accent-tint: rgba(62, 207, 129, 0.13);
+  --accent-soft: rgba(62, 207, 129, 0.1);
+  --accent-line: rgba(62, 207, 129, 0.36);
+  --ok: #4ade80;
+  --ok-bg: rgba(34, 197, 94, 0.14);
+  --warn: #fbbf24;
+  --warn-bg: rgba(245, 158, 11, 0.13);
+  --danger: #f87171;
+  --danger-bg: rgba(239, 68, 68, 0.15);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.35), 0 10px 28px -16px rgba(0, 0, 0, 0.55);
+}
+/* Buttons stay DEEP-fill with white ink (the accent token does double
+   duty as link green; the fill does not follow it into the night). */
+html[data-pf-theme='dark'] .shell--forest .btn-primary {
+  background: #0d5c3c;
+  color: #ffffff;
+}
+html[data-pf-theme='dark'] .shell--forest .btn-primary:hover {
+  background: #12874f;
+}
+/* Danger buttons keep their text legible on the translucent dark wash. */
+html[data-pf-theme='dark'] .shell--forest .btn-danger {
+  color: #fca5a5;
+}
+/* Topbar hairline and shadow read differently over dark canvas. */
+html[data-pf-theme='dark'] .shell--forest .shell-topbar {
+  background: rgba(16, 26, 21, 0.94);
+}
+/* The hero value in the operator band is already the amber of the band's
+   own register - untouched. Cards inherit the re-based tokens. */
+
+/* ── Reduce motion: the console's own switch ──
+   Kills the entrance stagger and any animated movement inside the shell.
+   Colour transitions stay: they are feedback, not travel. The browser's
+   own prefers-reduced-motion rule continues to apply independently. */
+html[data-pf-motion='reduced'] .shell--forest *,
+html[data-pf-motion='reduced'] .shell--forest *::before,
+html[data-pf-motion='reduced'] .shell--forest *::after {
+  animation: none !important;
+}
+
+/* ── Theme switch (Settings page): the three-way register control ── */
+.pf-theme-switch {
+  display: inline-flex;
+  gap: 0.25rem;
+  padding: 0.25rem;
+  background: var(--bg-sunk);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.pf-theme-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 640;
+  padding: 0.45rem 0.8rem;
+  border-radius: calc(var(--radius) - 4px);
+  cursor: pointer;
+  transition: background-color 140ms ease, color 140ms ease, border-color 140ms ease;
+}
+.pf-theme-option:hover { color: var(--ink); background: var(--bg-soft); }
+.pf-theme-option.is-active {
+  background: var(--surface);
+  border-color: var(--line-strong);
+  color: var(--ink);
+  box-shadow: var(--shadow-sm);
+}
+.pf-theme-option svg { color: var(--accent); }
+.pf-theme-option:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* ── Motion switch (Settings page): an honest two-state toggle ── */
+.pf-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 640;
+  color: var(--ink);
+  cursor: pointer;
+}
+.pf-switch-track {
+  width: 2.6rem;
+  height: 1.45rem;
+  border-radius: 999px;
+  background: var(--line-strong);
+  position: relative;
+  transition: background-color 160ms ease;
+  flex: none;
+}
+.pf-switch-thumb {
+  position: absolute;
+  top: 0.14rem;
+  left: 0.14rem;
+  width: 1.17rem;
+  height: 1.17rem;
+  border-radius: 999px;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  transition: transform 160ms ease;
+}
+.pf-switch.is-on .pf-switch-track { background: var(--accent); }
+.pf-switch.is-on .pf-switch-thumb { transform: translateX(1.15rem); }
+.pf-switch:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 6px; }
+
+/* ── Quick theme toggle (sidebar footer): one glyph, concrete flip ── */
+.shell-side-foot-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  width: 100%;
+}
+.shell-side-foot-actions form { flex: 1; display: flex; }
+.shell-side-foot-actions form .btn { flex: 1; }
+.pf-quick-theme {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.15rem;
+  height: 2.15rem;
+  flex: none;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(233, 241, 236, 0.85);
+  cursor: pointer;
+  transition: background-color 140ms ease, color 140ms ease, border-color 140ms ease;
+}
+.pf-quick-theme:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.3);
+}
+.pf-quick-theme:focus-visible {
+  outline: 2px solid #2fbf6b;
+  outline-offset: 1px;
 }

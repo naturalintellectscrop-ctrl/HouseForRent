@@ -71,7 +71,10 @@ export default async function PlatformOverviewPage() {
       db.session.count({ where: { revokedAt: null, expiresAt: { gt: new Date() } } }),
       db.auditEvent.count(),
       db.auditEvent.findMany({
-        take: 10,
+        // Six entries keeps the audit rail roughly level with the queue
+        // column it sits beside; the full trail is one click away and the
+        // total figure below the rail states the true volume.
+        take: 6,
         orderBy: { occurredAt: 'desc' },
         include: { actorParty: { select: { displayName: true } } },
       }),

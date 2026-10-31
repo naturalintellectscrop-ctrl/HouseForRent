@@ -31,30 +31,38 @@ export function AuthAside() {
         </h2>
       </div>
 
-      <ul className="trust-list" style={{ gap: '1rem', fontSize: '1rem' }}>
+      <ul className="trust-list">
         <li>
-          <Icon.shield size={18} />
+          <span className="trust-ico" aria-hidden="true">
+            <Icon.shield size={15} />
+          </span>
           <span>
             A field officer visits and photographs every property before it is
             published.
           </span>
         </li>
         <li>
-          <Icon.clock size={18} />
+          <span className="trust-ico" aria-hidden="true">
+            <Icon.clock size={15} />
+          </span>
           <span>
             Availability carries a date. Stale listings leave search instead of
             wasting your trip.
           </span>
         </li>
         <li>
-          <Icon.lock size={18} />
+          <span className="trust-ico" aria-hidden="true">
+            <Icon.lock size={15} />
+          </span>
           <span>
             Rent and deposit are held by us — recorded against the deal — and
             released to the landlord only after move-in is confirmed.
           </span>
         </li>
         <li>
-          <Icon.key size={18} />
+          <span className="trust-ico" aria-hidden="true">
+            <Icon.key size={15} />
+          </span>
           <span>
             Free for tenants. The landlord pays one commission, once, on a
             completed move-in.

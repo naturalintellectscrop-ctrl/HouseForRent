@@ -43,6 +43,11 @@ const csp = (() => {
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  // Parallel-rig knob: an isolated test rig (scripts/test-rig.mjs) boots a
+  // second `next dev` in THIS repo while the main server runs. Each instance
+  // needs its own build dir or the .next/dev/lock allows only one. Default
+  // is untouched (".next"); only the rig sets NEXT_DIST_DIR.
+  distDir: process.env.NEXT_DIST_DIR || ".next",
   // sharp is a native module: keep it external to the server bundle so the
   // standalone output traces the real binary (bundling WASM/native fallbacks
   // silently degrades image processing).
