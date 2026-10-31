@@ -34,7 +34,7 @@ export function AuthAside() {
       <ul className="trust-list">
         <li>
           <span className="trust-ico" aria-hidden="true">
-            <Icon.shield size={15} />
+            <Icon.shield size={16} />
           </span>
           <span>
             A field officer visits and photographs every property before it is
@@ -43,7 +43,7 @@ export function AuthAside() {
         </li>
         <li>
           <span className="trust-ico" aria-hidden="true">
-            <Icon.clock size={15} />
+            <Icon.clock size={16} />
           </span>
           <span>
             Availability carries a date. Stale listings leave search instead of
@@ -52,7 +52,7 @@ export function AuthAside() {
         </li>
         <li>
           <span className="trust-ico" aria-hidden="true">
-            <Icon.lock size={15} />
+            <Icon.lock size={16} />
           </span>
           <span>
             Rent and deposit are held by us — recorded against the deal — and
@@ -61,7 +61,7 @@ export function AuthAside() {
         </li>
         <li>
           <span className="trust-ico" aria-hidden="true">
-            <Icon.key size={15} />
+            <Icon.key size={16} />
           </span>
           <span>
             Free for tenants. The landlord pays one commission, once, on a

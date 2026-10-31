@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import type { InputHTMLAttributes } from 'react';
+import { Eye, EyeOff } from 'lucide-react';
 
 /**
  * A password field with a show/hide toggle - the eye every sign-in form
@@ -60,46 +61,14 @@ export function PasswordInput(
 
 /* ── glyphs ─────────────────────────────────────────────────────────── */
 
-/* Thin-line SVG on the same 24-grid as the shared icon set in ui.tsx,
-   drawn locally so this stays the only thing the client bundle carries. */
+/* Lucide's Eye / EyeOff: the same professionally-drawn 24-grid set the
+   shared Icon vocabulary moved to. Tree-shaken here so this stays the
+   only thing the client bundle carries. */
 
 function EyeGlyph() {
-  return (
-    <svg
-      width={18}
-      height={18}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.6}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-      focusable="false"
-    >
-      <path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z" />
-      <circle cx="12" cy="12" r="3" />
-    </svg>
-  );
+  return <Eye size={18} strokeWidth={1.75} aria-hidden="true" focusable="false" />;
 }
 
 function EyeOffGlyph() {
-  return (
-    <svg
-      width={18}
-      height={18}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.6}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-      focusable="false"
-    >
-      <path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z" />
-      <circle cx="12" cy="12" r="3" />
-      <path d="M4.5 19.5 19.5 4.5" />
-    </svg>
-  );
+  return <EyeOff size={18} strokeWidth={1.75} aria-hidden="true" focusable="false" />;
 }

@@ -11,22 +11,85 @@ import Link from 'next/link';
 import type { ListingPhoto } from '@/lib/contract';
 import { mediaUrl } from '@/lib/contract';
 import { MediaImage } from '@/app/media-image';
+import type { LucideIcon } from 'lucide-react';
+import {
+  Activity,
+  ArrowLeftRight,
+  ArrowRight,
+  ArrowUpRight,
+  Bath,
+  BedDouble,
+  Bookmark,
+  Building2,
+  Calendar,
+  Camera,
+  ChartColumn,
+  Check,
+  Clock,
+  Coins,
+  Eye,
+  Facebook,
+  FileText,
+  House,
+  Instagram,
+  KeyRound,
+  List,
+  Lock,
+  LogOut,
+  Mail,
+  MapPin,
+  Menu,
+  Monitor,
+  Moon,
+  Phone,
+  Plus,
+  Search,
+  Settings,
+  ShieldCheck,
+  SlidersHorizontal,
+  Sun,
+  TriangleAlert,
+  User,
+  Users,
+  Youtube,
+} from 'lucide-react';
 
 /* ── iconography ────────────────────────────────────────────────────── */
 
 /**
- * Thin-line SVG, drawn on a 24-grid, inheriting `currentColor`.
+ * ── Why Lucide, after a hand-drawn set ──
+ * The previous set was drawn in-house on the same 24-grid. It kept one
+ * visual voice, but hand-drawn paths drift: at 15px the "key" read as a
+ * magnifying glass, the shield wobbled, and every fix redrew one glyph
+ * while its siblings aged. Lucide is a professionally-drawn stroke set on
+ * the identical 24-grid — the register does not change, the drafting
+ * quality does. Icons stay `currentColor`, decorative, `aria-hidden`: the
+ * meaning is always in the adjacent text, never in the glyph.
  *
- * ── Why not emoji ──
- * An emoji renders as a different picture on every platform, cannot take
- * the brand colour, and is read aloud by a screen reader as whatever
- * Unicode named it in 2015. For an interface whose job is to look
- * trustworthy, that is three problems for no benefit.
- *
- * Every icon here is decorative and marked `aria-hidden`: the meaning is
- * always in the adjacent text, never in the glyph.
+ * The `Icon` API is unchanged (size-only props), so every surface -
+ * marketplace, portals, ops console - upgrades through this one file.
  */
-function Svg({
+function luc(Cmp: LucideIcon, defaultSize = 18) {
+  function Glyph({ size }: { size?: number }) {
+    return (
+      <Cmp
+        size={size ?? defaultSize}
+        strokeWidth={1.75}
+        aria-hidden="true"
+        focusable="false"
+      />
+    );
+  }
+  return Glyph;
+}
+
+/**
+ * The escape hatch for brand glyphs Lucide does not carry. Same 24-grid,
+ * same stroke register as Lucide, so the footer's social row keeps one
+ * voice. Each social mark is rendered WITHOUT a link until the real
+ * profile exists - a social button that goes nowhere is a dead end.
+ */
+function BrandGlyph({
   children,
   size = 18,
 }: {
@@ -40,7 +103,7 @@ function Svg({
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth={1.6}
+      strokeWidth={1.75}
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"
@@ -52,279 +115,89 @@ function Svg({
 }
 
 export const Icon = {
-  check: (p: { size?: number }) => (
-    <Svg {...p}>
-      <path d="M20 6 9 17l-5-5" />
-    </Svg>
-  ),
-  /* ── Shell & dashboard icons (forest refresh) ──
-     Drawn in the same thin-line register as the originals: 24 grid, 1.6
-     stroke, currentColor. The sidebar and the stat tiles need a handful of
-     nouns the set did not carry yet; adding them HERE keeps one visual
-     voice instead of importing a second icon system. */
-  home: (p: { size?: number }) => (
-    <Svg {...p}>
-      <path d="M3 11.5 12 4l9 7.5" />
-      <path d="M5.5 9.5V20h13V9.5" />
-      <path d="M10 20v-5.5h4V20" />
-    </Svg>
-  ),
-  plus: (p: { size?: number }) => (
-    <Svg {...p}>
-      <path d="M12 5v14M5 12h14" />
-    </Svg>
-  ),
-  calendar: (p: { size?: number }) => (
-    <Svg {...p}>
-      <rect x="3" y="5" width="18" height="16" rx="2" />
-      <path d="M3 10h18M8 3v4M16 3v4" />
-    </Svg>
-  ),
-  coins: (p: { size?: number }) => (
-    <Svg {...p}>
-      <circle cx="9" cy="9" r="5.5" />
-      <path d="M14.2 7a5.5 5.5 0 1 1-6.6 8.4" />
-    </Svg>
-  ),
-  list: (p: { size?: number }) => (
-    <Svg {...p}>
-      <path d="M9 6h12M9 12h12M9 18h12" />
-      <path d="M3.5 6h.01M3.5 12h.01M3.5 18h.01" />
-    </Svg>
-  ),
-  users: (p: { size?: number }) => (
-    <Svg {...p}>
-      <circle cx="9" cy="8.5" r="3.5" />
-      <path d="M3.5 19a5.5 5.5 0 0 1 11 0" />
-      <path d="M15.5 5.7a3.5 3.5 0 0 1 0 5.6M20.5 19a5.5 5.5 0 0 0-3.5-4.8" />
-    </Svg>
-  ),
-  gear: (p: { size?: number }) => (
-    <Svg {...p}>
-      <circle cx="12" cy="12" r="3.2" />
-      <path d="M12 2.8v2.4M12 18.8v2.4M2.8 12h2.4M18.8 12h2.4M5.5 5.5l1.7 1.7M16.8 16.8l1.7 1.7M18.5 5.5l-1.7 1.7M7.2 16.8l-1.7 1.7" />
-    </Svg>
-  ),
-  /* Settings & appearance: the console's preference vocabulary, drawn in
-     the same register so the Settings entry and the theme controls do not
-     read as a second-hand icon set. */
-  sliders: (p: { size?: number }) => (
-    <Svg {...p}>
-      <path d="M4 8h9M17 8h3M4 16h3M11 16h9" />
-      <circle cx="15" cy="8" r="2.1" />
-      <circle cx="9" cy="16" r="2.1" />
-    </Svg>
-  ),
-  sun: (p: { size?: number }) => (
-    <Svg {...p}>
-      <circle cx="12" cy="12" r="4" />
-      <path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.2 5.2l1.4 1.4M17.4 17.4l1.4 1.4M18.8 5.2l-1.4 1.4M6.6 17.4l-1.4 1.4" />
-    </Svg>
-  ),
-  moon: (p: { size?: number }) => (
-    <Svg {...p}>
-      <path d="M20 13.5A8 8 0 0 1 10.5 4a8 8 0 1 0 9.5 9.5z" />
-    </Svg>
-  ),
-  monitor: (p: { size?: number }) => (
-    <Svg {...p}>
-      <rect x="3" y="4.5" width="18" height="12.5" rx="2" />
-      <path d="M9 20.5h6M12 17v3.5" />
-    </Svg>
-  ),
-  eye: (p: { size?: number }) => (
-    <Svg {...p}>
-      <path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z" />
-      <circle cx="12" cy="12" r="3" />
-    </Svg>
-  ),
-  chart: (p: { size?: number }) => (
-    <Svg {...p}>
-      <path d="M5 20v-6M11 20V5M17 20v-9" />
-      <path d="M3 20h18" />
-    </Svg>
-  ),
-  doc: (p: { size?: number }) => (
-    <Svg {...p}>
-      <path d="M6 3h8l4 4v14H6z" />
-      <path d="M14 3v4h4M9.5 12h5M9.5 16h5" />
-    </Svg>
-  ),
-  swap: (p: { size?: number }) => (
-    <Svg {...p}>
-      <path d="M7 3 3 7l4 4" />
-      <path d="M3 7h14" />
-      <path d="m17 21 4-4-4-4" />
-      <path d="M21 17H7" />
-    </Svg>
-  ),
-  alert: (p: { size?: number }) => (
-    <Svg {...p}>
-      <path d="M12 3 2.5 20h19z" />
-      <path d="M12 9.5V14M12 17h.01" />
-    </Svg>
-  ),
-  arrowUpRight: (p: { size?: number }) => (
-    <Svg {...p}>
-      <path d="M7 17 17 7" />
-      <path d="M8.5 7H17v8.5" />
-    </Svg>
-  ),
-  signout: (p: { size?: number }) => (
-    <Svg {...p}>
-      <path d="M10 3H5a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h5" />
-      <path d="m15 8 4 4-4 4" />
-      <path d="M19 12H9" />
-    </Svg>
-  ),
-  pulse: (p: { size?: number }) => (
-    <Svg {...p}>
-      <path d="M3 12h4l2.5-7 4 14L16 12h5" />
-    </Svg>
-  ),
-  search: (p: { size?: number }) => (
-    <Svg {...p}>
-      <circle cx="11" cy="11" r="7" />
-      <path d="m21 21-4.3-4.3" />
-    </Svg>
-  ),
-  shield: (p: { size?: number }) => (
-    <Svg {...p}>
-      <path d="M12 3l7 3v5c0 4.5-3 8.3-7 10-4-1.7-7-5.5-7-10V6z" />
-      <path d="M9 12l2 2 4-4" />
-    </Svg>
-  ),
-  pin: (p: { size?: number }) => (
-    <Svg {...p}>
-      <path d="M12 21s7-5.6 7-11a7 7 0 1 0-14 0c0 5.4 7 11 7 11z" />
-      <circle cx="12" cy="10" r="2.5" />
-    </Svg>
-  ),
-  bed: (p: { size?: number }) => (
-    <Svg {...p}>
-      <path d="M3 7v11M3 12h18v6M21 18v-6a3 3 0 0 0-3-3h-6v3" />
-      <circle cx="7.5" cy="10.5" r="1.8" />
-    </Svg>
-  ),
-  bath: (p: { size?: number }) => (
-    <Svg {...p}>
-      <path d="M4 12h16v3a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4z" />
-      <path d="M7 12V6a2 2 0 0 1 4 0" />
-      <path d="M6 19l-1 2M18 19l1 2" />
-    </Svg>
-  ),
-  camera: (p: { size?: number }) => (
-    <Svg {...p}>
-      <path d="M3 8h3l1.5-2h9L18 8h3v11H3z" />
-      <circle cx="12" cy="13" r="3.5" />
-    </Svg>
-  ),
-  clock: (p: { size?: number }) => (
-    <Svg {...p}>
-      <circle cx="12" cy="12" r="9" />
-      <path d="M12 7v5l3 2" />
-    </Svg>
-  ),
-  lock: (p: { size?: number }) => (
-    <Svg {...p}>
-      <rect x="4" y="10" width="16" height="10" rx="2" />
-      <path d="M8 10V7a4 4 0 0 1 8 0v3" />
-    </Svg>
-  ),
-  key: (p: { size?: number }) => (
-    <Svg {...p}>
-      <circle cx="8" cy="8" r="4" />
-      <path d="M11 11l9 9M17 17l2-2M14 14l2-2" />
-    </Svg>
-  ),
-  arrow: (p: { size?: number }) => (
-    <Svg {...p}>
-      <path d="M5 12h14M13 6l6 6-6 6" />
-    </Svg>
-  ),
-  menu: (p: { size?: number }) => (
-    <Svg {...p} size={p.size ?? 22}>
-      <path d="M4 7h16M4 12h16M4 17h16" />
-    </Svg>
-  ),
-  user: (p: { size?: number }) => (
-    <Svg {...p}>
-      <circle cx="12" cy="8" r="4" />
-      <path d="M4 20a8 8 0 0 1 16 0" />
-    </Svg>
-  ),
-  building: (p: { size?: number }) => (
-    <Svg {...p}>
-      <path d="M4 21V6l7-3v18M11 21h9V10l-9-3" />
-      <path d="M7 9h.01M7 13h.01M15 12h.01M15 16h.01" />
-    </Svg>
-  ),
+  check: luc(Check),
+  /* ── Shell & dashboard icons ──
+     The sidebar, stat tiles and theme controls share this one vocabulary;
+     the names below keep their original keys so call sites read the same. */
+  home: luc(House),
+  plus: luc(Plus),
+  calendar: luc(Calendar),
+  coins: luc(Coins),
+  list: luc(List),
+  users: luc(Users),
+  gear: luc(Settings),
+  sliders: luc(SlidersHorizontal),
+  sun: luc(Sun),
+  moon: luc(Moon),
+  monitor: luc(Monitor),
+  eye: luc(Eye),
+  chart: luc(ChartColumn),
+  doc: luc(FileText),
+  swap: luc(ArrowLeftRight),
+  alert: luc(TriangleAlert),
+  arrowUpRight: luc(ArrowUpRight),
+  signout: luc(LogOut),
+  pulse: luc(Activity),
+  search: luc(Search),
+  /* Trust vocabulary. `KeyRound` is deliberate: the old key glyph was a
+     circle with a tail and at 15px it read as a search lens - the exact
+     confusion this swap exists to fix. */
+  shield: luc(ShieldCheck),
+  pin: luc(MapPin),
+  bed: luc(BedDouble),
+  bath: luc(Bath),
+  camera: luc(Camera),
+  clock: luc(Clock),
+  lock: luc(Lock),
+  key: luc(KeyRound),
+  arrow: luc(ArrowRight),
+  menu: luc(Menu, 22),
+  user: luc(User),
+  building: luc(Building2),
   /* Bookmark (QA round: the saved-homes toggle). Deliberately NOT on the
      property card - see the PropertyCard note about invented social proof.
      A bookmark is a private fact the system actually holds; a heart count
      is not. */
-  bookmark: (p: { size?: number }) => (
-    <Svg {...p}>
-      <path d="M19 21l-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
-    </Svg>
-  ),
-  bookmarkFilled: (p: { size?: number }) => (
-    <Svg {...p}>
-      <path d="M19 21l-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" fill="currentColor" />
-    </Svg>
-  ),
-  mail: (p: { size?: number }) => (
-    <Svg {...p}>
-      <rect x="3" y="5" width="18" height="14" rx="2" />
-      <path d="m3 7 9 6 9-6" />
-    </Svg>
-  ),
-  phone: (p: { size?: number }) => (
-    <Svg {...p}>
-      <path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z" />
-    </Svg>
-  ),
-  /* Unlinked social placeholders (the real handles are coming). Drawn in
-     the same thin-line register as the rest of the set rather than as
-     filled brand artwork, so the footer keeps one visual voice. Each is
-     rendered WITHOUT a link until the real profile exists - a social
-     button that goes nowhere is a dead end. */
+  bookmark: luc(Bookmark),
+  bookmarkFilled: function BookmarkFilled({ size }: { size?: number }) {
+    return (
+      <Bookmark
+        size={size ?? 18}
+        strokeWidth={1.75}
+        fill="currentColor"
+        aria-hidden="true"
+        focusable="false"
+      />
+    );
+  },
+  mail: luc(Mail),
+  phone: luc(Phone),
+  /* Unlinked social placeholders (the real handles are coming). Lucide
+     carries Facebook, Instagram and YouTube; WhatsApp, X and TikTok it
+     does not, so those three stay on the hand-drawn `Brand` wrapper -
+     same grid, same stroke - rather than pulling in a second icon
+     dependency for three glyphs. */
   whatsapp: (p: { size?: number }) => (
-    <Svg {...p}>
+    <BrandGlyph {...p}>
       <path d="M12 3a9 9 0 0 0-7.7 13.6L3 21l4.5-1.2A9 9 0 1 0 12 3z" />
       <path d="M9 8.7c.3 3 2.9 5.4 5.9 5.7l1.4-1.4-2-1.3-1 .5a5.3 5.3 0 0 1-2.1-2.1l.5-1L10.4 7z" />
-    </Svg>
+    </BrandGlyph>
   ),
-  facebook: (p: { size?: number }) => (
-    <Svg {...p}>
-      <path d="M15 8h3V5h-3a4 4 0 0 0-4 4v2H8v3h3v7h3v-7h3l1-3h-4V9a1 1 0 0 1 1-1z" />
-    </Svg>
-  ),
-  instagram: (p: { size?: number }) => (
-    <Svg {...p}>
-      <rect x="3.5" y="3.5" width="17" height="17" rx="4.5" />
-      <circle cx="12" cy="12" r="3.8" />
-      <circle cx="17.2" cy="6.8" r="0.6" fill="currentColor" stroke="none" />
-    </Svg>
-  ),
+  facebook: luc(Facebook),
+  instagram: luc(Instagram),
   xSocial: (p: { size?: number }) => (
-    <Svg {...p}>
+    <BrandGlyph {...p}>
       <path d="M4 4l16 16" />
       <path d="M20 4L4 20" />
-    </Svg>
+    </BrandGlyph>
   ),
   tiktok: (p: { size?: number }) => (
-    <Svg {...p}>
+    <BrandGlyph {...p}>
       <path d="M14 4v9.5a3.75 3.75 0 1 1-3.2-3.7" />
       <path d="M14 6c.6 2 2.2 3.4 4.5 3.6" />
-    </Svg>
+    </BrandGlyph>
   ),
-  youtube: (p: { size?: number }) => (
-    <Svg {...p}>
-      <rect x="2.5" y="6" width="19" height="12" rx="3.5" />
-      <path d="M10.5 9.5v5L15 12z" />
-    </Svg>
-  ),
+  youtube: luc(Youtube),
 };
 
 /* ── brand ──────────────────────────────────────────────────────────── */
