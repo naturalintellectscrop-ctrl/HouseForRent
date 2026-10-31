@@ -32,6 +32,7 @@ import {
   FileText,
   House,
   Instagram,
+  Landmark,
   KeyRound,
   List,
   Lock,
@@ -120,6 +121,7 @@ export const Icon = {
      The sidebar, stat tiles and theme controls share this one vocabulary;
      the names below keep their original keys so call sites read the same. */
   home: luc(House),
+  landmark: luc(Landmark),
   plus: luc(Plus),
   calendar: luc(Calendar),
   coins: luc(Coins),

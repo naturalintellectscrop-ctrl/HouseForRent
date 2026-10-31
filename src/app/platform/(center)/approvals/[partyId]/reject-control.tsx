@@ -38,6 +38,9 @@ export function RejectApplicationControl({
       await postJson(`/admin/users/${partyId}/reject`, { reason: reason.trim() });
       setDone(true);
       setArmed(false);
+      // Back to the queue: the row's disappearance is the visible proof
+      // the decision stuck; the account trail carried it meanwhile.
+      router.push('/platform/approvals');
       router.refresh();
     } catch (err) {
       if (err instanceof ClientApiError) {

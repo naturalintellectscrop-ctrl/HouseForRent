@@ -1,7 +1,8 @@
 import Link from 'next/link';
 import { adminPartyDetail, PartyNotFoundError } from '@/server/ops';
-import { DegradedPanel, humanize, loadPlatformData } from '../../data';
+import { DegradedPanel, humanize, loadPlatformData, roleLabel } from '../../data';
 import { IdentityCheckControl } from '@/app/ops/users/[partyId]/identity-check';
+import { ApproveApplicationControl } from './approve-control';
 import { RejectApplicationControl } from './reject-control';
 
 export const metadata = {
@@ -12,13 +13,14 @@ export const metadata = {
 /**
  * One account application, and the two decisions the platform can take.
  *
- * ── The decisions reuse the platform's ONE activation path ──
- * Approval here is NOT a new "activate" switch: it is the existing
- * operations-run identity check (the same outcome logic the applicant
- * runs on themselves), whose verified result flips the party active.
- * Rejection is the new, recorded counterpart - a required reason on the
- * audit trail - because the status vocabulary could always express it
- * but nothing could record it.
+ * ── Two decisions, one evidence tool ──
+ * Approval is the platform's recorded decision to activate (reviewer,
+ * moment and optional basis on the trail). The operations-run identity
+ * check stays available as the stronger EVIDENCE for that decision - the
+ * same outcome logic the applicant runs on themselves - and a verified
+ * result also activates. Rejection is the recorded counterpart - a
+ * required reason on the audit trail - because the status vocabulary
+ * could always express it but nothing could record it.
  *
  * ── What each decision does and does not grant (stated, not implied) ──
  * An activation makes the PERSON an active platform account. It does not
@@ -53,7 +55,7 @@ export default async function ReviewApplicationPage(props: {
         <header className="stack-sm">
           <h1 className="h1">{party.displayName}</h1>
           <p className="muted">
-            This is a provisioned staff account ({humanize(detail.role)}).
+            This is a provisioned staff account ({roleLabel(detail.role)}).
             Staff are never applications - they are created by an
             administrator through the authorized provisioning route.
           </p>
@@ -69,6 +71,9 @@ export default async function ReviewApplicationPage(props: {
   const isRejected =
     detail.accountStatus === 'suspended' &&
     detail.audit.some((a) => a.action === 'account_application_rejected');
+  const isApproved = detail.accountStatus === 'active';
+  const approvedEvent = detail.audit.find((a) => a.action === 'account_application_approved');
+  const rejectedEvent = detail.audit.find((a) => a.action === 'account_application_rejected');
 
   return (
     <div className="stack-lg">
@@ -80,7 +85,7 @@ export default async function ReviewApplicationPage(props: {
         <div className="stack-sm">
           <h1 className="h1">{party.displayName}</h1>
           <p className="muted">
-            {humanize(detail.role)} application · {party.primaryPhone}
+            {roleLabel(detail.role)} application · {party.primaryPhone}
             {detail.listerTier ? ` · ${humanize(detail.listerTier)}` : ''} ·
             applied {party.createdAt.toISOString().slice(0, 10)}
           </p>
@@ -94,25 +99,38 @@ export default async function ReviewApplicationPage(props: {
         </span>
       </header>
 
-      {isRejected ? (
+      {isApproved || isRejected ? (
         <div className="card plat-section">
           <h2 className="h2">Decision recorded</h2>
-          {detail.audit
-            .filter((a) => a.action === 'account_application_rejected')
-            .slice(0, 1)
-            .map((a) => (
-              <p key={a.id} className="muted" style={{ margin: 0 }}>
-                Rejected by <strong>{a.actorName}</strong> on{' '}
-                {a.createdAt.toISOString().replace('T', ' ').slice(0, 16)} UTC
-                {a.detail && typeof a.detail.reason === 'string'
-                  ? ` - “${a.detail.reason}”`
+          {isApproved ? (
+            approvedEvent ? (
+              <p key={approvedEvent.id} className="muted" style={{ margin: 0 }}>
+                Approved by <strong>{approvedEvent.actorName}</strong> on{' '}
+                {approvedEvent.createdAt.toISOString().replace('T', ' ').slice(0, 16)} UTC
+                {approvedEvent.detail && typeof approvedEvent.detail.note === 'string'
+                  ? ` - “${approvedEvent.detail.note}”`
                   : ''}
-                .
+                . The account is active.
               </p>
-            ))}
+            ) : (
+              <p className="muted" style={{ margin: 0 }}>
+                The account is active - activated by a passing identity check.
+              </p>
+            )
+          ) : rejectedEvent ? (
+            <p key={rejectedEvent.id} className="muted" style={{ margin: 0 }}>
+              Rejected by <strong>{rejectedEvent.actorName}</strong> on{' '}
+              {rejectedEvent.createdAt.toISOString().replace('T', ' ').slice(0, 16)} UTC
+              {rejectedEvent.detail && typeof rejectedEvent.detail.reason === 'string'
+                ? ` - “${rejectedEvent.detail.reason}”`
+                : ''}
+              .
+            </p>
+          ) : null}
           <p className="muted plat-feed-note" style={{ marginBottom: 0 }}>
-            The account is refused at sign-in by the account-status policy.
-            No further decisions are available on a rejected application.
+            {isRejected
+              ? 'The account is refused at sign-in by the account-status policy. No further decisions are available on a rejected application.'
+              : 'The person can sign in and use the platform. Property verification, listing publication and payouts keep their own gates.'}
           </p>
         </div>
       ) : null}
@@ -129,7 +147,7 @@ export default async function ReviewApplicationPage(props: {
             </li>
             <li>
               <span>Role</span>
-              <strong>{humanize(detail.role)}</strong>
+              <strong>{roleLabel(detail.role)}</strong>
             </li>
             {detail.listerTier ? (
               <li>
@@ -185,39 +203,57 @@ export default async function ReviewApplicationPage(props: {
       </div>
 
       {isPending ? (
-        <div className="plat-decide-grid">
-          <section className="card plat-section plat-decide">
+        <>
+          <div className="plat-decide-grid">
+            <section className="card plat-section plat-decide">
+              <div className="plat-section-head">
+                <h2 className="h2">Approve - activate the account</h2>
+              </div>
+              <p className="muted" style={{ marginTop: 0 }}>
+                The platform&rsquo;s decision: this person is verified to
+                your satisfaction and welcome. Their account goes active
+                immediately, and the decision - with you as the reviewer,
+                and an optional note on your basis - is recorded on the
+                trail below.
+              </p>
+              <ul className="plat-scope-list">
+                <li className="is-grant">
+                  <strong>Grants:</strong> an active platform account.
+                </li>
+                <li className="is-limit">
+                  <strong>Does not:</strong> verify any property, publish any
+                  listing (field-officer gate), or grant staff access.
+                </li>
+              </ul>
+              <ApproveApplicationControl partyId={party.id} displayName={party.displayName} />
+            </section>
+
+            <section className="card plat-section plat-decide">
+              <div className="plat-section-head">
+                <h2 className="h2">Reject the application</h2>
+              </div>
+              <RejectApplicationControl partyId={party.id} displayName={party.displayName} />
+            </section>
+          </div>
+
+          <section className="card plat-section">
             <div className="plat-section-head">
-              <h2 className="h2">Approve - run the identity check</h2>
+              <h2 className="h2">Stronger evidence (optional) - run the identity check</h2>
             </div>
             <p className="muted" style={{ marginTop: 0 }}>
               The same sandbox check the applicant runs on themselves: the
-              NIN&rsquo;s structure, and whether the name matches this account.
-              A verified result activates the account immediately.
+              NIN&rsquo;s structure, and whether the name matches this
+              account. A verified result also activates a still-pending
+              account - use it when you want the check itself on the trail,
+              not only the decision.
             </p>
-            <ul className="plat-scope-list">
-              <li className="is-grant">
-                <strong>Grants:</strong> an active platform account.
-              </li>
-              <li className="is-limit">
-                <strong>Does not:</strong> verify any property, publish any
-                listing (field-officer gate), or grant staff access.
-              </li>
-            </ul>
             <IdentityCheckControl
               partyId={party.id}
               displayName={party.displayName}
               currentState={identity.state}
             />
           </section>
-
-          <section className="card plat-section plat-decide">
-            <div className="plat-section-head">
-              <h2 className="h2">Reject the application</h2>
-            </div>
-            <RejectApplicationControl partyId={party.id} displayName={party.displayName} />
-          </section>
-        </div>
+        </>
       ) : !isRejected ? (
         <p className="muted">
           This account has already been decided - it is{' '}
@@ -264,6 +300,11 @@ export default async function ReviewApplicationPage(props: {
                   event.detail &&
                   typeof event.detail.reason === 'string'
                     ? ` - “${event.detail.reason}”`
+                    : ''}
+                  {event.action === 'account_application_approved' &&
+                  event.detail &&
+                  typeof event.detail.note === 'string'
+                    ? ` - “${event.detail.note}”`
                     : ''}
                 </span>
               </li>

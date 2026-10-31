@@ -38,6 +38,18 @@ export function humanize(value: string): string {
   return value.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase());
 }
 
+/** Role display names - the internal `foo` key never reaches a human eye. */
+export const ROLE_LABEL: Record<string, string> = {
+  tenant: 'Tenant',
+  lister: 'Lister',
+  foo: 'Field officer',
+  admin: 'Administrator',
+};
+
+export function roleLabel(role: string): string {
+  return ROLE_LABEL[role] ?? humanize(role);
+}
+
 export function DegradedPanel({ title }: { title: string }): ReactNode {
   return (
     <div className="plat-degraded card">

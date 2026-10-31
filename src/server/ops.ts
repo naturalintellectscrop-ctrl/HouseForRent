@@ -187,6 +187,9 @@ export async function provisionStaff(params: {
   role: AuthRole;
 }) {
   if (params.role !== 'foo' && params.role !== 'admin') throw new StaffRoleError();
+  if (params.password.length < 8) {
+    throw new ApiError(422, 'VALIDATION', 'Choose a password of at least 8 characters.');
+  }
   const { hashPassword } = await import('./auth');
 
   // Same courtesy the self-service register gives: a duplicate phone is a
@@ -972,8 +975,8 @@ export async function setListerTier(params: {
 
 // ── account applications (the approval queue) ────────────────────────────
 //
-// Every self-service account is born `pending_verification` (registration
-// is the application). Activation in this domain has exactly ONE server
+// Every landlord account is born `pending_verification` (registration
+// is the application); tenants register active. Activation in this domain has exactly ONE server
 // path - an identity check that passes flips the party active (the code
 // above, unchanged) - so the queue's job is to make that path findable:
 // who is waiting, how long, what has been tried, and what a decision will
@@ -1134,4 +1137,164 @@ export async function rejectAccountApplication(params: {
       occurredAt: new Date(),
     },
   });
+}
+
+/**
+ * APPROVE an account application - the platform decides to activate.
+ *
+ * ── Why a direct approval exists beside the identity check ──
+ * The identity check is the strongest EVIDENCE for approval, but the
+ * decision itself is the platform's: a reviewer who has verified the
+ * person another way (documents inspected, a phone call, an in-person
+ * meeting) must be able to record that decision without first running a
+ * sandbox NIN query they may not have the data for. What keeps this
+ * honest is the same machinery rejection uses: the reviewer's identity,
+ * the moment and (optionally) their stated basis go on the account trail
+ * forever, and the state move is a conditional update - two reviewers
+ * deciding at once produce exactly one approval, and a decision that
+ * raced a rejection comes back 409 instead of overwriting history.
+ *
+ * ── What approval does NOT do ──
+ * It activates the PERSON. It does not verify any property, publish any
+ * listing (the field-officer publish gate), switch payouts on, or grant
+ * staff privileges. An approval without a passing identity check is
+ * visible as such on the trail: the identity section keeps showing the
+ * true attempt state.
+ */
+export async function approveAccountApplication(params: {
+  actorPartyId: string;
+  partyId: string;
+  note?: string;
+}): Promise<void> {
+  const note = (params.note ?? '').trim().replace(/\s+/g, ' ');
+  if (note.length > 500) {
+    throw new ApiError(422, 'VALIDATION', 'Keep the note under 500 characters.');
+  }
+
+  const party = await db.party.findUnique({
+    where: { id: params.partyId },
+    include: { userAccounts: { take: 1 } },
+  });
+  if (!party || !party.userAccounts[0]) throw new PartyNotFoundError(params.partyId);
+  const account = party.userAccounts[0];
+  // Staff accounts are provisioned, never applied for (same line reject draws).
+  if (account.authRole !== 'tenant' && account.authRole !== 'lister') {
+    throw new IdentityCheckNotApplicableError(account.authRole);
+  }
+  if (party.status !== 'pending_verification') {
+    throw new ApplicationNotPendingError(party.status);
+  }
+
+  const moved = await db.party.updateMany({
+    where: { id: party.id, status: 'pending_verification' },
+    data: { status: 'active' },
+  });
+  if (moved.count === 0) {
+    // A concurrent decision moved the account first - same contract as
+    // rejection: the error reflects the caller's refreshed reality.
+    const now = await db.party.findUnique({
+      where: { id: params.partyId },
+      select: { status: true },
+    });
+    throw new ApplicationNotPendingError(now?.status ?? 'unknown');
+  }
+
+  await db.auditEvent.create({
+    data: {
+      actorPartyId: params.actorPartyId,
+      eventType: 'account_application_approved',
+      // Subject = the PARTY, matching the rejection event's scope.
+      subjectRef: party.id,
+      payload: {
+        role: account.authRole,
+        priorStatus: 'pending_verification',
+        ...(note ? { note } : {}),
+      },
+      occurredAt: new Date(),
+    },
+  });
+}
+
+/**
+ * SUSPEND or RESTORE a staff account's platform access.
+ *
+ * ── The rails ──
+ * Staff-only (tenants and listers have their own lifecycle through the
+ * application queue); the acting admin cannot change their own access
+ * (a sole owner must not be able to lock themself out); the last active
+ * administrator cannot be suspended (platform control must survive);
+ * the status move is conditional so two concurrent decisions produce one
+ * winner; suspension revokes live sessions immediately (the sign-in
+ * policy already refuses a suspended account on every later request);
+ * and every change lands on the audit trail with the acting admin's
+ * identity. No new status vocabulary: `active`/`suspended` are the same
+ * party statuses every consumer already enforces.
+ */
+export class StaffAccessError extends ApiError {
+  constructor(message: string) {
+    super(422, 'STAFF_ACCESS_INVALID', message);
+    this.name = 'StaffAccessError';
+  }
+}
+
+export async function setStaffAccess(params: {
+  actorPartyId: string;
+  partyId: string;
+  action: 'suspend' | 'restore';
+}): Promise<{ status: string }> {
+  const target = await db.party.findUnique({
+    where: { id: params.partyId },
+    include: { userAccounts: { take: 1 } },
+  });
+  if (!target || !target.userAccounts[0]) throw new PartyNotFoundError(params.partyId);
+  const account = target.userAccounts[0];
+  if (account.authRole !== 'foo' && account.authRole !== 'admin') {
+    throw new StaffAccessError('Access control applies to staff accounts only.');
+  }
+  if (target.id === params.actorPartyId) {
+    throw new StaffAccessError('You cannot change your own access here - ask another administrator.');
+  }
+
+  if (params.action === 'suspend') {
+    if (target.status !== 'active') {
+      throw new StaffAccessError(`This account is ${target.status} - only an active account can be suspended.`);
+    }
+    if (account.authRole === 'admin') {
+      const otherActiveAdmins = await db.userAccount.count({
+        where: { authRole: 'admin', partyId: { not: target.id }, party: { status: 'active' } },
+      });
+      if (otherActiveAdmins === 0) {
+        throw new StaffAccessError('This is the last active administrator - platform control would be locked out.');
+      }
+    }
+    const moved = await db.party.updateMany({
+      where: { id: target.id, status: 'active' },
+      data: { status: 'suspended' },
+    });
+    if (moved.count === 0) throw new StaffAccessError('The account moved first - refresh and retry.');
+    await db.session.updateMany({
+      where: { userAccountId: account.id, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+  } else {
+    if (target.status !== 'suspended') {
+      throw new StaffAccessError(`This account is ${target.status} - only a suspended account can be restored.`);
+    }
+    const moved = await db.party.updateMany({
+      where: { id: target.id, status: 'suspended' },
+      data: { status: 'active' },
+    });
+    if (moved.count === 0) throw new StaffAccessError('The account moved first - refresh and retry.');
+  }
+
+  await db.auditEvent.create({
+    data: {
+      actorPartyId: params.actorPartyId,
+      eventType: 'staff_access_changed',
+      subjectRef: target.id,
+      payload: { action: params.action, role: account.authRole, name: target.displayName },
+      occurredAt: new Date(),
+    },
+  });
+  return { status: params.action === 'suspend' ? 'suspended' : 'active' };
 }

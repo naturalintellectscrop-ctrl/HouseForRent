@@ -9,6 +9,7 @@ import {
   SectionCard,
   humanize,
   loadPlatformData,
+  roleLabel,
 } from './data';
 import { Icon } from '@/app/ui';
 
@@ -265,7 +266,7 @@ export default async function PlatformOverviewPage() {
                     <span className="plat-queue-main">
                       <strong className="plat-name">{row.displayName}</strong>
                       <span className="plat-sub">
-                        {humanize(row.role)}
+                        {roleLabel(row.role)}
                         {row.identityState === 'verified'
                           ? ' · identity verified'
                           : row.identityState !== null
@@ -335,7 +336,7 @@ export default async function PlatformOverviewPage() {
             </ul>
             <p className="muted plat-feed-note">
               {data.roleCounts
-                .map((r) => `${humanize(r.authRole)}: ${r._count._all.toLocaleString('en-UG')}`)
+                .map((r) => `${roleLabel(r.authRole)}: ${r._count._all.toLocaleString('en-UG')}`)
                 .join(' · ')}
             </p>
           </SectionCard>

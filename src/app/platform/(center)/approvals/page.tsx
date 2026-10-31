@@ -13,10 +13,16 @@ export const metadata = {
 /**
  * The approval queue - the platform's pending work, as accounts.
  *
- * Every self-service registration IS the application: the account exists,
- * can sign in under the pending policy, and waits on exactly one server
- * event - an identity check that passes - to become active. This page
- * makes that wait VISIBLE and ROUTED instead of discoverable only by
+ * A landlord registration IS the application: the account exists, can
+ * sign in under the pending policy, and waits on one decision - the
+ * platform's recorded activation, ideally evidenced by a passing
+ * identity check. Tenants are NOT here: they register active, because
+ * their account only ever speaks for the tenant themself - the landlord
+ * approves each tenancy application and identity checks happen at deal
+ * time. A pending tenant on this page is a legacy account created
+ * before self-activation, kept visible so it gets decided exactly once.
+ *
+ * This page makes that wait VISIBLE and ROUTED instead of discoverable only by
  * people who already know where the ops console keeps its directory.
  *
  * Ordering is operational: landlords first (their application gates a
@@ -49,7 +55,7 @@ export default async function PlatformApprovalsPage() {
       <PlatPageHead
         eyebrow="Account workqueue"
         title="Account applications"
-        lede="Accounts waiting on activation. Approval means an identity check that passes - the one server path that flips an account active. It verifies the PERSON; it does not verify any property, approve any listing, or grant staff privileges."
+        lede="Landlord accounts waiting on activation. Approval is the platform's recorded decision to activate - evidenced ideally by a passing identity check. It verifies the PERSON; it does not verify any property, approve any listing, or grant staff privileges. Tenant accounts no longer wait here: they activate at registration, because a tenant account only ever speaks for the tenant themself."
       />
 
       {rows.length === 0 ? (
@@ -65,7 +71,10 @@ export default async function PlatformApprovalsPage() {
         <>
           {[
             { title: 'Landlord applications', group: landlords },
-            { title: 'Tenant applications', group: tenants },
+            // Tenants register active since self-activation; a pending
+            // tenant here is a legacy account created before it. Keep the
+            // section so each legacy account still gets decided once.
+            { title: 'Tenant accounts (before self-activation)', group: tenants },
           ]
             .filter((section) => section.group.length > 0)
             .map((section) => (
@@ -124,10 +133,14 @@ export default async function PlatformApprovalsPage() {
             ))}
 
           <p className="muted plat-feed-note">
-            An approved identity check activates the account immediately and
-            is recorded on its trail with the acting reviewer. A rejection
-            records the decision, its reason and the reviewer - the account
-            is then refused at sign-in by the existing status policy.
+            Approval activates the account immediately - by your recorded
+            decision, or by a passing identity check - and is written on its
+            trail with the acting reviewer. A rejection records the decision,
+            its reason and the reviewer - the account is then refused at
+            sign-in by the existing status policy. Why tenants no longer
+            wait: their account gates nothing but their own tenancy - the
+            landlord still approves every application, and identity checks
+            happen at deal time, when there is a lease to protect.
           </p>
         </>
       )}

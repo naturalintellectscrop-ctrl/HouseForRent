@@ -1,6 +1,13 @@
 import Link from 'next/link';
 import { db } from '@/lib/db';
-import { DegradedPanel, PlatPageHead, SectionCard, loadPlatformData, humanize } from '../data';
+import {
+  DegradedPanel,
+  PlatPageHead,
+  SectionCard,
+  loadPlatformData,
+  humanize,
+  roleLabel,
+} from '../data';
 
 /**
  * Every account on the platform, most recent first, with its party status
@@ -42,7 +49,7 @@ export default async function PlatformUsersPage() {
           <ul className="plat-kv">
             {roleCounts.map((r) => (
               <li key={r.authRole}>
-                <span>{humanize(r.authRole)}</span>
+                <span>{roleLabel(r.authRole)}</span>
                 <strong>{r._count._all.toLocaleString('en-UG')}</strong>
               </li>
             ))}
@@ -90,7 +97,7 @@ export default async function PlatformUsersPage() {
                     </span>
                   </td>
                   <td className="plat-table-muted">{a.party.email ?? '—'}</td>
-                  <td>{humanize(a.authRole)}</td>
+                  <td>{roleLabel(a.authRole)}</td>
                   <td>
                     {a.party.status === 'pending_verification' ? (
                       <Link href={`/platform/approvals/${a.partyId}`} className="plat-action">

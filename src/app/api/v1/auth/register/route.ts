@@ -30,7 +30,16 @@ export const POST = route(async (req: NextRequest) => {
 
   const created = await db.$transaction(async (tx) => {
     const party = await tx.party.create({
-      data: { displayName, primaryPhone, status: 'pending_verification' },
+      data: {
+        displayName,
+        primaryPhone,
+        // Landlords gate a business relationship (listings, field visits,
+        // payouts) and wait for review; a tenant account only ever speaks
+        // for the tenant themself, and the lease-level gates (landlord
+        // approval of the application, verified move-in) apply later, so
+        // tenants start active.
+        status: role === 'lister' ? 'pending_verification' : 'active',
+      },
     });
     const account = await tx.userAccount.create({ data: { partyId: party.id, authRole: role } });
     await tx.userCredential.create({

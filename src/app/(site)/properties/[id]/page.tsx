@@ -415,11 +415,11 @@ export default async function PropertyPage({
             <h3 className="h3">How the money works</h3>
             <ul className="trust-list" style={{ marginTop: '0.6rem' }}>
               <li>
-                <Icon.lock size={14} />
+                <Icon.landmark size={14} />
                 <span>Rent and deposit are held by us, not sent onward.</span>
               </li>
               <li>
-                <Icon.key size={14} />
+                <Icon.home size={14} />
                 <span>Released to the landlord after you move in.</span>
               </li>
               <li>
