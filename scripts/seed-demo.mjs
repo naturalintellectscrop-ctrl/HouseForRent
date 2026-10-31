@@ -1,7 +1,7 @@
 /**
  * House For Rent — the demo corridor seed (sandbox port of seed-web-demo.mjs).
  *
- * HONESTY RULES (non-negotiable, from the repo's CLAUDE.md §5):
+ * HONESTY RULES (non-negotiable, from the repo's orientation document §5):
  *  - Refuses to run without DEMO_PASSWORD (F-009: never a committed password).
  *  - Every property photograph it mints is GENERATED ARTWORK, stored with
  *    source='development_fixture', and the image itself is labelled

@@ -16,7 +16,7 @@ The authoritative repository is `github.com/naturalintellectscrop-ctrl/HouseForR
 
 - Monorepo: `apps/web` (Next.js 16.2.12, App Router, thin client) + `apps/api` (NestJS + Prisma + PostgreSQL, 10 migrations).
 - `_legacy/` already quarantines the old sandbox-era artifacts (db, prisma, src, mini-services, upload, tool-results, examples, .zscripts). Nothing in `apps/` references it. Safe to leave archived.
-- SSOT documentation set is genuinely excellent and current: `CLAUDE.md` (orientation), `docs/House_For_Rent_Business_Discovery_Summary.md` (11 frozen decisions), PRD, Technical Architecture, Data Model, API Spec, DOMAIN.md (stage log), AUTHENTICATION.md, DEPLOYMENT.md, `HOUSE_FOR_RENT_ENGINEERING_FINDINGS.md` (F-001…F-017 with statuses), `HOUSE_FOR_RENT_CONNECTIVITY_MATRIX.md`.
+- SSOT documentation set is genuinely excellent and current: the orientation document, `docs/House_For_Rent_Business_Discovery_Summary.md` (11 frozen decisions), PRD, Technical Architecture, Data Model, API Spec, DOMAIN.md (stage log), AUTHENTICATION.md, DEPLOYMENT.md, `HOUSE_FOR_RENT_ENGINEERING_FINDINGS.md` (F-001…F-017 with statuses), `HOUSE_FOR_RENT_CONNECTIVITY_MATRIX.md`.
 - Hand-written design system in `apps/web/app/globals.css` (2,053 lines, two registers: marketplace vs `.ops` console), `ui.tsx` (server-rendered shared components, thin-line SVG icons), `site-chrome.tsx`.
 
 **Verified status of historical findings (from the findings ledger + code):**
@@ -60,7 +60,7 @@ The real repo is already coherent; rebuilding it there is not possible from this
 
 - Port the domain model to SQLite (same models, same state machine, BigInt money, string-on-the-wire).
 - Implement the API contract as Next.js route handlers under `/api/v1/*`, backed by a server-only **service layer** (`src/server/services/*`) — the same separation of duties the NestJS modules provide, so service code can be lifted back into the NestJS API later.
-- Server components read through the same service layer (one implementation of business rules); browser mutations go through `/api/v1/*` fetch — the browser never computes business value (CLAUDE.md §5 invariant).
+- Server components read through the same service layer (one implementation of business rules); browser mutations go through `/api/v1/*` fetch — the browser never computes business value (orientation invariant).
 - Auth: local credential sessions (scrypt + HMAC-signed httpOnly cookie) replacing Supabase, which cannot run here. Divergence recorded; the real repo keeps Supabase.
 - Design system, copy, routes, honesty rules: **ported, not reinvented**.
 - Demo data: clearly labelled `development_fixture` artwork, same as the repo's convention. No fake statistics, no testimonials.

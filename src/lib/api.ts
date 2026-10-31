@@ -628,7 +628,7 @@ async function resolveSavedListings() {
 /**
  * The signed-in landlord's money position (QA round: /landlord/earnings).
  * The aggregation is the server's - the page renders what arrives and adds
- * no arithmetic of its own (CLAUDE.md §5: the browser never computes
+ * no arithmetic of its own (orientation invariant: the browser never computes
  * business value).
  */
 async function resolveLandlordFinancials() {
