@@ -219,3 +219,90 @@ and verification records follow the same rule); no escrow/custody licensing clai
 tests (sandbox mock self-labels MOCK in the database); no live settlement or deposit custody
 enabled. New money paths run inside the same single-transaction, audited, server-derived-amount
 discipline as the existing ones.
+
+## 10. Financial operations completion (Phase 2, 2026-10-31)
+
+Completes the operational layer AROUND the architecture above without changing any of it.
+Additive migration `20261031120000_financial_operations_phase2` (DRAFT — committed
+UNAPPLIED to production; apply via `scripts/apply-migration.mjs` after owner review).
+
+### 10.1 Duplicate-payment resolution (complete workflow)
+
+- `duplicate_payment_refund` (deal action, admin) now: bounds the amount by the deal's real
+  funding credits AND by a cumulative bound (pending + confirmed duplicate refunds can never
+  total more than was ever collected — "record the duplicate" twice cannot pay twice); links
+  the record to the collect instruction the provider double-collected under
+  (`RefundRecord.duplicateOfInstructionId`); refuses a second OPEN record for the same source.
+- The payout is instructed through the SAME PSP seam as every other refund (idempotency key
+  `refund:{recordId}`). Sandbox mock: completes instantly and labels itself MOCK. Live: parks
+  pending until the provider's webhook confirms the money left.
+- Completion (`applyDuplicateRefundCompletion`, dispatched by the webhook AND the retry path
+  through ONE shared dispatcher `completeRefundRecordByKind`) marks the record confirmed ONLY
+  on provider confirmation and makes NO ledger posting — the duplicate was never booked as a
+  liability, so its return books nothing. Redeliveries are no-ops.
+- Provider-reported failure marks the linked refund record FAILED regardless of the deal's
+  status (a duplicate refund does not park the deal), and the deal reverts only where it was
+  parked (`refund_pending`).
+- Console: duplicates appear from the provider's own `psp_duplicate_collect_confirmation`
+  audit events with resolution state `unresolved → refund_in_progress → partially_resolved →
+  resolved` (confirmed segments aggregated per deal).
+
+### 10.2 Refund retry discipline (admin)
+
+`POST /api/v1/admin/finance/refund-records/:id/retry` — FAILED records only. A PENDING record
+cannot be retried (the provider has not answered; a second instruction risks a double payout);
+a CONFIRMED record has nothing left to retry. Each retry issues a FRESH instruction under an
+attempt-suffixed idempotency key (`refund:{recordId}:rN`) — a failed instruction is never
+reused — and is audited (`refund_retry_issued`).
+
+### 10.3 Provider statement reconciliation (the provider side)
+
+- New storage: `provider_statement` + `provider_statement_line` (+ `ProviderLineKind`,
+  `ProviderLineMatchState`, `ProviderStatementSource` enums). Imports are append-only; verdicts
+  are frozen on the rows at import; a repeated row identity within one import is refused.
+- Adapter boundary: `src/server/finance/provider-statement.ts`. NO provider API is integrated —
+  statements arrive as role-gated JSON imports (`POST /api/v1/admin/finance/provider-statements`)
+  until the business approves a live fetch. The format is provider-neutral.
+- Classification (deterministic, by import sequence `line_seq`): `matched` / `mismatch` /
+  `duplicate` (a second provider line under an already-matched reference — the double-collection
+  shape) / `unexpected` (no internal instruction for the reference) / `unmatched` (fee or
+  reversal with no booked counterpart). The MISSING side lists succeeded internal instructions
+  the statement never mentioned (period-scoped when the statement names one).
+- Two balances, always separate, never merged: `providerReportedNet` (Σcollections − payouts −
+  refunds − fees − reversals, per the statement) and `internalNetForMatched` (our books for the
+  matched instructions). Internal-only reconciliation is never labelled provider reconciliation.
+- Internal check (`runReconciliation`) explicitly excludes duplicate-payment payout instructions
+  from the payout mirror — by design they have no ledger side; their truth is provider-side and
+  belongs to statement reconciliation.
+
+### 10.4 Payout execution boundary (provider-neutral completion)
+
+- Live `release`/`refund` instructions now carry a provider reference (UUID) at issue time —
+  the dedupe key for the future payout API and the hook statement lines match on.
+- Instruction dedupe in live mode is per idempotency key (the purpose), not per (deal, kind) —
+  a second refund record's payout can never attach to the first record's instruction.
+- Every payout path (settle, full refund, partial refund, deposit release, commission-reversal
+  payout, duplicate-payment refund) refuses to book on a FAILED instruction (502
+  `PSP_INSTRUCTION_FAILED`): nothing moved, nothing is booked, the record (where one exists)
+  fails honestly, and a retry issues a fresh instruction.
+- In live mode, undispatched payouts remain honestly PENDING (blocked: provider payout dispatch
+  not integrated) — the console lists them with the reason; nothing pretends.
+
+### 10.5 Admin finance console
+
+`/ops/finance` (server-rendered, admin-gated by the same backend rules):
+ledger integrity, the books (rent/deposit/owed/commission/fees), provider + custody status,
+duplicate payments with resolution state, refund records with their REAL execution state and
+retry for failed ones, deals parked on a money wait with their instruction states, blocked
+payouts with reasons, imported statements with exception flags, the pending-policy list, and
+the financial audit tail. Reads go through `/api/v1/admin/finance/operations` (and the shared
+`financeOverview()` used by the overview endpoint — one implementation, no figure can drift).
+No fake balances, no mock activity, no synthesised success anywhere on it.
+
+### 10.6 Verification
+
+Finance pipeline suite extended to 166 checks (from 125): the 20 mandated scenarios + the
+adversarial regressions + P2-A..P2-D (duplicate workflow, retry discipline, statement import
+classification/validation/books-invariance, operations endpoint + role gates). ALL PASS.
+`verify-prod-finance-state.mjs` (read-only) reports production: finance migration applied
+cleanly, zero finance schema drift, zero financial activity, zero posting violations.

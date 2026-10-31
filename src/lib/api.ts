@@ -181,6 +181,150 @@ export interface Reconciliation {
   history: ReconciliationCheck[];
 }
 
+// ── admin finance operations console (Phase 2) ────────────────────────
+
+export interface FinanceDuplicateRow {
+  eventId: string;
+  seenAt: string;
+  dealId: string | null;
+  instructionId: string | null;
+  confirmedAmount: string | null;
+  /** resolved | partially_resolved | refund_in_progress | unresolved */
+  resolutionState: string;
+  resolved: boolean;
+  confirmedReturned: string;
+  resolutions: Array<{ id: string; state: string; amount: string; createdAt: string }>;
+}
+
+export interface RefundRecordRow {
+  id: string;
+  dealId: string;
+  dealStatus: string;
+  kind: string;
+  state: string;
+  amount: string;
+  reason: string;
+  createdAt: string;
+  confirmedAt: string | null;
+  failureReason: string | null;
+  instructionId: string | null;
+  instructionState: string | null;
+  retryable: boolean;
+}
+
+export interface PendingDealRow {
+  id: string;
+  status: string;
+  updatedAt: string;
+  tenantName: string;
+  landlordName: string;
+  advanceRentSnapshot: string | null;
+  depositAmountSnapshot: string | null;
+  instructions: Array<{ id: string; kind: string; amount: string; state: string }>;
+}
+
+export interface BlockedPayoutRow {
+  instructionId: string;
+  dealId: string;
+  kind: string;
+  amount: string;
+  state: string;
+  blockedReason: string;
+}
+
+export interface FinanceAuditEvent {
+  id: string;
+  eventType: string;
+  actorName: string;
+  subjectRef: string | null;
+  payload: unknown;
+  occurredAt: string;
+}
+
+/** Mirrors src/server/finance/overview.ts - one implementation, two readers. */
+export interface FinanceOverviewData {
+  money: {
+    collected: string;
+    heldInCustody: { rent: string; deposit: string; legacyEscrow: string; total: string; note: string };
+    owedToLandlord: string;
+    commissionEarned: string;
+    providerFeesBorneByHfr: string;
+    settledToLandlord: string;
+    refunded: { rent: string; deposit: string; commissionReversalPayouts: string };
+  };
+  psp: {
+    mode: string;
+    confirmed: { collect: string; release: string; refund: string };
+    inFlight: { collect: string; release: string; refund: string };
+    failed: { collect: string; release: string; refund: string };
+    counts: Record<string, Record<string, number>>;
+  };
+  workflows: {
+    moveInVerificationsOpen: number;
+    moveInVerificationsDisputed: number;
+    depositDeductionsAwaitingAction: number;
+    refundRecordsPending: number;
+    refundRecordsFailed: number;
+    dealsInFinancialReview: number;
+    postSettlementRefundCoordinations: number;
+  };
+  integrity: { everyPostingBalances: boolean };
+  provider: { pspMode: string; depositCustodyConfirmed: boolean; custodyNote: string | null; payoutDispatchNote: string | null };
+  pendingPolicyApprovals: ReadonlyArray<{ key: string; question: string; status: string }>;
+}
+
+export interface FinanceOperations {
+  overview: FinanceOverviewData;
+  duplicates: FinanceDuplicateRow[];
+  refundRecords: RefundRecordRow[];
+  pendingDeals: PendingDealRow[];
+  blockedPayouts: BlockedPayoutRow[];
+  auditTail: FinanceAuditEvent[];
+}
+
+export interface ProviderStatementRow {
+  id: string;
+  provider: string;
+  source: string;
+  periodStart: string | null;
+  periodEnd: string | null;
+  note: string | null;
+  lineCount: number;
+  createdAt: string;
+  importedByPartyId: string;
+  counts: Record<string, number>;
+  hasExceptions: boolean;
+}
+
+export interface ProviderStatementDetail {
+  statement: {
+    id: string;
+    provider: string;
+    source: string;
+    periodStart: string | null;
+    periodEnd: string | null;
+    note: string | null;
+    lineCount: number;
+    createdAt: string;
+    importedByPartyId: string;
+  };
+  counts: Record<string, number>;
+  missing: Array<{ instructionId: string; providerRef: string | null; kind: string; amount: string }>;
+  providerReportedNet: string;
+  internalNetForMatched: string;
+  lines: Array<{
+    id: string;
+    lineRef: string | null;
+    providerRef: string;
+    kind: string;
+    amount: string;
+    currency: string;
+    occurredAt: string;
+    matchState: string;
+    matchNote: string | null;
+  }>;
+}
+
 export interface DealRow {
   id: string;
   status: string;
@@ -1072,6 +1216,57 @@ async function resolveReconciliation(): Promise<Reconciliation> {
   };
 }
 
+// ── admin finance operations console (Phase 2) ─────────────────────────────
+
+/** Admin gate for the finance console reads - same rule the HTTP guards run. */
+async function requireAdminCaller() {
+  const caller = await requireCaller();
+  if (caller.role !== 'admin') throw new ApiError(403, 'FORBIDDEN', 'admin surface');
+  return caller;
+}
+
+async function resolveFinanceOperations(): Promise<FinanceOperations> {
+  await requireAdminCaller();
+  const overview = await (await import('@/server/finance/overview')).financeOverview();
+  const ops = await import('@/server/finance/operations');
+  const [duplicates, refundRecords, pendingDeals, blockedPayouts, auditTail] = await Promise.all([
+    ops.unresolvedDuplicatePayments(),
+    ops.refundRecordRows(),
+    ops.pendingMoneyDeals(),
+    ops.blockedPayouts(),
+    ops.financeAuditTail(),
+  ]);
+  return jsonSafeOps({ overview, duplicates, refundRecords, pendingDeals, blockedPayouts, auditTail });
+}
+
+/** BigInt→string + Date→ISO, recursively (same wire contract as jsonSafe). */
+function jsonSafeOps<T>(value: T): T {
+  const walk = (v: unknown): unknown => {
+    if (typeof v === 'bigint') return v.toString();
+    if (v instanceof Date) return v.toISOString();
+    if (Array.isArray(v)) return v.map(walk);
+    if (v && typeof v === 'object') {
+      const out: Record<string, unknown> = {};
+      for (const [k, val] of Object.entries(v as Record<string, unknown>)) out[k] = walk(val);
+      return out;
+    }
+    return v;
+  };
+  return walk(value) as T;
+}
+
+async function resolveProviderStatements(): Promise<ProviderStatementRow[]> {
+  await requireAdminCaller();
+  const { listProviderStatements } = await import('@/server/finance/provider-statement');
+  return listProviderStatements();
+}
+
+async function resolveProviderStatementDetail(id: string): Promise<ProviderStatementDetail> {
+  await requireAdminCaller();
+  const { providerStatementDetail } = await import('@/server/finance/provider-statement');
+  return providerStatementDetail(id);
+}
+
 async function resolveConfigVersions(key: string): Promise<ConfigVersion[]> {
   const param = await db.configParameter.findUnique({ where: { key }, include: { versions: true } });
   if (!param) return [];
@@ -1229,6 +1424,16 @@ function resolverFor(path: string, authenticated: boolean): Resolver {
   }
   if (parts[1] === 'admin' && parts[2] === 'deals') return () => resolveDealStates();
   if (parts[1] === 'admin' && parts[2] === 'reconciliation') return () => resolveReconciliation();
+  // Phase 2 finance console reads (admin-gated; mutations are HTTP routes).
+  if (parts[1] === 'admin' && parts[2] === 'finance' && parts[3] === 'operations') {
+    return () => resolveFinanceOperations();
+  }
+  if (parts[1] === 'admin' && parts[2] === 'finance' && parts[3] === 'provider-statements' && parts.length === 5) {
+    return () => resolveProviderStatementDetail(parts[4]);
+  }
+  if (parts[1] === 'admin' && parts[2] === 'finance' && parts[3] === 'provider-statements') {
+    return () => resolveProviderStatements();
+  }
   if (parts[1] === 'admin' && parts[2] === 'audit' && parts.length === 4) {
     return async () => toAuditEvents(await recentAuditEvents(50)).filter((e) => e.subjectRef === parts[3]);
   }

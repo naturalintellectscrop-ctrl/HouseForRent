@@ -1508,6 +1508,10 @@ model RefundRecord {
   reason             String
   requestedByPartyId String       @map("requested_by_party_id")
   instructionId      String?      @map("instruction_id")
+  /// duplicate_payment refunds only: the COLLECT instruction the provider
+  /// double-collected under. The refund's own payout instruction stays in
+  /// instruction_id; this names the original payment that was collected twice.
+  duplicateOfInstructionId String? @map("duplicate_of_instruction_id")
   confirmedAt        DateTime?    @map("confirmed_at")
   failureReason      String?      @map("failure_reason")
   createdAt          DateTime     @default(now()) @map("created_at")
@@ -1516,6 +1520,8 @@ model RefundRecord {
   deal Deal @relation(fields: [dealId], references: [id])
 
   @@index([dealId])
+  @@index([kind, state])
+  @@index([duplicateOfInstructionId])
   @@map("refund_record")
 }
 
@@ -1586,4 +1592,103 @@ model PostSettlementRefund {
 
   @@index([dealId])
   @@map("post_settlement_refund")
+}
+
+// ── provider statement reconciliation (Phase 2, FINANCIAL_ARCHITECTURE.md §9) ──
+//
+// An IMPORTED provider statement (or transaction report) and its rows. This
+// is the provider side of reconciliation: the internal reconciliation check
+// compares our books to THEMSELVES and to our OWN instruction records; these
+// tables are where an actual provider-reported truth lands, gets classified
+// line by line, and stays - the import is append-only and its decisions are
+// never overwritten by a later import.
+//
+// The provider column is deliberately a free token ('nylonpay' today). No
+// provider API is integrated here: statements arrive as reviewed imports
+// (JSON over the admin endpoint) until the business approves a live fetch.
+
+enum ProviderStatementSource {
+  manual_import
+}
+
+model ProviderStatement {
+  id                String                  @id @default(uuid())
+  provider          String                  @default("nylonpay")
+  source            ProviderStatementSource @default(manual_import)
+
+  /// Inclusive reporting period the statement covers, when the provider
+  /// names one. A line outside the period is an import error, not silent.
+  periodStart       DateTime?               @map("period_start")
+  periodEnd         DateTime?               @map("period_end")
+
+  importedByPartyId String                  @map("imported_by_party_id")
+  note              String?
+
+  /// Rows the import received (before any classification).
+  lineCount         Int                     @default(0) @map("line_count")
+  createdAt         DateTime                @default(now()) @map("created_at")
+
+  lines ProviderStatementLine[]
+
+  @@index([provider, createdAt])
+  @@map("provider_statement")
+}
+
+/// What the provider says happened, one row per provider transaction.
+enum ProviderLineKind {
+  collection
+  payout
+  refund
+  fee
+  reversal
+}
+
+/// The verdict the classifier recorded for this line, frozen at import:
+///   matched    - pairs with an internal instruction/posting of the same amount
+///   mismatch   - pairs but the amounts (or states) disagree
+///   duplicate  - a second provider line for a reference already matched
+///   unexpected - no internal instruction/posting for this provider reference
+///   unmatched  - internal object of the expected class exists but amounts
+///                could not be paired within this statement (review)
+enum ProviderLineMatchState {
+  matched
+  mismatch
+  duplicate
+  unexpected
+  unmatched
+}
+
+model ProviderStatementLine {
+  id                    String                 @id @default(uuid())
+  statementId           String                 @map("statement_id")
+
+  /// Position in the import (0-based): the classification verdicts must be
+  /// deterministic - which row "first matched" a reference and which row is
+  /// the duplicate can never depend on UUID ordering.
+  lineSeq               Int                    @default(0) @map("line_seq")
+
+  /// The provider's row identity (statement line / transaction id), unique
+  /// within one statement import so re-importing the same file is refused.
+  lineRef               String?                @map("line_ref")
+  /// The transaction reference our system issued (PspInstruction.providerRef).
+  providerRef           String                 @map("provider_ref")
+  kind                  ProviderLineKind
+  amount                BigInt
+  currency              String                 @default("UGX")
+  occurredAt            DateTime               @map("occurred_at")
+
+  /// The classification verdict + what it paired against, preserved.
+  matchState            ProviderLineMatchState @default(unmatched) @map("match_state")
+  matchedInstructionId  String?                @map("matched_instruction_id")
+  matchNote             String?                @map("match_note")
+
+  /// Verbatim provider row, kept for audit (bounded by the import route).
+  raw                   Json?
+
+  statement ProviderStatement @relation(fields: [statementId], references: [id])
+
+  @@unique([statementId, lineRef])
+  @@index([statementId])
+  @@index([providerRef])
+  @@map("provider_statement_line")
 }
