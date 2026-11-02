@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { hashPassword, issueSession, resolveSession, homeFor } from '@/server/auth';
+import { registrationRateLimit } from '@/server/rate-limit';
 import { ApiError, readJson, requireString, route } from '@/server/http';
 
 /**
@@ -8,6 +9,11 @@ import { ApiError, readJson, requireString, route } from '@/server/http';
  * Only `tenant` and `lister` exist here; staff are provisioned through
  * /api/v1/ops/staff by an admin, and this endpoint refuses any other value
  * regardless of what the client sends (DTO allowlist rule).
+ *
+ * P-11: rate limited before any database work - account-creation spam is a
+ * abuse vector the endpoint previously offered for free. Per-identifier
+ * (the phone being claimed) and per-IP windows, memory + the shared durable
+ * layer. A 429 names the wait; a legitimate person is nowhere near the cap.
  */
 export const POST = route(async (req: NextRequest) => {
   const body = await readJson(req);
@@ -23,6 +29,22 @@ export const POST = route(async (req: NextRequest) => {
   if (password.length < 8) throw new ApiError(400, 'VALIDATION', 'Choose a password of at least 8 characters.');
   if (role !== 'tenant' && role !== 'lister') {
     throw new ApiError(400, 'VALIDATION', 'Choose whether you are looking for a home or letting one.');
+  }
+
+  // Rate limit after the cheap input checks, BEFORE any database work - same
+  // ordering as login. The identifier is the normalised phone digits (the
+  // account key being claimed), bounded so the limiter cannot be poisoned.
+  const ip =
+    req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+    req.headers.get('x-real-ip') ||
+    'unknown';
+  const limitVerdict = await registrationRateLimit({ ip, identifier: primaryPhone.replace(/\D/g, '') });
+  if (!limitVerdict.ok) {
+    throw new ApiError(
+      429,
+      'TOO_MANY_ATTEMPTS',
+      `Too many sign-up attempts from this connection. Try again in about ${Math.max(1, Math.ceil(limitVerdict.retryAfterSeconds / 60))} minute(s).`,
+    );
   }
 
   const existing = await db.party.findUnique({ where: { primaryPhone } });

@@ -1692,3 +1692,23 @@ model ProviderStatementLine {
   @@index([providerRef])
   @@map("provider_statement_line")
 }
+
+/// Durable rate-limit counters (P-11 security round): fixed-window attempt
+/// counts SHARED by every deployed instance, so a multi-instance deployment
+/// enforces one limit instead of N (the in-memory limiter's honest weakness).
+/// One row per bounded bucket key; a new window resets the row in place, so
+/// the table stays bounded by distinct keys, never by attempt volume. Stale
+/// rows are swept opportunistically by the limiter itself.
+model RateLimitCounter {
+  id          String   @id @default(uuid())
+  /// Scope-prefixed, normalised, bounded key — e.g. "reg-ip:1.2.3.4" or
+  /// "cred-id:1.2.3.4|p:+2567…". The limiter refuses unbounded input.
+  bucketKey   String   @unique @map("bucket_key")
+  hits        Int      @default(0)
+  /// Start of the current fixed window for this bucket.
+  windowStart DateTime @map("window_start")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([updatedAt])
+  @@map("rate_limit_counter")
+}

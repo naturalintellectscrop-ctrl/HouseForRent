@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { issueSession, resolveSession, homeFor, verifyPassword, maySignIn } from '@/server/auth';
-import { rateLimit } from '@/server/rate-limit';
+import { credentialRateLimit } from '@/server/rate-limit';
 import { ApiError, readJson, requireString, route } from '@/server/http';
 
 /**
@@ -21,9 +21,11 @@ import { ApiError, readJson, requireString, route } from '@/server/http';
  * that. Account status policy is enforced here: suspended/disabled/archived
  * accounts cannot sign in.
  *
- * ── Controls added in Task 39 ──
- * - Rate limiting: sliding windows per (IP + identifier) and per IP. Honest
- *   scope note: in-memory, so per-instance on a multi-instance deployment.
+ * ── Controls added in Task 39, upgraded in the P-11 round ──
+ * - Rate limiting: sliding windows per (IP + identifier) and per IP. The
+ *   P-11 round added the DURABLE layer behind the same windows (the shared
+ *   rate_limit_counter table), so a multi-instance deployment enforces one
+ *   limit instead of N - the memory layer remains as the fast first bump.
  * - Audit: successful sign-ins of every role are recorded ('signed_in'), and
  *   a wrong password against an EXISTING admin account is recorded
  *   ('signin_failed') - a targeted-attempt signal on the highest-value
@@ -50,7 +52,7 @@ export const POST = route(async (req: NextRequest) => {
     req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
     req.headers.get('x-real-ip') ||
     'unknown';
-  const verdict = rateLimit({ ip, identifier: `${isEmail ? 'e' : 'p'}:${normalised}` });
+  const verdict = await credentialRateLimit({ ip, identifier: `${isEmail ? 'e' : 'p'}:${normalised}` });
   if (!verdict.ok) {
     throw new ApiError(
       429,

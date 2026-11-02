@@ -17,7 +17,7 @@
  *    not free text - they become the baseline for partner standards.
  */
 import { db } from '@/lib/db';
-import { assertViewingTransitionAllowed } from './viewing-state-machine';
+import { assertViewingTransitionAllowed, IllegalViewingTransitionError } from './viewing-state-machine';
 import type { ConditionRating } from './domain';
 
 // ── errors ───────────────────────────────────────────────────────────────
@@ -327,6 +327,9 @@ export async function getViewingDetail(viewingId: string) {
     status: v.status,
     scheduledFor: v.scheduledFor,
     tenantName: v.tenantParty.displayName,
+    /** Identity of the assigned officer, when one exists - the read-path
+     * assignment check runs on THIS (P-1), not on a display name. */
+    conductedByPartyId: v.conductedByPartyId,
     conductedByName: v.conductedByParty?.displayName ?? null,
     listing: {
       id: v.listing.id,
@@ -452,12 +455,67 @@ export async function conduct(params: { viewingId: string; fooPartyId: string; i
   });
 }
 
-/** FR-5.2 - no-shows are tracked, not deleted. */
-export async function markNoShow(params: { viewingId: string; fooPartyId: string }) {
-  const viewing = await db.viewing.findUnique({ where: { id: params.viewingId } });
-  if (!viewing) throw new ViewingNotFoundError(params.viewingId);
-  assertViewingTransitionAllowed(viewing.status as never, 'no_show');
-  return db.viewing.update({ where: { id: params.viewingId }, data: { status: 'no_show' } });
+/**
+ * FR-5.2 - no-shows are tracked, not deleted.
+ *
+ * B-3: the operation is now the full discipline the other viewing writes
+ * already follow.
+ *  - Authorization: the actor is the ASSIGNED officer, an admin (the visit
+ *    record's close controls are shared with the console), or an officer
+ *    claiming a still-unassigned scheduled visit (the same assign-on-report
+ *    path fileFieldReport permits). Anyone else is refused with the typed
+ *    403 - a no-show claim against someone else's visit is exactly the
+ *    record an audit question turns on.
+ *  - State: the frozen graph decides (only scheduled → no_show; no_show is
+ *    terminal), and the write is a CAS on `status = 'scheduled'`, so two
+ *    concurrent closers (or a stale double-submit) cannot both win - the
+ *    loser gets the typed 409 instead of a silent second write.
+ *  - Audit: the decision lands in the audit trail IN THE SAME TRANSACTION
+ *    as the status change, carrying the actor and the state it came from.
+ *  - Nothing else is touched: the update targets this one row, and a failed
+ *    authorization inside the transaction rolls the whole thing back.
+ */
+export async function markNoShow(params: { viewingId: string; fooPartyId: string; actorRole?: string }) {
+  return db.$transaction(async (tx) => {
+    const viewing = await tx.viewing.findUnique({ where: { id: params.viewingId } });
+    if (!viewing) throw new ViewingNotFoundError(params.viewingId);
+    assertViewingTransitionAllowed(viewing.status as never, 'no_show');
+
+    const isAdmin = params.actorRole === 'admin';
+    if (!isAdmin) {
+      const mine = viewing.conductedByPartyId === params.fooPartyId;
+      // Unassigned + still scheduled is the only claimable state - the graph
+      // check above already refused everything else.
+      const claimable = viewing.conductedByPartyId === null;
+      if (!mine && !claimable) throw new NotAssignedOfficerError(params.viewingId);
+    }
+
+    // CAS: only a row still in `scheduled` moves. A concurrent transition
+    // that won the race first makes this a 409, not a duplicate audit row.
+    const moved = await tx.viewing.updateMany({
+      where: { id: params.viewingId, status: 'scheduled' },
+      data: { status: 'no_show' },
+    });
+    if (moved.count === 0) {
+      throw new IllegalViewingTransitionError(viewing.status, 'no_show');
+    }
+
+    await tx.auditEvent.create({
+      data: {
+        actorPartyId: params.fooPartyId,
+        eventType: 'viewing_no_show',
+        subjectRef: params.viewingId,
+        payload: {
+          from: viewing.status,
+          listingId: viewing.listingId,
+          officerPartyId: viewing.conductedByPartyId,
+        },
+        occurredAt: new Date(),
+      },
+    });
+
+    return tx.viewing.findUniqueOrThrow({ where: { id: params.viewingId } });
+  });
 }
 
 /**

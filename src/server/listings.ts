@@ -576,8 +576,18 @@ function publishBlockers(input: {
  * FR-3.1, FR-3.2, FR-9.1, plus the photography rule from the launch-gate
  * round). `dryRun` produces the same evaluation without
  * flipping state, so the landlord UI can show what is still missing.
+ *
+ * B-4: pass `callerPartyId` (the session holder) whenever a CALLER is
+ * involved - the evaluation then verifies actual ownership before it
+ * reports anything. A dry-run is a read of a landlord's gate state
+ * (verification, mandate, agreement acceptance, photo counts), so it must
+ * refuse someone else's listing exactly as the real publish would - the
+ * same NotYourListingError 403 publishListing raises - never a green light
+ * the real operation would reject. Server-side callers (publishListing)
+ * pass the owner id they have already authenticated; omitting the
+ * parameter is for callers with no actor at all.
  */
-export async function evaluatePublish(listingId: string, dryRun = true) {
+export async function evaluatePublish(listingId: string, dryRun = true, callerPartyId?: string) {
   const listing = await db.listing.findUnique({
     where: { id: listingId },
     include: {
@@ -586,7 +596,10 @@ export async function evaluatePublish(listingId: string, dryRun = true) {
       photos: { select: { id: true } },
     },
   });
-  if (!listing) throw new Error('listing not found');
+  if (!listing) throw new ApiError(404, 'LISTING_NOT_FOUND', 'listing not found');
+  if (callerPartyId && listing.property.ownerPartyId !== callerPartyId) {
+    throw new NotYourListingError();
+  }
 
   const tier = listing.property.ownerParty.listerProfile?.tier as ListerTier | undefined;
   const mandateVerified = tier
@@ -622,10 +635,10 @@ export async function evaluatePublish(listingId: string, dryRun = true) {
 /** The landlord publishes (only after the gate passes). */
 export async function publishListing(params: { listingId: string; listerPartyId: string }) {
   const listing = await db.listing.findUnique({ where: { id: params.listingId }, include: { property: true } });
-  if (!listing) throw new Error('listing not found');
+  if (!listing) throw new ApiError(404, 'LISTING_NOT_FOUND', 'listing not found');
   if (listing.property.ownerPartyId !== params.listerPartyId) throw new NotYourListingError();
 
-  const result = await evaluatePublish(params.listingId, false);
+  const result = await evaluatePublish(params.listingId, false, params.listerPartyId);
   if (!result.canPublish) {
     // A typed answer carrying the same blocker codes the dry-run reports -
     // an API consumer gets the truth (422), not an opaque 500

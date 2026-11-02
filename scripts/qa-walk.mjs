@@ -256,9 +256,16 @@ if (r.status !== 200) fail('sign-agreement', r);
 if (STAGE === 'sign') { console.log(JSON.stringify(manifest, null, 2)); process.exit(0); }
 
 // ── stage: fund-escrow (MOCK provider, sandbox only) ─────────────────────
+// B-1 shape fix: the deal detail carries the ledger-derived figure as
+// `financials.expectedUpfront` (see financialSummary in src/server/deals.ts).
+// The walk previously read `financialSnapshot.totalPayable` / `.totalDueUpfront`
+// - fields that exist nowhere in the contract - so it silently sent NO
+// expectedAmount and the endpoint's amount-match check (F-012) never ran.
+// Sending the derived figure makes the walk EXERCISE that check.
 const detail = await landlord('GET', `/deals/${manifest.dealId}`);
-const escrow = detail.body?.financialSnapshot?.totalPayable ?? detail.body?.financialSnapshot?.totalDueUpfront ?? null;
-r = await tenant('POST', `/deals/${manifest.dealId}/fund-escrow`, { expectedAmount: escrow ?? undefined });
+const escrow = detail.body?.financials?.expectedUpfront ?? null;
+if (!escrow) fail('deal detail financials.expectedUpfront missing', detail.body?.financials ?? detail.body);
+r = await tenant('POST', `/deals/${manifest.dealId}/fund-escrow`, { expectedAmount: escrow });
 manifest.fundEscrow = { status: r.status, body: r.body };
 if (r.status !== 200) fail('fund-escrow (mock)', r);
 

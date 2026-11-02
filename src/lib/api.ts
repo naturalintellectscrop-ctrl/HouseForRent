@@ -517,6 +517,20 @@ async function requireCaller() {
   return session;
 }
 
+/**
+ * Staff gate for the field-operations reads. The HTTP guards refuse a
+ * non-staff caller regardless (NFR-1); this is the same rule where those
+ * resolvers are reached IN-PROCESS, so the role boundary holds no matter
+ * which surface asks.
+ */
+async function requireStaffCaller() {
+  const caller = await requireCaller();
+  if (caller.role !== 'foo' && caller.role !== 'admin') {
+    throw new ApiError(403, 'FORBIDDEN', 'staff surface');
+  }
+  return caller;
+}
+
 async function resolveListingsSearch(sp: URLSearchParams): Promise<SearchResponse> {
   const filters: Parameters<typeof publicSearch>[0] = {};
   const nid = sp.get('neighbourhoodId') ?? sp.get('neighbourhoodIds');
@@ -854,8 +868,14 @@ async function resolveAssignedViewings() {
 }
 
 async function resolveDispatchQueue(): Promise<DispatchQueue> {
+  // P-1: the dispatch queue is ADMIN-ONLY information - every requested
+  // viewing (with tenant names) plus the officer roster with their loads.
+  // An officer's work surface is the visits assigned to them
+  // (/v1/viewings/assigned/me), never the queue that assigns them. The HTTP
+  // route already refused non-admins; this closes the in-process path, and
+  // the dispatch page renders the 403 as an explanation.
   const caller = await requireCaller();
-  if (caller.role !== 'admin' && caller.role !== 'foo') throw new ApiError(403, 'FORBIDDEN', 'staff surface');
+  if (caller.role !== 'admin') throw new ApiError(403, 'FORBIDDEN', 'admin surface');
 
   const rows = await dispatchQueue();
   const windowDays = await freshnessWindowDays();
@@ -911,9 +931,19 @@ async function resolveViewingDetail(viewingId: string): Promise<ViewingDetail> {
   const caller = await requireCaller();
   if (caller.role !== 'foo' && caller.role !== 'admin') throw new ApiError(403, 'FORBIDDEN', 'staff surface');
   const detail = await getViewingDetail(viewingId);
-  if (detail.conductedByName && caller.role === 'foo' && detail.conductedByName !== caller.displayName) {
-    // Assigned to another officer: an admin may look, an officer may not.
-    throw new ApiError(403, 'NOT_ASSIGNED_OFFICER', 'this visit is assigned to another officer');
+  if (caller.role === 'foo') {
+    // P-1: assignment is checked by IDENTITY, not display name (two officers
+    // can share a name; a rename would strand the assigned officer's own
+    // page). An officer reads a visit they are assigned to - or one that is
+    // still SCHEDULED and unassigned, which is the assign-on-report path
+    // the field-report flow permits. Everything else (another officer's
+    // visits and evidence, unassigned requests dispatch has not offered)
+    // is refused without disclosing which case it is.
+    const mine = detail.conductedByPartyId === caller.partyId;
+    const claimable = detail.conductedByPartyId === null && detail.status === 'scheduled';
+    if (!mine && !claimable) {
+      throw new ApiError(403, 'NOT_ASSIGNED_OFFICER', 'this visit is assigned to another officer');
+    }
   }
   const fieldReport: FieldReport | null = detail.fieldReport
     ? {
@@ -990,7 +1020,12 @@ async function resolveViewingDetail(viewingId: string): Promise<ViewingDetail> {
 }
 
 async function resolveIntroductions() {
-  const caller = await requireCaller();
+  // P-1: introduction records are circumvention EVIDENCE - party names and
+  // introduction timestamps across the whole book. Staff-only (the HTTP
+  // route gates foo|admin), and an officer keeps their own scoping below;
+  // the unguarded version previously handed the full book to any
+  // authenticated caller that reached this resolver in-process.
+  const caller = await requireStaffCaller();
   const rows = await findIntroductions(
     caller.role === 'foo' ? { fooPartyId: caller.partyId } : {},
   );
@@ -1123,6 +1158,10 @@ async function resolveDealDetail(dealId: string): Promise<DealDetail> {
 
 /** The launch gate: verified-fresh live inventory against the configured bar. */
 async function resolveLaunchGate(): Promise<LaunchGate> {
+  // P-1: a STAFF read - the ops overview deliberately shows officers the
+  // launch gate (it is on their field-work board), but a tenant or lister
+  // has no surface here and previously could read it in-process.
+  await requireStaffCaller();
   const windowDays = await freshnessWindowDays();
   const cutoff = new Date(Date.now() - windowDays * 24 * 60 * 60 * 1000);
   // The parameter row carries no value - the current value is the latest
@@ -1164,6 +1203,11 @@ async function resolveVerificationQueue(): Promise<VerificationQueue> {
 }
 
 async function resolveDealStates(): Promise<DealStates> {
+  // P-1: the deal book - every deal with party names, rents and commission -
+  // is administrator-only information. The HTTP route gates on admin; the
+  // in-process resolver previously did not, so any staff page (or any page
+  // that forgot its own gate) could read it.
+  await requireAdminCaller();
   const rows = await listDealsForOps();
   const withCommission = await Promise.all(rows.map(async (r) => {
     const deal = await db.deal.findUnique({ where: { id: r.id }, select: { commissionAmount: true } });
@@ -1200,6 +1244,9 @@ function toAuditEvents(rows: Awaited<ReturnType<typeof recentAuditEvents>>): Aud
 }
 
 async function resolveReconciliation(): Promise<Reconciliation> {
+  // P-1: ledger and custodian balances are the most sensitive figures the
+  // product serves. Admin-only at the HTTP route; now also in-process.
+  await requireAdminCaller();
   const history = await recentReconciliationChecks();
   const checks: ReconciliationCheck[] = history.map((c) => ({
     id: c.id,
@@ -1268,6 +1315,10 @@ async function resolveProviderStatementDetail(id: string): Promise<ProviderState
 }
 
 async function resolveConfigVersions(key: string): Promise<ConfigVersion[]> {
+  // P-1: configuration history (what changed, when, by whom) is an admin
+  // read - same rule as the /v1/ops/config HTTP route that serves the same
+  // console.
+  await requireAdminCaller();
   const param = await db.configParameter.findUnique({ where: { key }, include: { versions: true } });
   if (!param) return [];
   return param.versions.map((v) => ({
@@ -1281,6 +1332,9 @@ async function resolveConfigVersions(key: string): Promise<ConfigVersion[]> {
 }
 
 async function resolveCommissionRates() {
+  // P-1: the effective-dated commission history is admin console data
+  // (the config page renders it). Same rule as /v1/ops/config over HTTP.
+  await requireAdminCaller();
   const rows = await db.commissionRateVersion.findMany({ orderBy: { effectiveFrom: 'desc' } });
   return rows.map((r) => ({ id: r.id, rateBp: r.rateBpOfMonth, effectiveFrom: r.effectiveFrom.toISOString() }));
 }
@@ -1435,9 +1489,20 @@ function resolverFor(path: string, authenticated: boolean): Resolver {
     return () => resolveProviderStatements();
   }
   if (parts[1] === 'admin' && parts[2] === 'audit' && parts.length === 4) {
-    return async () => toAuditEvents(await recentAuditEvents(50)).filter((e) => e.subjectRef === parts[3]);
+    // P-1: the audit trail (every actor, action and payload across the
+    // product) is admin-only - the HTTP routes already gate it; the
+    // in-process reads now carry the same rule.
+    return async () => {
+      await requireAdminCaller();
+      return toAuditEvents(await recentAuditEvents(50)).filter((e) => e.subjectRef === parts[3]);
+    };
   }
-  if (parts[1] === 'admin' && parts[2] === 'audit') return async () => toAuditEvents(await recentAuditEvents(100));
+  if (parts[1] === 'admin' && parts[2] === 'audit') {
+    return async () => {
+      await requireAdminCaller();
+      return toAuditEvents(await recentAuditEvents(100));
+    };
+  }
   if (parts[1] === 'admin' && parts[2] === 'commission-rates') return () => resolveCommissionRates();
   if (parts[1] === 'admin' && parts[2] === 'config' && parts[4] === 'versions') return () => resolveConfigVersions(parts[3]);
 
