@@ -17,6 +17,7 @@
  * FOR UPDATE statement returns when the real API is restored.
  */
 import { randomUUID } from 'node:crypto';
+import { Prisma } from '@prisma/client';
 import { db } from '@/lib/db';
 import {
   assertTransitionAllowed,
@@ -185,14 +186,38 @@ export class DepositCustodyUnconfirmedError extends Error {
 export class DealAlreadyExistsError extends Error {
   constructor(
     introductionRecordId: string,
-    readonly existingDealId: string,
+    readonly existingDealId?: string,
   ) {
     super(
-      `introduction record ${introductionRecordId} already has an active deal ` +
-        `(${existingDealId}). One introduction is one tenant meeting one property once.`,
+      existingDealId
+        ? `introduction record ${introductionRecordId} already has an active deal ` +
+            `(${existingDealId}). One introduction is one tenant meeting one property once.`
+        : `introduction record ${introductionRecordId} already has an active deal — a concurrent ` +
+            `creation won the uniqueness race. One introduction is one tenant meeting one property once.`,
     );
     this.name = 'DealAlreadyExistsError';
   }
+}
+
+/**
+ * True ONLY for the unique violation the active-deal index raises
+ * (deal_one_active_per_introduction on "deal"). The predicate/statuses live
+ * in that migration; this check must stay narrow so an unrelated P2002 (a
+ * different table's unique constraint, a future new unique index on deal)
+ * keeps its own error handling instead of being converted into a
+ * deal-conflict 409. Prisma reports the violating constraint either as the
+ * index name (string) or as the indexed field names (array) depending on
+ * connector/version — both shapes are matched here, and on "deal" the only
+ * unique index covering introduction_record_id is the active-deal one.
+ */
+export function isActiveDealUniqueViolation(err: unknown): boolean {
+  if (!(err instanceof Prisma.PrismaClientKnownRequestError) || err.code !== 'P2002') return false;
+  const target = (err.meta as { target?: unknown } | null)?.target;
+  const parts = Array.isArray(target) ? target.map((t) => String(t)) : [String(target ?? '')];
+  return (
+    parts.some((t) => t.includes('deal_one_active_per_introduction')) ||
+    parts.some((t) => t === 'introduction_record_id')
+  );
 }
 
 /**
@@ -248,15 +273,26 @@ export async function createFromIntroduction(params: {
     });
     if (active) throw new DealAlreadyExistsError(introduction.id, active.id);
 
-    return tx.deal.create({
-      data: {
-        // every one of these comes from the record, none from the client
-        listingId: introduction.listingId,
-        tenantPartyId: introduction.tenantPartyId,
-        landlordPartyId: introduction.landlordPartyId,
-        introductionRecordId: introduction.id,
-      },
-    });
+    // The check above is a TOCTOU race under READ COMMITTED; the partial
+    // unique index (migration 20261028120000) is the structural backstop.
+    // A loser here translates the index's P2002 into the SAME typed 409 the
+    // pre-check raises — never a raw Prisma error, never an opaque 500. The
+    // transaction callback throws, so the losing insert rolls back and the
+    // winner's row is untouched (exactly one active deal survives).
+    try {
+      return await tx.deal.create({
+        data: {
+          // every one of these comes from the record, none from the client
+          listingId: introduction.listingId,
+          tenantPartyId: introduction.tenantPartyId,
+          landlordPartyId: introduction.landlordPartyId,
+          introductionRecordId: introduction.id,
+        },
+      });
+    } catch (err) {
+      if (isActiveDealUniqueViolation(err)) throw new DealAlreadyExistsError(introduction.id);
+      throw err;
+    }
   });
 }
 
