@@ -66,18 +66,19 @@ A truncated/interrupted export has NO sidecar and fails gunzip's CRC, and `db-re
 
 **Step 6 — Second-copy verification.** On the copy's host: `gunzip -c <copy> | sha256sum` must equal the recorded digest; compare byte sizes. Record both digests in the artifact table.
 
-**Step 7 — Restore drill (same day).** `bun scripts/production-recovery-drill.mjs --file backups/export-<ts>.ndjson.gz` — restores the real export into a disposable local PostgreSQL (PGlite 16) and verifies counts vs manifest, FK-chain joins, JSONB roundtrip, ledger balance, and that the application's own Prisma client reads the rows. While connected for the export, also capture the append-only trigger DDL read-only (`select pg_get_triggerdef(oid) from pg_trigger where tgname='reject_mutation';`) so `scripts/recovery-out-of-band-tables.sql` can gain the trigger supplement it still lacks (§4 note).
+**Step 7 — Restore drill (same day).** `bun scripts/production-recovery-drill.mjs --file backups/export-<ts>.ndjson.gz` — restores the real export into a disposable local PostgreSQL (PGlite 16) and verifies counts vs manifest, FK-chain joins, JSONB roundtrip, ledger balance, and that the application's own Prisma client reads the rows. (DONE 2026-11-11: the append-only wall DDL was captured read-only from the production catalog and committed as `scripts/recovery-triggers.sql` — note the triggers are named `<table>_immutable`, not `reject_mutation`; the latter is the FUNCTION they execute. Re-capture only if the migrations ledger ever gains these objects.)
 
-**Artifact record (fill one row per export):**
+**Artifact record (one row per export):**
 
-| Field | Value |
-|---|---|
-| File + timestamp | `export-<ts>.ndjson.gz` |
-| Bytes / sha256(decompressed) | — |
-| rowTotal / non-empty tables | — |
-| Exported by (script commit) | — |
-| Off-host copy location + digest match | — |
-| Same-day restore drill result | — |
+| Field | Export #1 (2026-10-23) | Export #2 — FIRST VERIFIED (2026-11-11) |
+|---|---|---|
+| File + timestamp | `export-2026-10-23T15-32-24-446Z.ndjson.gz` | `export-2026-11-11T05-35-57-612Z.ndjson.gz` |
+| Bytes / sha256(decompressed) | 76 rows; artifact LOST, digest never recorded | 13,314 B / `6fc9b2a667581e8c42b53be38c614c93f6ef74ffa012a4216c2e30546918e09a` |
+| rowTotal / non-empty tables | 76 / 13 | 184 / 19 (48 tables in manifest; `_prisma_migrations` excluded by design) |
+| Exported by (script commit) | Task 45 run | `scripts/db-export.mjs` @ `ded4d4d`, repo HEAD `c0ed8e9`, READ ONLY REPEATABLE READ via pooler; preflight identity: PostgreSQL 17.6, 49 public tables, 21 MB |
+| Sidecar + checksum verify | n/a | MATCH (`gunzip -c \| sha256sum` == sidecar) |
+| Off-host copy + digest match | never done (artifact lost) | **PENDING OWNER ACTION — download the artifact out of the ephemeral sandbox, then verify the copy with the same command and record here** |
+| Same-day restore drill | not drilled that day | **ALL CHECKS PASSED** (`production-recovery-drill.mjs`: 50-table recovery schema incl. out-of-band; 184/184 rows; counts == manifest; FK chains join; ledger 0==0 trivially balanced; JSONB intact; app client reads restored DB) |
 
 **Verified bounds & traps (probes re-run 2026-11-03, all behaved as documented):**
 1. Checksum = decompressed stream (use the `gunzip` pipe above).
@@ -85,7 +86,7 @@ A truncated/interrupted export has NO sidecar and fails gunzip's CRC, and `db-re
 3. `db-restore` cannot load a non-null `text[]` row (`field_report.media_asset_ids` → 42804). Production currently has zero such rows; this becomes a REAL restore blocker the moment field officers file reports with media references — fix `buildInsert` before field-report go-live.
 4. A failed restore leaves the target partially loaded (restore is non-transactional) — always re-create the target, never retry in place.
 5. `scripts/verify-restored.mjs` is STALE (Prisma-camelCase columns, `amount_minor`) — it fails loudly (42703) on a real Postgres target. Do not use it; the canonical verification is `db-restore`'s built-in gates + `production-recovery-drill.mjs`.
-6. Recovery schema = datamodel diff + out-of-band supplement; it does NOT include the production `reject_mutation` triggers (no `CREATE TRIGGER` exists anywhere in the repo) and does not include unapplied DRAFT migrations. A recovery DB therefore accepts UPDATE/DELETE on the 10 append-only-protected tables at the DB level — the append-only wall must be re-applied before any recovery DB serves traffic.
+6. Recovery schema = datamodel diff + out-of-band supplement; it does NOT include the production append-only wall and does not include unapplied DRAFT migrations. **Closed 2026-11-11:** the wall was captured read-only from the production catalog — 10 `<table>_immutable` triggers (audit_event, commission_rate_version, config_version, consent_record, deal_transition, introduction_record, ledger_entry, listing_agreement, psp_instruction, psp_instruction_event) executing `public.reject_mutation()`, plus the `viewing_conducted_requires_evidence` guard — now committed as `scripts/recovery-triggers.sql`. Apply it AFTER the data load (the evidence guard fires on INSERT and would reject a restored conducted viewing whose evidence rows load later). Until it is applied, a recovery DB accepts UPDATE/DELETE on the protected tables at the DB level.
 
 ## 3. Where backups live, who can access, retention
 
@@ -124,7 +125,9 @@ The script refuses to run against the source URL, refuses a non-empty target, or
 
 ### Recovery-test status
 
-> **STATUS CORRECTION (2026-11-03, readiness round):** the first REAL production export WAS taken through the Supabase pooler on **2026-10-23** (`backups/export-2026-10-23T15-32-24-446Z.ndjson.gz`, 76 rows / 13 non-empty tables) and the same-day `production-recovery-drill.mjs` run PASSED all checks on real data (recorded: worklog Task 45, commits 75c8c73/e256466). However, that artifact lived only in this ephemeral sandbox and is now GONE (sandbox reset); its sha256 was never recorded anywhere durable, and no independent off-host copy has ever been verified. **Honest current claim: the machinery is verified end-to-end (re-verified 2026-11-03: recovery drill all-PASS; roundtrip probes all behaved as documented); NO currently-valid production backup exists.** The next export must follow §2a exactly — checksum recorded durably + artifact copied off-host + second copy verified + same-day restore drill — before any backup claim is made.
+> **STATUS CORRECTION (2026-11-03, readiness round):** the first REAL production export WAS taken through the Supabase pooler on **2026-10-23** (`backups/export-2026-10-23T15-32-24-446Z.ndjson.gz`, 76 rows / 13 non-empty tables) and the same-day `production-recovery-drill.mjs` run PASSED all checks on real data (recorded: worklog Task 45, commits 75c8c73/e256466). However, that artifact lived only in this ephemeral sandbox and is now GONE (sandbox reset); its sha256 was never recorded anywhere durable, and no independent off-host copy has ever been verified.
+>
+> **FIRST VERIFIED PRODUCTION BACKUP (2026-11-11, Round 69):** owner authorized the run and delivered the production connection through the approved git-ignored mechanism. Full §2a loop executed: read-only preflight (identity confirmed: PostgreSQL 17.6, 49 public tables, all money tables at 0 rows — no real money has moved yet) → consistent export (184 rows / 19 non-empty tables) → sidecar checksum MATCH via the `gunzip` pipe → same-day restore drill **ALL CHECKS PASSED** on the real export → append-only wall DDL captured read-only and committed (`scripts/recovery-triggers.sql`). **The one remaining step is the owner's: download the artifact out of the sandbox to independent storage and verify the second copy (§2a Steps 5–6). Until that is recorded, treat the backup as verified-but-not-yet-independent.**
 >
 > **MACHINERY VERIFIED (October 2026, launch-gate round 2).**
 > `scripts/recovery-drill.mjs` executes the full pipeline end to end against a real, separate PostgreSQL instance (PGlite — Postgres 16 WASM — served over the wire protocol, exercised with the application's own Prisma client) using a **synthetic, clearly-labelled** export:
