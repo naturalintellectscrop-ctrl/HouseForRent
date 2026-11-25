@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { provisionStaff } from '@/server/ops';
-import { hashPassword } from '@/server/auth';
 import { db } from '@/lib/db';
 import { readJson, requireRole, requireString, route } from '@/server/http';
 
@@ -18,7 +17,6 @@ export const POST = route(async (req: NextRequest) => {
     password: requireString(body, 'password'),
     role: requireString(body, 'role') as never,
   });
-  await hashPassword; // (hashed inside provisionStaff via dynamic import)
   return NextResponse.json({ accountId: account.id }, { status: 201 });
 });
 

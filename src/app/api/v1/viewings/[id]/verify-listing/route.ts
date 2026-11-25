@@ -7,10 +7,9 @@ import { readJson, requireRole, requireString, route } from '@/server/http';
  * verdict from the ground: sets verification_state, availability, and
  * resets the freshness clock. Audited.
  */
-export const POST = route(async (req: NextRequest, ctx: { params: Promise<{ id: string }> }) => {
+export const POST = route(async (req: NextRequest) => {
   const session = await requireRole(['foo', 'admin']);
   const body = await readJson(req);
-  await ctx.params;
 
   const listing = await verifyListingFromVisit({
     listingId: requireString(body, 'listingId'),

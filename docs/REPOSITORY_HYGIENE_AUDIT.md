@@ -2,6 +2,8 @@
 
 **Status:** Written 2026-11-11 from a read-only audit at commit `ad93c96`. **Nothing was deleted, renamed, relocated or rewritten.** This document is the requested investigation + proposed cleanup plan **for owner approval**. Labels: **[Verified in source code / git metadata]**, **[Verified on disk this audit]**, **[Reported by previous agent]**.
 
+> **ADDENDUM — 2026-11-11, post-audit execution.** Under the owner's subsequent cleanup mandate, the following §8 recommendations were EXECUTED on branch `chore/hfr-codebase-cleanup`: `.zscripts/` + `tests/*.sh` + `examples/websocket` + `mini-services/.gitkeep` removed as one set (which also eliminated the repository's only Chinese-language tracked content); the shadcn/ui scaffold set + orphan hooks + `src/lib/utils.ts` + `components.json` removed; 50 unused dependencies pruned with both lockfiles refreshed; the inert Tailwind toolchain retired; the root package renamed `house-for-rent`; `.gitignore` tightened (`--full-page` and the redundant `/skills/media/` entry dropped, `!.env.example` added); `README.md` and `.env.example` created. **Deliberately retained:** `Caddyfile` (active gateway config for this dev environment) and `apps/web/` (load-bearing for the Vercel Build Command override until it is cleared in the dashboard). The body below is preserved unchanged as the audit record.
+
 ---
 
 ## 1. The `z_scripts` question — ground truth

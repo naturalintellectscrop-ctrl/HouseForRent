@@ -63,14 +63,14 @@ All versions from `package.json` / lockfiles **[Verified in source code]**. "Use
 | Next.js | `^16.1.1` | Full-stack framework (App Router; RSC + route handlers) | `src/app/**` | `output: "standalone"`; Turbopack; CSP/headers in `next.config.ts` |
 | React | `^19.0.0` | UI | — | Server components dominate; ~44 small client islands |
 | TypeScript | `^5` | Language (strict) | everywhere | `npx tsc --noEmit` is a standing gate (0 errors recorded) |
-| Tailwind CSS | v4 in devDeps | **Installed but NOT used by product UI** | `tailwind.config.ts` orphaned | Product UI is a hand-written ~5,000-line CSS system (`src/app/globals.css`); shadcn/ui (48 components in `src/components/ui`) also **unused** — scaffold residue (`docs/REPOSITORY_HYGIENE_AUDIT.md`) |
+| Tailwind CSS | ~~v4 in devDeps~~ removed | **Removed in the 2026-11-11 cleanup** (was installed but never used by product UI) | — | Product UI is a hand-written ~5,000-line CSS system (`src/app/globals.css`, no `@apply`/`@theme`/`@tailwind` directives); the inert toolchain (`tailwindcss`, `@tailwindcss/postcss`, `tw-animate-css`, `tailwindcss-animate`, `tailwind.config.ts`, `postcss.config.mjs`) and the unused shadcn/ui set were removed on `chore/hfr-codebase-cleanup` |
 | Prisma + `@prisma/client` | `^6.11.1` | ORM; schema SSOT | `prisma/schema.prisma` (45 models / 42 enums) | Runtime hardening for Supabase pooler in `src/lib/db.ts` |
 | PostgreSQL | 17.6 (Supabase) | Production database | session pooler | 49 public tables; `ba_*` + `_applied_migrations` out-of-band; 10 `<table>_immutable` triggers + `viewing_conducted_requires_evidence` + `rls_auto_enable` **[Verified in production]** |
 | PGlite (`@electric-sql/pglite` + `-socket`) | 0.5.x / 0.2.x (devDeps) | Local Postgres-16-WASM test/dev rig | `scripts/dev-local-stack.mjs`, `scripts/test-rig.mjs`, suites | No Docker needed; real wire protocol |
 | `bcryptjs` | `^3.0.3` | Password hashing (cost 10) | `src/server/auth.ts` | Dummy-hash timing equalization |
 | `@nile-squad/nylonpay-ts` | `^2.0.1` | PSP SDK (collect + webhook signature) | `src/server/nylonpay.ts` | Payout API **not** wired |
 | `sharp` | `^0.34.3` | Image renditions (WebP thumb/card/detail) | `src/server/image-pipeline.ts` | `serverExternalPackages` in `next.config.ts` |
-| `next-themes`, `next-auth@4`, `next-intl`, `zod`, `zustand`, `@tanstack/react-query`, `framer-motion`, `z-ai-web-dev-sdk`, recharts, dnd-kit, embla, MDX editor, react-syntax-highlighter, uuid, react-markdown, react-day-picker, react-hook-form, sonner, vaul, input-otp, cmdk, chart libs | various | **Installed but unused by product code** | package.json only | Verified unused via repo-wide import search (agent traces in `docs/REPOSITORY_HYGIENE_AUDIT.md`); prune candidates |
+| ~~shadcn/ui scaffold + unused deps~~ | — | **Removed in the 2026-11-11 cleanup** (50 packages; see `docs/REPOSITORY_HYGIENE_AUDIT.md` addendum) | — | Radix/cva/embla/recharts/dnd-kit/MDX/zod/next-auth/z-ai-web-dev-sdk et al. had zero imports outside the removed `src/components/ui` set; kept: lucide-react, sharp, bcryptjs, NylonPay SDK, Prisma, pg/PGlite |
 | Bun | 1.3.x (lockfile) | Script/test runner, dev server | `bun.lock` | npm ALSO active for Vercel build path (`package-lock.json`) — dual lockfiles, see onboarding doc |
 | ESLint | `^9` + `eslint-config-next` | Lint gate | `eslint.config.mjs` | `bun run lint` — 0 errors recorded |
 | Vercel | framework preset | Hosting + deploy-on-push | `vercel.json` (minimal), stale build-command override satisfied by `apps/web` shim | No CI beyond Vercel build (`.github` absent) |
@@ -146,7 +146,7 @@ Storage seam with Supabase Storage (private bucket `media`, service-role REST) a
 - **Environment variables (names only — values never in repo):**
   - Runtime: `DATABASE_URL`, `NODE_ENV`, `NEXT_PUBLIC_SITE_URL` (falls back to the production URL), `DEBUG_QUERIES`, `NYLONPAY_API_KEY`, `NYLONPAY_API_SECRET`, `NYLONPAY_WEBHOOK_SECRET`, `NYLONPAY_MODE`, `NYLONPAY_BASE_URL`, `MEDIA_STORAGE`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_MEDIA_BUCKET`, `MEDIA_ROOT`, `MEDIA_MAX_BYTES`.
   - Ops scripts (self-guarding): `PROD_DATABASE_URL`; `TARGET_DATABASE_URL` + `ALLOW_PROD_MIGRATION`; `RESTORE_DATABASE_URL` + `ALLOW_DB_RESTORE`; `PROVISION_DATABASE_URL`; `OWNER_*` provisioning vars; `QA_PASSWORD`/`RIG_*`/`DEMO_PASSWORD`/`SEED_PASSWORD` etc.; `SWEEP_DRY_RUN`/`ALLOW_ORPHAN_DELETE`; `DRY_RUN`/`APPLY` (media repair).
-  - Files: `.env` and `.env.prod` exist untracked (each holds `DATABASE_URL`; the sandbox `.env` carries a stale SQLite `file:` template — a documented trap, DR §2a). **No `.env.example`** (P2).
+  - Files: `.env` and `.env.prod` exist untracked (each holds `DATABASE_URL`; the sandbox `.env` carries a stale SQLite `file:` template — a documented trap, DR §2a). **`.env.example` now exists** (variable names only).
 - **Verification:** no health endpoint exists; deployment verification = Vercel GitHub commit status + manual smoke (and this audit's live 200). Production DB verification = read-only probes (`scripts/verify-prod-db.mjs`, `verify-prod-finance-state.mjs`, `prod-gate-db-probe.mjs`).
 - **Monitoring/logging:** none beyond Vercel build logs and `console.error` (documented rationale: no operator log access on Vercel drives the typed-error design). No CI (`.github` absent): gates are manual per-round `tsc --noEmit` + ESLint + the five suites, recorded in `worklog.md`/`docs/REVIEW_LOG.md`.
 
@@ -161,13 +161,12 @@ Storage seam with Supabase Storage (private bucket `media`, service-role REST) a
 | `src/app/api/v1/**` | ~90 HTTP route handlers |
 | `src/server/**` | Domain services (the real system) |
 | `src/lib/**` | `db.ts` (Prisma client + pooler hardening), `api.ts` (in-process read adapter), `client.ts` (HTTP client), `session.ts`, `money.ts`, `contract.ts`, `portal.ts`, `seo.tsx` |
-| `src/components/ui/**` | Unused shadcn scaffold (see hygiene audit) |
+| `Caddyfile` | Local sandbox gateway config (runtime infrastructure for this dev environment — retained) |
 | `prisma/` | `schema.prisma` + 6 migration dirs (3 DRAFT) |
 | `scripts/` | 40+ operational scripts: 5 test suites, DB export/restore/drills, migration rails, read-only prod probes, media tools, seeds/purge, QA walkers |
 | `docs/` | 11 existing docs + the 5 onboarding/audit deliverables |
 | `backups/` (gitignored) | The 2026-11-11 verified production export + sidecar + preflight artifact |
-| `.zscripts/` | **Git-tracked** legacy sandbox deploy scripts (hygiene audit — removal candidate) |
-| `tests/`, `examples/`, `mini-services/`, `Caddyfile` | Sandbox-scaffold artifacts (hygiene audit) |
+| ~~`.zscripts/`, `tests/`, `examples/`, `mini-services/`~~ | **Removed in the 2026-11-11 cleanup** — abandoned z.ai sandbox deploy chain (see hygiene audit addendum) |
 | `worklog.md` | The continuity record (69 rounds) — read it before changing anything historical |
 
 ## 11. Architecture boundaries — do not change casually

@@ -32,6 +32,7 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
 
 # vercel
 .vercel
@@ -48,9 +49,6 @@ test
 prompt
 
 server.log
-# Skills directory
-/skills/media/
-
 # sandbox runtime data & environment tooling (not product code)
 /skills/
 /tool-results/
@@ -59,7 +57,6 @@ server.log
 /media/
 /db/
 *.db
---full-page
 .zscripts/
 
 # disaster-recovery exports contain real personal + money data — NEVER commit

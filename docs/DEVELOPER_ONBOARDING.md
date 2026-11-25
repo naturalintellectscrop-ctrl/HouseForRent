@@ -25,7 +25,7 @@ bun run dev                     # http://localhost:3000
 - **Media stays local in dev:** the stack sets `MEDIA_STORAGE=local`; never point a dev sandbox at the production Supabase bucket.
 - **Known trap:** some sandbox shells export a stale `DATABASE_URL=file:…` (SQLite-era) that **overrides** `.env` — check `env | grep DATABASE_URL` if the app cannot connect. **[Reported by previous agent — worklog Round 68]**
 - **There is no seed for a full demo dataset**; `scripts/dev-verify-fixture.mjs` is the maintained fixture path; `scripts/seed-demo.mjs` has drifted (superseded).
-- There is **no README, no `.env.example`, and no CI** — this document is the setup guide (P2 items to fix, `docs/RELEASE_READINESS.md`).
+- There is **no CI** yet (P1-7 in `docs/RELEASE_READINESS.md`) — this document plus `README.md` are the setup guide; `.env.example` exists for variable names.
 
 ## 2. Repository map
 
@@ -35,7 +35,7 @@ See `docs/ARCHITECTURE.md` §10 for the full table. The short version:
 - `prisma/schema.prisma` — SSOT for the data model (45 models). `prisma/migrations/` — **only 3 of 6 are applied to production**; the other 3 are DRAFT/owner-gated.
 - `scripts/` — operational tooling: the five test suites, DB export/restore/recovery drills, migration rails, read-only production probes, media tools.
 - `docs/` — 16 documents (11 prior + 5 from this audit). `worklog.md` — round-by-round history.
-- `.zscripts/`, `tests/*.sh`, `examples/`, `Caddyfile`, `apps/web/` — sandbox/scaffold artifacts; read `docs/REPOSITORY_HYGIENE_AUDIT.md` before touching them (`apps/web` is load-bearing for the current Vercel build command override!).
+- `apps/web/` — Vercel build-command shim (load-bearing — keep until the dashboard override is cleared); `Caddyfile` — active local gateway config for this dev environment. The abandoned `.zscripts/`, `tests/*.sh`, `examples/`, `mini-services/` sandbox chain and the unused shadcn/ui scaffold were **removed in the 2026-11-11 cleanup** (see `docs/REPOSITORY_HYGIENE_AUDIT.md` addendum).
 
 ## 3. How the pieces work (short answers)
 
@@ -87,7 +87,7 @@ One Next.js 16 (App Router, React 19, TypeScript 5) monolith on Vercel; PostgreS
 
 Standing gates every round: `npx tsc --noEmit` (0) and `bun run lint` (0). Last recorded full pass: Round 67 (`ee8ce44` commit message) **[Verified by automated test — reported; not re-executed in this audit]**.
 
-**Q: How do we deploy?** Push to `main` → Vercel builds (framework preset). The `apps/web` workspace shim must stay until the stale Vercel Build Command override (`npm run build --workspace @hfr/web`) is cleared in the dashboard. Verify via the GitHub commit status + a live check. There is no other deploy path — the `.zscripts` sandbox chain is legacy (hygiene audit).
+**Q: How do we deploy?** Push to `main` → Vercel builds (framework preset). The `apps/web` workspace shim must stay until the stale Vercel Build Command override (`npm run build --workspace @hfr/web`) is cleared in the dashboard. Verify via the GitHub commit status + a live check. There is no other deploy path — the legacy `.zscripts` sandbox chain was removed in the 2026-11-11 cleanup.
 
 **Q: How do we safely create migrations?** Additive SQL under `prisma/migrations/<timestamp>_<name>/migration.sql` with a header documenting purpose/rollback/status; **never** `prisma db push` against production (`scripts/db-push-guard.mjs` refuses); apply only through the rails: `TARGET_DATABASE_URL=… ALLOW_PROD_MIGRATION=yes node scripts/apply-migration.mjs prisma/migrations/<dir>/migration.sql` (refuses re-application; writes an honest `_prisma_migrations` row atomically with the DDL). Keep DRAFT migrations unapplied until the owner authorizes; run the §2a backup loop first — `docs/DISASTER_RECOVERY.md` §2a is the mandatory procedure for every data-touching change.
 
@@ -108,10 +108,10 @@ Standing gates every round: `npx tsc --noEmit` (0) and `bun run lint` (0). Last 
 ## 6. Gotchas that will bite a new developer
 
 - **Dual lockfiles:** `bun.lock` (scripts/docs use bun) and `package-lock.json` (the Vercel override uses npm). Don't mix; consolidation pending the override cleanup.
-- **Scaffold naming:** `package.json` name is `nextjs_tailwind_shadcn_ts`; `apps/web` contains no code; `src/components/ui` (shadcn, 48 files), `tailwind.config.ts`, framer-motion, next-auth, zod, zustand, react-query etc. are **unused** by the product (hand-written CSS system instead).
-- **`tests/*.sh` and `examples/websocket` are scaffold artifacts** (the socket.io demo isn't even installable — socket.io isn't a dependency).
-- **`.gitignore` foot-guns:** entries `test`, `prompt`, `local-*`, `--full-page` ignore same-named files anywhere (one `local-*` script was silently swallowed once — worklog 1269).
-- **`.zscripts/` is tracked despite the gitignore entry** — untracked-by-gitignore does not untrack committed files. See the hygiene audit.
+- **Scaffold remnants (mostly resolved):** the root package is now named `house-for-rent`; the unused shadcn/ui set, Tailwind toolchain and sandbox deploy chain were removed in the 2026-11-11 cleanup. Still present: `apps/web` (build shim — keep until the Vercel override is cleared) and dual lockfiles (consolidate after that).
+- ~~**`tests/*.sh` and `examples/websocket` are scaffold artifacts**~~ — resolved: removed in the 2026-11-11 cleanup (the socket.io demo was unbuildable — socket.io was never a dependency).
+- **`.gitignore` foot-guns:** entries `test`, `prompt`, `local-*` ignore same-named files anywhere (one `local-*` script was silently swallowed once — worklog 1269). The `--full-page` artifact entry and the redundant `/skills/media/` line were removed in the 2026-11-11 cleanup.
+- ~~**`.zscripts/` is tracked despite the gitignore entry**~~ — resolved: removed in the 2026-11-11 cleanup; the `.gitignore` entry now guards against re-adding it.
 - **Worklog format shift:** rounds ≤64 are `## Task ID: N` blocks; rounds 65–69 are `## Round N` headings.
 - **The first ~200 lines of `worklog.md` describe the ORIGINAL repo layout** (`_legacy/`, NestJS `apps/api`) — historical context, not current state.
 - **No `error.tsx` boundaries** exist — expected failures are handled per-fetch; unexpected render throws hit Next's default error UI.
