@@ -1,0 +1,84 @@
+# House For Rent - continuous integration (validation only).
+#
+# Deliberately NO deploy job: production deploys remain the owner-controlled
+# Vercel flow (see docs/DEPLOYMENT_CONFIG_PROPOSAL.md). This pipeline exists
+# to prove, on every pull request and every push to main, that the tree
+# lints, type-checks, passes all five regression suites against a real
+# application rig, and production-builds.
+#
+# Suite notes (the five scripts are self-contained; no service containers
+# needed): each boots a disposable PGlite (Postgres 16 WASM) database on a
+# random high port + the real `next dev` application on another random high
+# port, drives the real HTTP surface, and tears the rig's process group down
+# on exit. They share no fixed ports and MUST run sequentially within one
+# job (each rig kills stray `next dev` instances at boot by design).
+#
+# Runtime notes:
+# - bun is required because the rigs spawn `next dev` through `bunx`
+#   (the repo's documented package-manager convention).
+# - DATABASE_URL is a syntactically valid dummy: the postinstall
+#   `prisma generate` and schema validation need the env var present, and
+#   the rigs substitute their own rig URL at runtime. No real credentials
+#   exist in or near CI.
+
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: lint, typecheck, regression suites, production build
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      DATABASE_URL: postgresql://ci:ci@127.0.0.1:9/ci
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Set up bun (the rigs spawn next dev via bunx)
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies (npm ci, lockfile-enforced)
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Regression suite - financial pipeline
+        run: node scripts/finance-pipeline-tests.mjs
+
+      - name: Regression suite - authorization
+        run: node scripts/authz-regression-tests.mjs
+
+      - name: Regression suite - KYC pipeline
+        run: node scripts/kyc-pipeline-tests.mjs
+
+      - name: Regression suite - deal uniqueness
+        run: node scripts/deal-uniqueness-tests.mjs
+
+      - name: Regression suite - image pipeline
+        run: node scripts/image-pipeline-tests.mjs
+
+      - name: Production build
+        run: npm run build
