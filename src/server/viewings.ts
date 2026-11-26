@@ -43,6 +43,33 @@ export class ViewingNotFoundError extends Error {
     this.name = 'ViewingNotFoundError';
   }
 }
+export class ViewingNotScheduledError extends Error {
+  constructor(viewingId: string, status: string) {
+    super(
+      `viewing ${viewingId} is not in the scheduled state (status: ${status}). ` +
+        'A field report is filed on a scheduled viewing.',
+    );
+    this.name = 'ViewingNotScheduledError';
+  }
+}
+export class FieldReportExistsError extends Error {
+  constructor(viewingId: string) {
+    super(
+      `viewing ${viewingId} already has a field report. The report is immutable ` +
+        'once filed - corrections are new evidence, not edits.',
+    );
+    this.name = 'FieldReportExistsError';
+  }
+}
+export class ListingNotLiveError extends Error {
+  constructor(listingId: string, state: string) {
+    super(
+      `listing ${listingId} is not open for viewing requests (publication state: ${state}). ` +
+        'Only a live listing accepts them.',
+    );
+    this.name = 'ListingNotLiveError';
+  }
+}
 export class NotAssignedOfficerError extends Error {
   constructor(viewingId: string) {
     super(`viewing ${viewingId} is assigned to a different officer`);
@@ -78,7 +105,7 @@ export async function requestViewing(params: {
   });
   if (!listing) throw new ViewingNotFoundError(params.listingId);
   if (listing.publicationState !== 'live') {
-    throw new Error('this listing is not open for viewing requests');
+    throw new ListingNotLiveError(params.listingId, listing.publicationState);
   }
 
   return db.viewing.create({
@@ -382,7 +409,7 @@ export async function fileFieldReport(params: {
   const viewing = await db.viewing.findUnique({ where: { id: params.viewingId } });
   if (!viewing) throw new ViewingNotFoundError(params.viewingId);
   if (viewing.status !== 'scheduled') {
-    throw new Error('a field report is filed on a scheduled viewing');
+    throw new ViewingNotScheduledError(params.viewingId, viewing.status);
   }
   if (viewing.conductedByPartyId && viewing.conductedByPartyId !== params.fooPartyId) {
     throw new NotAssignedOfficerError(params.viewingId);
@@ -396,7 +423,7 @@ export async function fileFieldReport(params: {
   }
 
   const existing = await db.fieldReport.findUnique({ where: { viewingId: params.viewingId } });
-  if (existing) throw new Error('a field report already exists for this viewing - corrections are new evidence, not edits');
+  if (existing) throw new FieldReportExistsError(params.viewingId);
 
   return db.fieldReport.create({
     data: {

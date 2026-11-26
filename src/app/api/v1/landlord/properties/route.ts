@@ -17,13 +17,13 @@ export const POST = route(async (req: NextRequest) => {
   const bathrooms = Number(body.bathrooms);
   const months = Number(body.requiredMonthsUpfront ?? 2);
   if (!Number.isInteger(bedrooms) || bedrooms < 0 || bedrooms > 20) {
-    throw new Error('bedrooms must be a whole number between 0 and 20');
+    throw new ApiError(400, 'VALIDATION', 'bedrooms must be a whole number between 0 and 20');
   }
   if (!Number.isInteger(bathrooms) || bathrooms < 0 || bathrooms > 20) {
-    throw new Error('bathrooms must be a whole number between 0 and 20');
+    throw new ApiError(400, 'VALIDATION', 'bathrooms must be a whole number between 0 and 20');
   }
   if (!Number.isInteger(months) || months < 1 || months > 24) {
-    throw new Error('requiredMonthsUpfront must be between 1 and 24');
+    throw new ApiError(400, 'VALIDATION', 'requiredMonthsUpfront must be between 1 and 24');
   }
 
   // Enum allowlists at the edge: an unknown propertyType or furnishing state

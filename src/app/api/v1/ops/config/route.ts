@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { listConfigParameters, listCommissionRateVersions } from '@/server/ops';
 import { setConfigParameter } from '@/server/listings';
 import { db } from '@/lib/db';
-import { readJson, requireRole, requireString, route } from '@/server/http';
+import { ApiError, readJson, requireRole, requireString, route } from '@/server/http';
 
 /** GET /api/v1/ops/config - parameters + effective-dated commission rates. */
 export const GET = route(async () => {
@@ -26,7 +26,7 @@ export const POST = route(async (req: NextRequest) => {
     // Commission rates are effective-dated, not overwritten (Decision 4).
     const bp = parseInt(value, 10);
     if (!Number.isInteger(bp) || bp <= 0 || bp > 10000) {
-      throw new Error('commission rate must be between 1 and 10000 basis points');
+      throw new ApiError(400, 'VALIDATION', 'commission rate must be between 1 and 10000 basis points');
     }
     const version = await db.commissionRateVersion.create({
       data: { rateBpOfMonth: bp, effectiveFrom: new Date(), createdByPartyId: session.partyId },

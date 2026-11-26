@@ -15,13 +15,7 @@
  * - Idempotent: saving twice is one row (upsert on the natural key).
  */
 import { db } from '@/lib/db';
-import { freshnessWindowDays, photoToView, withFreshness, type SearchResult } from '@/server/listings';
-
-export class ListingNotFoundError extends Error {
-  constructor() {
-    super('listing not found');
-  }
-}
+import { freshnessWindowDays, ListingNotFoundError, photoToView, withFreshness, type SearchResult } from '@/server/listings';
 
 /** Is this listing in the caller's saved set? (For the detail-page toggle.) */
 export async function isSaved(partyId: string, listingId: string): Promise<boolean> {
@@ -47,7 +41,7 @@ export async function saveListing(partyId: string, listingId: string): Promise<{
     where: { id: listingId },
     select: { id: true },
   });
-  if (!listing) throw new ListingNotFoundError();
+  if (!listing) throw new ListingNotFoundError(listingId);
 
   await db.savedListing.upsert({
     where: { partyId_listingId: { partyId, listingId } },

@@ -248,6 +248,49 @@ r = await landlordB('POST', `/landlord/listings/${listingA}/publish`, {});
 check('B-4 real publish of ANOTHER landlord listing still refused 403',
   r.status === 403 && r.body?.error?.code === 'NOT_YOUR_LISTING', JSON.stringify(r.body?.error ?? r.body));
 
+// ── 6b. Round-72 error-status corrections: what used to surface as a bare
+// Error (an opaque 500 INTERNAL) now reads as the honest 4xx ────────────────
+r = await landlordA('POST', '/landlord/properties', {
+  propertyType: 'apartment', bedrooms: 25, bathrooms: 1, furnished: 'semi_furnished',
+  neighbourhoodId: 'rig-nbhd-1', landmarkText: `QA-AUTHZ-bad-bedrooms ${RUN}`,
+  monthlyRent: '800,000', requiredMonthsUpfront: 2, depositAmount: '1,600,000',
+});
+check('R72 bedrooms out of range is 400 VALIDATION (was a bare-Error 500)',
+  r.status === 400 && r.body?.error?.code === 'VALIDATION', JSON.stringify(r.body?.error ?? r.body));
+r = await landlordA('POST', '/landlord/properties', {
+  propertyType: 'apartment', bedrooms: 2, bathrooms: 1, furnished: 'semi_furnished',
+  neighbourhoodId: 'rig-nbhd-1', landmarkText: `QA-AUTHZ-bad-months ${RUN}`,
+  monthlyRent: '800,000', requiredMonthsUpfront: 0, depositAmount: '1,600,000',
+});
+check('R72 requiredMonthsUpfront=0 is 400 VALIDATION (was a bare-Error 500)',
+  r.status === 400 && r.body?.error?.code === 'VALIDATION', JSON.stringify(r.body?.error ?? r.body));
+r = await tenant('POST', '/viewings', { listingId: listingB, preferredDate: new Date(Date.now() + 86400000).toISOString() });
+check('R72 viewing request on a NOT-LIVE listing is 409 LISTING_NOT_LIVE (was a bare-Error 500)',
+  r.status === 409 && r.body?.error?.code === 'LISTING_NOT_LIVE', JSON.stringify(r.body?.error ?? r.body));
+r = await landlordB('POST', '/landlord/listings/does-not-exist/withdraw', {});
+check('R72 withdraw of a missing listing is 404 LISTING_NOT_FOUND (was a bare-Error 500)',
+  r.status === 404 && r.body?.error?.code === 'LISTING_NOT_FOUND', JSON.stringify(r.body?.error ?? r.body));
+r = await landlordB('POST', `/landlord/listings/${listingA}/withdraw`, {});
+check('R72 withdraw of ANOTHER landlord listing keeps 403 NOT_YOUR_LISTING',
+  r.status === 403 && r.body?.error?.code === 'NOT_YOUR_LISTING', JSON.stringify(r.body?.error ?? r.body));
+// Route validation fires before the viewing lookup, so a nonexistent id with a
+// bad payload still reads as the caller's mistake (400), not a missing row.
+r = await officerA('POST', '/viewings/does-not-exist/field-report', { conditionRating: 'terrible', matchesListing: true, isAvailable: true });
+check('R72 bad conditionRating is 400 VALIDATION (was a bare-Error 500)',
+  r.status === 400 && r.body?.error?.code === 'VALIDATION', JSON.stringify(r.body?.error ?? r.body));
+r = await admin('POST', '/ops/config', { key: 'commission_rate_bp', value: '0' });
+check('R72 commission rate 0 bp is 400 VALIDATION (was a bare-Error 500)',
+  r.status === 400 && r.body?.error?.code === 'VALIDATION', JSON.stringify(r.body?.error ?? r.body));
+r = await admin('POST', '/ops/config', { key: 'commission_rate_bp', value: '10001' });
+check('R72 commission rate 10001 bp is 400 VALIDATION (was a bare-Error 500)',
+  r.status === 400 && r.body?.error?.code === 'VALIDATION', JSON.stringify(r.body?.error ?? r.body));
+r = await admin('POST', `/admin/users/${la.partyId}/tier`, { tier: 'mega_landlord' });
+check('R72 unknown listing tier is 422 VALIDATION (service guard mirrors the route)',
+  r.status === 422 && r.body?.error?.code === 'VALIDATION', JSON.stringify(r.body?.error ?? r.body));
+r = await admin('POST', '/admin/users/party-does-not-exist/tier', { tier: 'property_owner' });
+check('R72 tier set on an unknown party is 404 PARTY_NOT_FOUND (was a bare-Error 500)',
+  r.status === 404 && r.body?.error?.code === 'PARTY_NOT_FOUND', JSON.stringify(r.body?.error ?? r.body));
+
 // ── 7. publish listing A through the full gate (for the viewing journeys) ────
 const jpeg = await sharp({ create: { width: 900, height: 600, channels: 3, background: { r: 92, g: 138, b: 96 } } })
   .jpeg({ quality: 85 }).toBuffer();
@@ -325,6 +368,12 @@ r = await officerA('POST', `/viewings/${viewing1}/field-report`, {
   conditionRating: 'good', matchesListing: true, isAvailable: true, issuesText: 'Authz rig report: no issues.',
 });
 check('officer files the structured field report', r.status === 201, `status=${r.status}`);
+r = await officerA('POST', `/viewings/${viewing1}/field-report`, { conditionRating: 'fair', matchesListing: false, isAvailable: true });
+check('R72 duplicate field report is 409 FIELD_REPORT_EXISTS (was a bare-Error 500)',
+  r.status === 409 && r.body?.error?.code === 'FIELD_REPORT_EXISTS', JSON.stringify(r.body?.error ?? r.body));
+r = await officerA('POST', `/viewings/${viewing2}/field-report`, { conditionRating: 'good', matchesListing: true, isAvailable: true });
+check('R72 field report on a NO-SHOW viewing is 409 VIEWING_NOT_SCHEDULED (was a bare-Error 500)',
+  r.status === 409 && r.body?.error?.code === 'VIEWING_NOT_SCHEDULED', JSON.stringify(r.body?.error ?? r.body));
 r = await officerA('POST', `/viewings/${viewing1}/conduct`, {});
 check('officer conducts (introduction recorded)', r.status === 201 && Boolean(r.body?.introductionRecordId), JSON.stringify(r.body));
 const introductionRecordId = r.body?.introductionRecordId;
@@ -351,6 +400,9 @@ check('B-1 deal detail carries financials.expectedUpfront (the walk fixed shape)
 r = await tenant('POST', `/deals/${dealId}/fund-escrow`, { expectedAmount: expectedUpfront });
 check('B-1 fund-escrow passes the amount-match check with the derived figure',
   r.status === 200, JSON.stringify(r.body?.error ?? r.body));
+r = await admin('POST', `/deals/${dealId}/resolve-dispute`, {});
+check('R72 resolve-dispute on a deal NOT on dispute_hold is 409 DEAL_NOT_ON_DISPUTE_HOLD (was a bare-Error 500)',
+  r.status === 409 && r.body?.error?.code === 'DEAL_NOT_ON_DISPUTE_HOLD', JSON.stringify(r.body?.error ?? r.body));
 
 // ── 12. P-1: admin reads over real HTTP (regression on the route gates) ─────
 for (const [label, path] of [

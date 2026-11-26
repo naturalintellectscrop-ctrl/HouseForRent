@@ -467,6 +467,12 @@ export class NotYourListingError extends Error {
     this.name = 'NotYourListingError';
   }
 }
+export class ListingNotFoundError extends Error {
+  constructor(listingId: string) {
+    super(`listing ${listingId} not found`);
+    this.name = 'ListingNotFoundError';
+  }
+}
 
 /** The landlord accepts the agreement: commission terms + circumvention clause.
  *
@@ -654,7 +660,7 @@ export async function publishListing(params: { listingId: string; listerPartyId:
 
 export async function withdrawListing(params: { listingId: string; listerPartyId: string }) {
   const listing = await db.listing.findUnique({ where: { id: params.listingId }, include: { property: true } });
-  if (!listing) throw new Error('listing not found');
+  if (!listing) throw new ListingNotFoundError(params.listingId);
   if (listing.property.ownerPartyId !== params.listerPartyId) throw new NotYourListingError();
   return db.listing.update({ where: { id: params.listingId }, data: { publicationState: 'withdrawn' } });
 }

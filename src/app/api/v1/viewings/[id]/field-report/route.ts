@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fileFieldReport } from '@/server/viewings';
-import { readJson, requireRole, requireString, route } from '@/server/http';
+import { ApiError, readJson, requireRole, requireString, route } from '@/server/http';
 
 /**
  * POST /api/v1/viewings/:id/field-report - the structured visit record.
@@ -15,7 +15,7 @@ export const POST = route(async (req: NextRequest, ctx: { params: Promise<{ id: 
 
   const conditionRating = requireString(body, 'conditionRating');
   if (!['excellent', 'good', 'fair', 'poor'].includes(conditionRating)) {
-    throw new Error('conditionRating must be one of excellent, good, fair, poor');
+    throw new ApiError(400, 'VALIDATION', 'conditionRating must be one of excellent, good, fair, poor');
   }
 
   const report = await fileFieldReport({

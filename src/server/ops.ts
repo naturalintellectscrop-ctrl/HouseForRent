@@ -935,14 +935,20 @@ export async function setListerTier(params: {
   tier: string;
 }) {
   if (!(LISTER_TIERS as readonly string[]).includes(params.tier)) {
-    throw new Error(`"${params.tier}" is not a listing tier`);
+    // Mirrors the admin tier route's 422 VALIDATION so the service-level
+    // guard and the HTTP edge cannot drift apart (Round-72 error-status pass).
+    throw new ApiError(
+      422,
+      'VALIDATION',
+      `"${params.tier}" is not a listing tier. Use one of: ${LISTER_TIERS.join(', ')}.`,
+    );
   }
 
   const account = await db.userAccount.findFirst({
     where: { partyId: params.partyId },
     include: { party: { include: { listerProfile: true } } },
   });
-  if (!account) throw new Error(`account ${params.partyId} not found`);
+  if (!account) throw new PartyNotFoundError(params.partyId);
   if (account.authRole !== 'lister') {
     throw new ListerTierNotApplicableError(params.partyId, account.authRole);
   }

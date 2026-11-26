@@ -54,6 +54,15 @@ export class DealNotFoundError extends Error {
     this.name = 'DealNotFoundError';
   }
 }
+export class DealNotOnDisputeHoldError extends Error {
+  constructor(dealId: string, status: string) {
+    super(
+      `deal ${dealId} is not on dispute_hold (status: ${status}). ` +
+        'Only a dispute that is on hold can be resolved back to its prior status.',
+    );
+    this.name = 'DealNotOnDisputeHoldError';
+  }
+}
 export class SnapshotImmutableError extends Error {
   constructor(dealId: string) {
     super(
@@ -988,7 +997,7 @@ export async function resolveDispute(params: { dealId: string; actorPartyId: str
   return transactional(async (tx) => {
     const deal = await requireDeal(params.dealId, tx);
     if (deal.status !== 'dispute_hold') {
-      throw new Error(`deal ${params.dealId} is not on dispute_hold (status: ${deal.status})`);
+      throw new DealNotOnDisputeHoldError(params.dealId, deal.status);
     }
     const entering = await tx.dealTransition.findFirst({
       where: { dealId: deal.id, toStatus: 'dispute_hold' },
