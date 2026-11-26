@@ -21,7 +21,10 @@ import { execFileSync, spawn } from 'node:child_process';
 import path from 'node:path';
 import sharp from 'sharp';
 
-const REPO = '/home/z/my-project';
+// Rig root: the checkout this file lives in, not a hardcoded absolute path -
+// the rig must boot the app from the tree being tested (primary clone,
+// worktree or CI checkout alike). HFR_REPO_ROOT overrides if ever needed.
+const REPO = process.env.HFR_REPO_ROOT ?? path.resolve(import.meta.dirname, '..');
 const PORT_DB = 55000 + Math.floor(Math.random() * 4000);
 const PORT_APP = 31000 + Math.floor(Math.random() * 8000); // rotate: killed runs leave orphans behind
 const RESTORE_URL = `postgres://rig:rig@127.0.0.1:${PORT_DB}/postgres?pgbouncer=true&connection_limit=1&pool_timeout=60`;

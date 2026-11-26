@@ -36,7 +36,10 @@ import path from 'node:path';
 import sharp from 'sharp';
 import bcrypt from 'bcryptjs';
 
-const REPO = '/home/z/my-project';
+// Rig root: the checkout this file lives in, not a hardcoded absolute path -
+// the rig must boot the app from the tree being tested (primary clone,
+// worktree or CI checkout alike). HFR_REPO_ROOT overrides if ever needed.
+const REPO = process.env.HFR_REPO_ROOT ?? path.resolve(import.meta.dirname, '..');
 const PORT_DB = 55000 + Math.floor(Math.random() * 4000);
 const PORT_APP = 31000 + Math.floor(Math.random() * 8000);
 const API = `http://127.0.0.1:${PORT_APP}/api/v1`;
