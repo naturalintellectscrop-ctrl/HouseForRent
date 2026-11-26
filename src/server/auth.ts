@@ -92,8 +92,10 @@ export const resolveSession = cache(async (): Promise<ResolvedSession | null> =>
   const token = jar.get(SESSION_COOKIE)?.value;
   if (!token) return null;
 
-  // The production `session` table keeps the token hash in
-  // `refresh_token_hash` with no unique constraint - lookup is findFirst.
+  // The token's SHA-256 identifies the session row. Uniqueness of the hash
+  // is enforced by construction (256-bit random token per sign-in) and - once
+  // DRAFT migration 20261126120000 is applied by the owner - by a unique
+  // index; until then the lookup stays findFirst and behaves identically.
   const row = await db.session.findFirst({
     where: { refreshTokenHash: hashToken(token) },
     include: {

@@ -238,7 +238,13 @@ model UserCredential {
 model Session {
   id               String    @id @default(uuid())
   userAccountId    String    @map("user_account_id")
-  refreshTokenHash String    @map("refresh_token_hash")
+  // Unique backstop (DRAFT migration 20261126120000, unapplied - see
+  // docs/MIGRATION_PROPOSAL_REFRESH_TOKEN_UNIQUENESS.md): a token hash
+  // identifies exactly one session row. Duplicates are excluded by
+  // construction today (256-bit random token per sign-in); the constraint
+  // turns the same failure class into a loud insert error instead of
+  // silent findFirst ambiguity.
+  refreshTokenHash String    @unique @map("refresh_token_hash")
   expiresAt        DateTime  @map("expires_at")
   revokedAt        DateTime? @map("revoked_at")
   createdAt        DateTime  @default(now()) @map("created_at")
