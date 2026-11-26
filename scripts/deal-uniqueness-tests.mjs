@@ -56,7 +56,13 @@ const MIGRATION = path.join(
 try { execFileSync('pkill', ['-9', '-f', 'next dev'], { stdio: 'ignore' }); } catch {}
 try { execFileSync('pkill', ['-9', '-f', 'next-server'], { stdio: 'ignore' }); } catch {}
 rmSync(path.join(REPO, '.next/dev/lock'), { force: true });
-process.on('exit', () => { try { app?.kill('SIGKILL'); } catch {} });
+process.on('exit', () => {
+  try { app?.kill('SIGKILL'); } catch {}
+  // next dev re-execs into its own process group (spawn is detached):
+  // kill the GROUP too, or the rig server outlives this run and holds
+  // the .next/dev lock against the next suite.
+  try { if (app?.pid) process.kill(-app.pid, 'SIGKILL'); } catch {}
+});
 
 let failures = 0;
 let checks = 0;

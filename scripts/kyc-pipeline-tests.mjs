@@ -54,6 +54,17 @@ const check = (name, pass, detail = '') => {
 };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// Kill any stray rig server from a previous aborted run, and always take
+// this run's whole rig process group down on exit - a leaked `next dev`
+// holds the .next/dev lock and breaks every suite after it.
+try { execFileSync('pkill', ['-9', '-f', 'next dev'], { stdio: 'ignore' }); } catch {}
+try { execFileSync('pkill', ['-9', '-f', 'next-server'], { stdio: 'ignore' }); } catch {}
+rmSync(path.join(REPO, '.next/dev/lock'), { force: true });
+process.on('exit', () => {
+  try { app?.kill('SIGKILL'); } catch {}
+  try { if (app?.pid) process.kill(-app.pid, 'SIGKILL'); } catch {}
+});
+
 // ── 1. rig database (schema regenerated from the current model) ─────────────
 mkdirSync(path.join(REPO, 'backups'), { recursive: true });
 const SCHEMA_SQL = path.join(REPO, 'backups', 'rig-schema.sql');
@@ -78,7 +89,7 @@ await server.start();
 // ── 2. the real application server ──────────────────────────────────────────
 try { execFileSync('fuser', ['-k', `${PORT_APP}/tcp`], { stdio: 'ignore' }); } catch {}
 
-const app = spawn('bunx', ['next', 'dev', '-p', String(PORT_APP)], {
+let app = spawn('bunx', ['next', 'dev', '-p', String(PORT_APP)], {
   cwd: REPO,
   detached: true,
   env: {
